@@ -1,0 +1,6 @@
+{
+  "name": "we-note-ai-workflow",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "dependencies": { "yaml": "2.9.1" }
+}

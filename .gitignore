@@ -1,0 +1,3 @@
+# Local orchestration logs and task worktrees
+/.ai-workflow/
+/scripts/node_modules/
