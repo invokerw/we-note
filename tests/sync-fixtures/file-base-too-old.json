@@ -1,0 +1,484 @@
+{
+  "scenario": "file-base-too-old",
+  "title": "同一文件基准过旧",
+  "content_samples": {
+    "remote.current": "data/settings-v2.json",
+    "local.stale_base": "data/settings-v1.json",
+    "local.candidate": "data/settings-v3.json"
+  },
+  "description": "先推进目标 JSON 文件，再以新的 operation_id 提交基于旧版本的本地 JSON。断言返回 FILE_VERSION_CONFLICT，错误中的当前版本可定位远端内容，且远端指针、版本数、Change 数与 Vault revision 均保持冲突前的值。",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 2,
+    "min_available_revision": 0,
+    "request_sequence": 1,
+    "files": [
+      {
+        "file_id": "file_settings",
+        "path": "data/settings.json",
+        "format": "json",
+        "current_version_id": "ver_settings_01"
+      },
+      {
+        "file_id": "file_todo",
+        "path": "notes/todo.txt",
+        "format": "txt",
+        "current_version_id": "ver_todo_01"
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_settings_01",
+        "file_id": "file_settings",
+        "vault_revision": 1,
+        "blob_id": "blob_21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "content_size": 195,
+        "base_version_id": null,
+        "created_by_device_id": "device_web_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "json",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_todo_01",
+        "file_id": "file_todo",
+        "vault_revision": 2,
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "txt",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "content_size": 195,
+        "created_by_device_id": "device_web_0001"
+      },
+      {
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "created_by_device_id": "device_mac_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000001",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 1,
+        "operation": "create_file",
+        "file_id": "file_settings",
+        "path": "data/settings.json",
+        "version_id": "ver_settings_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "content_size": 195,
+        "operation_id": "op_create_settings",
+        "device_id": "device_web_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      },
+      {
+        "change_id": "chg_000002",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 2,
+        "operation": "create_file",
+        "file_id": "file_todo",
+        "path": "notes/todo.txt",
+        "version_id": "ver_todo_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "operation_id": "op_create_todo",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      }
+    ],
+    "upload_sessions": [
+      {
+        "blob_reference": "upload_settings_v2",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_size": 220,
+        "blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4"
+      },
+      {
+        "blob_reference": "upload_settings_v3",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+        "content_size": 243,
+        "blob_id": "blob_6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "remote-advances-settings",
+      "description": "Web 端把 settings.json 推进到 v2，revision 由 2 到 3。",
+      "content_file": "data/settings-v2.json",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_settings_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_web_0001",
+          "operation_id": "op_settings_v2_0001",
+          "file_id": "file_settings",
+          "operation": "update_file_content",
+          "path": "data/settings.json",
+          "base_revision": 2,
+          "blob_reference": "upload_settings_v2",
+          "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+          "content_size": 220,
+          "client_timestamp": "2026-11-21T09:05:00Z",
+          "metadata": {
+            "format": "json",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_settings_01"
+        }
+      },
+      "expected_status": 200,
+      "expected_result": {
+        "mode": "submit",
+        "version_id": "ver_settings_02",
+        "parent_version_id": "ver_settings_01",
+        "change_id": "chg_000003",
+        "vault_revision": 3
+      },
+      "expected_state": {
+        "vault_revision": 3,
+        "counts.versions": 3,
+        "counts.changes": 3,
+        "files.file_settings.current_version_id": "ver_settings_02"
+      }
+    },
+    {
+      "id": "stale-local-json-rejected",
+      "description": "Mac 端基于 settings-v1 修改出的 settings-v3 用新 operation_id 提交，基准版本已被远端推进。",
+      "content_file": "data/settings-v3.json",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_settings_v3_conflict"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_settings_v3_conflict",
+          "file_id": "file_settings",
+          "operation": "update_file_content",
+          "path": "data/settings.json",
+          "base_revision": 2,
+          "blob_reference": "upload_settings_v3",
+          "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+          "content_size": 243,
+          "client_timestamp": "2026-11-21T09:10:00Z",
+          "metadata": {
+            "format": "json",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_settings_01",
+          "base_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_conflict_locates_remote": "data/settings-v2.json",
+      "expected_result": {
+        "code": "FILE_VERSION_CONFLICT",
+        "file_id": "file_settings",
+        "path": "data/settings.json",
+        "base_version_id": "ver_settings_01",
+        "base_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "current_version_id": "ver_settings_02",
+        "current_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "current_content_size": 220,
+        "current_blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "conflict_resolution": "fetch_current_version_then_three_way_merge"
+      }
+    },
+    {
+      "id": "version-matches-hash-stale-rejected",
+      "description": "基准版本仍与远端当前版本一致，但 base_content_hash 是旧版本的哈希。任一项不匹配即必须返回 FILE_VERSION_CONFLICT，且状态无副作用。",
+      "content_file": "data/settings-v3.json",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_settings_v3_version_only"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_settings_v3_version_only",
+          "file_id": "file_settings",
+          "operation": "update_file_content",
+          "path": "data/settings.json",
+          "base_revision": 3,
+          "blob_reference": "upload_settings_v3",
+          "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+          "content_size": 243,
+          "client_timestamp": "2026-11-21T09:15:00Z",
+          "metadata": {
+            "format": "json",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_settings_02",
+          "base_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_conflict_locates_remote": "data/settings-v2.json",
+      "expected_result": {
+        "code": "FILE_VERSION_CONFLICT",
+        "file_id": "file_settings",
+        "path": "data/settings.json",
+        "base_version_id": "ver_settings_02",
+        "base_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "current_version_id": "ver_settings_02",
+        "current_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "current_content_size": 220,
+        "current_blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "conflict_resolution": "fetch_current_version_then_three_way_merge"
+      }
+    },
+    {
+      "id": "hash-matches-version-stale-rejected",
+      "description": "base_content_hash 与远端当前版本一致，但 base_version_id 指向已被取代的旧版本。版本不匹配同样必须返回 FILE_VERSION_CONFLICT，且状态无副作用。",
+      "content_file": "data/settings-v3.json",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_settings_v3_hash_only"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_settings_v3_hash_only",
+          "file_id": "file_settings",
+          "operation": "update_file_content",
+          "path": "data/settings.json",
+          "base_revision": 3,
+          "blob_reference": "upload_settings_v3",
+          "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+          "content_size": 243,
+          "client_timestamp": "2026-11-21T09:20:00Z",
+          "metadata": {
+            "format": "json",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_settings_01",
+          "base_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_conflict_locates_remote": "data/settings-v2.json",
+      "expected_result": {
+        "code": "FILE_VERSION_CONFLICT",
+        "file_id": "file_settings",
+        "path": "data/settings.json",
+        "base_version_id": "ver_settings_01",
+        "base_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "current_version_id": "ver_settings_02",
+        "current_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "current_content_size": 220,
+        "current_blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "conflict_resolution": "fetch_current_version_then_three_way_merge"
+      }
+    },
+    {
+      "id": "version-only-stale-rejected",
+      "description": "只提供过期 base_version_id（不带 base_content_hash），仍必须返回 FILE_VERSION_CONFLICT 并可定位远端。",
+      "content_file": "data/settings-v3.json",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_settings_v3_version_only_base"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_settings_v3_version_only_base",
+          "file_id": "file_settings",
+          "operation": "update_file_content",
+          "path": "data/settings.json",
+          "base_revision": 3,
+          "blob_reference": "upload_settings_v3",
+          "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+          "content_size": 243,
+          "client_timestamp": "2026-11-21T09:25:00Z",
+          "metadata": {
+            "format": "json",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_settings_01"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_conflict_locates_remote": "data/settings-v2.json",
+      "expect_error_fields": {
+        "code": "FILE_VERSION_CONFLICT",
+        "file_id": "file_settings",
+        "base_version_id": "ver_settings_01",
+        "base_content_hash": null,
+        "current_version_id": "ver_settings_02",
+        "current_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4"
+      },
+      "expected_result": {
+        "code": "FILE_VERSION_CONFLICT",
+        "file_id": "file_settings",
+        "base_version_id": "ver_settings_01",
+        "base_content_hash": null,
+        "current_version_id": "ver_settings_02"
+      }
+    },
+    {
+      "id": "hash-only-stale-rejected",
+      "description": "只提供过期 base_content_hash（不带 base_version_id），仍必须返回 FILE_VERSION_CONFLICT 并可定位远端。",
+      "content_file": "data/settings-v3.json",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_settings_v3_hash_only_base"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_settings_v3_hash_only_base",
+          "file_id": "file_settings",
+          "operation": "update_file_content",
+          "path": "data/settings.json",
+          "base_revision": 3,
+          "blob_reference": "upload_settings_v3",
+          "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+          "content_size": 243,
+          "client_timestamp": "2026-11-21T09:27:00Z",
+          "metadata": {
+            "format": "json",
+            "line_ending": "lf"
+          },
+          "base_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_conflict_locates_remote": "data/settings-v2.json",
+      "expect_error_fields": {
+        "code": "FILE_VERSION_CONFLICT",
+        "file_id": "file_settings",
+        "base_version_id": null,
+        "base_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "current_version_id": "ver_settings_02",
+        "current_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4"
+      },
+      "expected_result": {
+        "code": "FILE_VERSION_CONFLICT",
+        "file_id": "file_settings",
+        "base_version_id": null,
+        "base_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73"
+      }
+    },
+    {
+      "id": "pull-confirms-no-new-change",
+      "description": "两次冲突都没有产生 Change，从 revision 2 拉取只剩第一次成功提交的那一条。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 2
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "from_revision": 2,
+        "to_revision": 3,
+        "changes": [
+          {
+            "change_id": "chg_000003",
+            "vault_revision": 3,
+            "file_id": "file_settings",
+            "version_id": "ver_settings_02"
+          }
+        ],
+        "has_more": false
+      },
+      "expected_state": {
+        "vault_revision": 3,
+        "counts.versions": 3,
+        "counts.changes": 3
+      }
+    },
+    {
+      "id": "vault-mismatch-expected-vault-id",
+      "description": "请求体 vault_id 与路由不一致时返回 VAULT_MISMATCH，并必须给出服务端期望的 expected_vault_id。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_other_9999",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 2
+        }
+      },
+      "expected_status": 400,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "VAULT_MISMATCH",
+        "vault_id": "vault_other_9999",
+        "expected_vault_id": "vault_demo_0001"
+      },
+      "expected_result": {
+        "code": "VAULT_MISMATCH",
+        "vault_id": "vault_other_9999",
+        "expected_vault_id": "vault_demo_0001"
+      }
+    }
+  ],
+  "version_samples": {
+    "ver_settings_01": "data/settings-v1.json",
+    "ver_todo_01": "notes/todo-v1.txt"
+  }
+}

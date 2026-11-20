@@ -1,0 +1,340 @@
+{
+  "scenario": "compressed-history-recovery",
+  "title": "压缩历史快照恢复",
+  "content_samples": {
+    "notes": "notes/todo-v1.txt",
+    "settings": "data/settings-v3.json"
+  },
+  "description": "min_available_revision=3 时，revision 3 及更早的创建 Change 已压缩；file_notes 没有任何保留的 Change，但初始快照仍能证明它的当前版本。文件状态与 manifest 必须可重建，不能因为缺少 Change 就把 current_version_id 强制为 null。",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 5,
+    "min_available_revision": 3,
+    "request_sequence": 2,
+    "files": [
+      {
+        "file_id": "file_notes",
+        "path": "notes/todo.txt",
+        "format": "txt",
+        "current_version_id": "ver_notes_02"
+      },
+      {
+        "file_id": "file_beta",
+        "path": "data/settings.json",
+        "format": "json",
+        "current_version_id": "ver_beta_02"
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_notes_02",
+        "file_id": "file_notes",
+        "vault_revision": 3,
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "txt",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_beta_01",
+        "file_id": "file_beta",
+        "vault_revision": 4,
+        "blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_size": 220,
+        "base_version_id": null,
+        "created_by_device_id": "device_web_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "json",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_beta_02",
+        "file_id": "file_beta",
+        "vault_revision": 5,
+        "blob_id": "blob_6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+        "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+        "content_size": 243,
+        "base_version_id": "ver_beta_01",
+        "created_by_device_id": "device_web_0001",
+        "created_at": "2026-11-21T09:05:00Z",
+        "metadata": {
+          "format": "json",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "created_by_device_id": "device_mac_0001"
+      },
+      {
+        "blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_size": 220,
+        "created_by_device_id": "device_web_0001"
+      },
+      {
+        "blob_id": "blob_6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+        "content_size": 243,
+        "created_by_device_id": "device_web_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000004",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 4,
+        "operation": "create_file",
+        "file_id": "file_beta",
+        "path": "data/settings.json",
+        "version_id": "ver_beta_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_size": 220,
+        "operation_id": "op_create_settings",
+        "device_id": "device_web_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      },
+      {
+        "change_id": "chg_000005",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 5,
+        "operation": "update_file_content",
+        "file_id": "file_beta",
+        "path": "data/settings.json",
+        "version_id": "ver_beta_02",
+        "parent_version_id": "ver_beta_01",
+        "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+        "content_size": 243,
+        "operation_id": "op_settings_v3_history",
+        "device_id": "device_web_0001",
+        "client_timestamp": "2026-11-21T09:05:00Z",
+        "created_at": "2026-11-21T09:05:00Z"
+      }
+    ],
+    "upload_sessions": [
+      {
+        "blob_reference": "upload_settings_v3",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+        "content_size": 243,
+        "blob_id": "blob_6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9"
+      },
+      {
+        "blob_reference": "upload_settings_final",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "content_size": 195,
+        "blob_id": "blob_21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73"
+      }
+    ],
+    "idempotency": [
+      {
+        "operation_id": "op_settings_v3_history",
+        "request_id": "req_000001",
+        "fingerprint": "sha256:3ba6085ee129fb4c30b34764944e3149852e26f896a094da900597ebe4f0f34d",
+        "request": {
+          "method": "POST",
+          "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+          "headers": {
+            "Idempotency-Key": "op_settings_v3_history"
+          },
+          "body": {
+            "mode": "submit",
+            "vault_id": "vault_demo_0001",
+            "device_id": "device_web_0001",
+            "operation_id": "op_settings_v3_history",
+            "file_id": "file_beta",
+            "operation": "update_file_content",
+            "path": "data/settings.json",
+            "base_revision": 4,
+            "blob_reference": "upload_settings_v3",
+            "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+            "content_size": 243,
+            "client_timestamp": "2026-11-21T09:05:00Z",
+            "metadata": {
+              "format": "json",
+              "line_ending": "lf"
+            },
+            "base_version_id": "ver_beta_01",
+            "base_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4"
+          }
+        },
+        "result": {
+          "protocol_version": "sync-v1",
+          "request_id": "req_000001",
+          "mode": "submit",
+          "replayed": false,
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_web_0001",
+          "operation_id": "op_settings_v3_history",
+          "file_id": "file_beta",
+          "path": "data/settings.json",
+          "version_id": "ver_beta_02",
+          "parent_version_id": "ver_beta_01",
+          "change_id": "chg_000005",
+          "blob_id": "blob_6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+          "content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+          "content_size": 243,
+          "vault_revision": 5
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "pull-at-lower-bound",
+      "description": "游标 3 等于下界，仍可增量：返回保留的 revision 4、5 两条 Change。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 3
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "from_revision": 3,
+        "to_revision": 5,
+        "changes": [
+          {
+            "change_id": "chg_000004",
+            "vault_revision": 4
+          },
+          {
+            "change_id": "chg_000005",
+            "vault_revision": 5
+          }
+        ],
+        "has_more": false
+      },
+      "expected_state": {
+        "vault_revision": 5,
+        "counts.changes": 2
+      }
+    },
+    {
+      "id": "fetch-manifest-after-compression",
+      "description": "manifest 必须重建被压缩文件的当前版本映射：file_notes 仍指向初始快照中的 ver_notes_02。",
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "headers": {
+          "X-Device-Id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_manifest_restores_map": true,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "manifest",
+        "vault_id": "vault_demo_0001",
+        "snapshot_revision": 5,
+        "min_available_revision": 3,
+        "files": [
+          {
+            "file_id": "file_beta",
+            "path": "data/settings.json",
+            "format": "json",
+            "current_version_id": "ver_beta_02",
+            "current_content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9",
+            "content_size": 243
+          },
+          {
+            "file_id": "file_notes",
+            "path": "notes/todo.txt",
+            "format": "txt",
+            "current_version_id": "ver_notes_02",
+            "current_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+            "content_size": 93
+          }
+        ]
+      },
+      "expected_state": {
+        "vault_revision": 5,
+        "counts.changes": 2
+      }
+    },
+    {
+      "id": "update-after-compression",
+      "description": "压缩后的状态仍可继续写入：以 file_beta 的当前版本为基准提交新内容，新 Change 的 revision 为 6。",
+      "content_file": "data/settings-v1.json",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_settings_final"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_web_0001",
+          "operation_id": "op_settings_final",
+          "file_id": "file_beta",
+          "operation": "update_file_content",
+          "path": "data/settings.json",
+          "base_revision": 5,
+          "blob_reference": "upload_settings_final",
+          "content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+          "content_size": 195,
+          "client_timestamp": "2026-11-21T09:10:00Z",
+          "metadata": {
+            "format": "json",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_beta_02",
+          "base_content_hash": "sha256:6dd374abe26f66aa5211b7d76bfa822168ba4f8af1b3e0e8490d2fd517d966d9"
+        }
+      },
+      "expected_status": 200,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": false,
+        "file_id": "file_beta",
+        "parent_version_id": "ver_beta_02",
+        "content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "vault_revision": 6
+      },
+      "expected_state": {
+        "vault_revision": 6,
+        "counts.changes": 3,
+        "counts.versions": 4,
+        "files.file_beta.current_version_id": "ver_beta_03",
+        "files.file_beta.current_content_hash": "sha256:21c9b70a1c1f2379c3fc4dd2374977266e222f4996a3d327188c67261911aa73",
+        "last_change.operation": "update_file_content"
+      }
+    }
+  ],
+  "version_samples": {
+    "ver_notes_02": "notes/todo-v1.txt",
+    "ver_beta_01": "data/settings-v2.json",
+    "ver_beta_02": "data/settings-v3.json"
+  }
+}

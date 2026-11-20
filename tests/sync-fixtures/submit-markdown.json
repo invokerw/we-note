@@ -1,0 +1,188 @@
+{
+  "scenario": "submit-markdown",
+  "title": "正常提交 Markdown",
+  "content_samples": {
+    "base": "notes/roadmap-v1.md",
+    "submitted": "notes/roadmap-v2.md"
+  },
+  "description": "读取 projects/roadmap.md 的 v1 与 v2 真实字节，以匹配的 base_version_id 提交一次内容更新，核对父版本、Blob、当前指针、新 Change 与返回 revision 的相互对应。",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 1,
+    "min_available_revision": 0,
+    "request_sequence": 1,
+    "files": [
+      {
+        "file_id": "file_roadmap",
+        "path": "projects/roadmap.md",
+        "format": "md",
+        "current_version_id": "ver_roadmap_01"
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_roadmap_01",
+        "file_id": "file_roadmap",
+        "vault_revision": 1,
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "md",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "created_by_device_id": "device_mac_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000001",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 1,
+        "operation": "create_file",
+        "file_id": "file_roadmap",
+        "path": "projects/roadmap.md",
+        "version_id": "ver_roadmap_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "operation_id": "op_create_roadmap",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      }
+    ],
+    "upload_sessions": [
+      {
+        "blob_reference": "upload_roadmap_v2",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "submit-roadmap-v2",
+      "description": "客户端已上传 roadmap-v2 字节，声明大小与 SHA-256 后提交；基准版本与服务端当前版本一致。",
+      "content_file": "notes/roadmap-v2.md",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_roadmap_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_roadmap_v2_0001",
+          "file_id": "file_roadmap",
+          "operation": "update_file_content",
+          "path": "projects/roadmap.md",
+          "base_revision": 1,
+          "blob_reference": "upload_roadmap_v2",
+          "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_size": 213,
+          "client_timestamp": "2026-11-21T09:05:00Z",
+          "metadata": {
+            "format": "md",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_roadmap_01",
+          "base_content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a"
+        }
+      },
+      "expected_status": 200,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": false,
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "operation_id": "op_roadmap_v2_0001",
+        "file_id": "file_roadmap",
+        "version_id": "ver_roadmap_02",
+        "parent_version_id": "ver_roadmap_01",
+        "change_id": "chg_000002",
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "vault_revision": 2
+      },
+      "expected_state": {
+        "vault_revision": 2,
+        "counts.versions": 2,
+        "counts.changes": 2,
+        "counts.blobs": 2,
+        "files.file_roadmap.current_version_id": "ver_roadmap_02",
+        "files.file_roadmap.current_content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "files.file_roadmap.current_size": 213,
+        "files.file_roadmap.current_blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "versions.ver_roadmap_02.base_version_id": "ver_roadmap_01",
+        "versions.ver_roadmap_02.blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "versions.ver_roadmap_02.vault_revision": 2,
+        "changes.1.change_id": "chg_000002",
+        "changes.1.version_id": "ver_roadmap_02",
+        "last_change.operation_id": "op_roadmap_v2_0001"
+      }
+    },
+    {
+      "id": "pull-after-submit",
+      "description": "从 revision 1 增量拉取，新的 Change 恰好出现一次。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 1
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "from_revision": 1,
+        "to_revision": 2,
+        "has_more": false,
+        "changes": [
+          {
+            "change_id": "chg_000002",
+            "vault_revision": 2,
+            "version_id": "ver_roadmap_02",
+            "operation": "update_file_content",
+            "file_id": "file_roadmap",
+            "path": "projects/roadmap.md"
+          }
+        ]
+      },
+      "expected_state": {
+        "vault_revision": 2,
+        "counts.changes": 2
+      }
+    }
+  ],
+  "version_samples": {
+    "ver_roadmap_01": "notes/roadmap-v1.md"
+  },
+  "async_upload_steps": [
+    "submit-roadmap-v2"
+  ]
+}

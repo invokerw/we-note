@@ -1,0 +1,133 @@
+{
+  "scenario": "request-id-exhausted",
+  "title": "请求序号耗尽",
+  "content_samples": {},
+  "description": "request_sequence=999999 时最后一个请求仍生成 req_999999；随后序号耗尽必须返回 503 REQUEST_ID_EXHAUSTED 且 request_id=null，绝不生成七位标识或改变协议状态。",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 1,
+    "min_available_revision": 0,
+    "request_sequence": 999999,
+    "files": [
+      {
+        "file_id": "file_roadmap",
+        "path": "projects/roadmap.md",
+        "format": "md",
+        "current_version_id": "ver_roadmap_01"
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_roadmap_01",
+        "file_id": "file_roadmap",
+        "vault_revision": 1,
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "md",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "created_by_device_id": "device_mac_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000001",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 1,
+        "operation": "create_file",
+        "file_id": "file_roadmap",
+        "path": "projects/roadmap.md",
+        "version_id": "ver_roadmap_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "operation_id": "op_create_roadmap",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      }
+    ],
+    "upload_sessions": []
+  },
+  "steps": [
+    {
+      "id": "pull-with-last-request-id",
+      "description": "序号 999999 仍然是合法的六位 request_id。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 1
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "request_id": "req_999999",
+        "from_revision": 1,
+        "to_revision": 1,
+        "changes": [],
+        "has_more": false
+      },
+      "expected_state": {
+        "vault_revision": 1,
+        "counts.changes": 1
+      }
+    },
+    {
+      "id": "pull-after-sequence-exhausted",
+      "description": "下一个序号超出 1..999999：必须返回 503 REQUEST_ID_EXHAUSTED 且 request_id 为 null。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 1
+        }
+      },
+      "expected_status": 503,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "REQUEST_ID_EXHAUSTED",
+        "request_id": null,
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "method": "POST",
+        "allowed_method": "POST"
+      },
+      "expected_result": {
+        "code": "REQUEST_ID_EXHAUSTED",
+        "request_id": null
+      },
+      "expected_state": {
+        "vault_revision": 1,
+        "counts.changes": 1
+      }
+    }
+  ],
+  "version_samples": {
+    "ver_roadmap_01": "notes/roadmap-v1.md"
+  }
+}

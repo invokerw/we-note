@@ -1,0 +1,286 @@
+{
+  "scenario": "update-deleted-file",
+  "title": "已删除文件的内容更新",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 3,
+    "min_available_revision": 0,
+    "request_sequence": 2,
+    "files": [
+      {
+        "file_id": "file_doc",
+        "path": "notes/doc.txt",
+        "format": "txt",
+        "current_version_id": "ver_doc_02",
+        "is_deleted": true
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_doc_01",
+        "file_id": "file_doc",
+        "vault_revision": 1,
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "txt",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_doc_02",
+        "file_id": "file_doc",
+        "vault_revision": 2,
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_size": 137,
+        "base_version_id": "ver_doc_01",
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:05:00Z",
+        "metadata": {
+          "format": "txt",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "created_by_device_id": "device_mac_0001"
+      },
+      {
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_size": 137,
+        "created_by_device_id": "device_mac_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000001",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 1,
+        "operation": "create_file",
+        "file_id": "file_doc",
+        "path": "notes/doc.txt",
+        "version_id": "ver_doc_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "operation_id": "op_create_doc",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      },
+      {
+        "change_id": "chg_000002",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 2,
+        "operation": "update_file_content",
+        "file_id": "file_doc",
+        "path": "notes/doc.txt",
+        "version_id": "ver_doc_02",
+        "parent_version_id": "ver_doc_01",
+        "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_size": 137,
+        "operation_id": "op_doc_v2",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:05:00Z",
+        "created_at": "2026-11-21T09:05:00Z"
+      },
+      {
+        "change_id": "chg_000003",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 3,
+        "operation": "delete_file",
+        "file_id": "file_doc",
+        "path": "notes/doc.txt",
+        "version_id": "ver_doc_02",
+        "parent_version_id": "ver_doc_01",
+        "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_size": 137,
+        "operation_id": "op_delete_doc",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:06:00Z",
+        "created_at": "2026-11-21T09:06:00Z"
+      }
+    ],
+    "upload_sessions": [
+      {
+        "blob_reference": "upload_doc_v2",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_size": 137,
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db"
+      },
+      {
+        "blob_reference": "upload_doc_restore",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c"
+      }
+    ],
+    "idempotency": [
+      {
+        "operation_id": "op_doc_v2",
+        "request_id": "req_000001",
+        "fingerprint": "sha256:f69ed7da0d841972ef7c3a9217cc5b4e21b7f3cf1434b32ec3fb48ef262fbfd9",
+        "request": {
+          "method": "POST",
+          "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+          "headers": {
+            "Idempotency-Key": "op_doc_v2"
+          },
+          "body": {
+            "mode": "submit",
+            "vault_id": "vault_demo_0001",
+            "device_id": "device_mac_0001",
+            "operation_id": "op_doc_v2",
+            "file_id": "file_doc",
+            "operation": "update_file_content",
+            "path": "notes/doc.txt",
+            "base_revision": 1,
+            "blob_reference": "upload_doc_v2",
+            "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+            "content_size": 137,
+            "client_timestamp": "2026-11-21T09:05:00Z",
+            "metadata": {
+              "format": "txt",
+              "line_ending": "lf"
+            },
+            "base_version_id": "ver_doc_01",
+            "base_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c"
+          }
+        },
+        "result": {
+          "protocol_version": "sync-v1",
+          "request_id": "req_000001",
+          "mode": "submit",
+          "replayed": false,
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_doc_v2",
+          "file_id": "file_doc",
+          "path": "notes/doc.txt",
+          "version_id": "ver_doc_02",
+          "parent_version_id": "ver_doc_01",
+          "change_id": "chg_000002",
+          "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_size": 137,
+          "vault_revision": 2
+        }
+      }
+    ]
+  },
+  "content_samples": {
+    "current": "notes/todo-v2.txt",
+    "restored": "notes/todo-v1.txt"
+  },
+  "description": "文件在 revision 3 被软删除。成功的内容更新必须恢复 is_deleted=false，并让最后一条 Change、文件状态、版本 metadata 与当前指针保持一致，不能留下 200 后仍为删除态的自相矛盾状态。",
+  "steps": [
+    {
+      "id": "update-soft-deleted-file",
+      "description": "以已删除文件的历史版本为基准提交内容：成功写入后 is_deleted 必须恢复为 false，最后一条 Change 是 update_file_content。",
+      "content_file": "notes/todo-v1.txt",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_doc_restore"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_doc_restore",
+          "file_id": "file_doc",
+          "operation": "update_file_content",
+          "path": "notes/doc.txt",
+          "base_revision": 3,
+          "blob_reference": "upload_doc_restore",
+          "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+          "content_size": 93,
+          "client_timestamp": "2026-11-21T09:10:00Z",
+          "metadata": {
+            "format": "txt",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_doc_02",
+          "base_content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db"
+        }
+      },
+      "expected_status": 200,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": false,
+        "operation_id": "op_doc_restore",
+        "file_id": "file_doc",
+        "version_id": "ver_doc_03",
+        "parent_version_id": "ver_doc_02",
+        "change_id": "chg_000004",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "vault_revision": 4
+      },
+      "expected_state": {
+        "vault_revision": 4,
+        "counts.versions": 3,
+        "counts.changes": 4,
+        "files.file_doc.is_deleted": false,
+        "files.file_doc.current_version_id": "ver_doc_03",
+        "last_change.operation": "update_file_content",
+        "versions.ver_doc_03.metadata.format": "txt",
+        "versions.ver_doc_03.metadata.line_ending": "lf"
+      }
+    },
+    {
+      "id": "manifest-shows-restored-file",
+      "description": "恢复后 manifest 必须把该文件报告为非删除态与新版本。",
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "headers": {
+          "X-Device-Id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_manifest_restores_map": true,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "manifest",
+        "vault_id": "vault_demo_0001",
+        "snapshot_revision": 4,
+        "files": [
+          {
+            "file_id": "file_doc",
+            "path": "notes/doc.txt",
+            "format": "txt",
+            "current_version_id": "ver_doc_03",
+            "current_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+            "content_size": 93,
+            "is_deleted": false
+          }
+        ]
+      },
+      "expected_state": {
+        "vault_revision": 4,
+        "counts.changes": 4
+      }
+    }
+  ],
+  "version_samples": {
+    "ver_doc_01": "notes/todo-v1.txt",
+    "ver_doc_02": "notes/todo-v2.txt"
+  }
+}
