@@ -1,0 +1,222 @@
+{
+  "scenario": "historical-single-hash-replay",
+  "title": "单哈希历史基准重放",
+  "content_samples": {
+    "base": "notes/roadmap-v1.md",
+    "current": "notes/roadmap-v2.md"
+  },
+  "description": "历史首次提交只提供 base_content_hash（不提供 base_version_id）。加载必须接受这种在线提交同样允许的基准形式，并保证原样重放返回 200、replayed=true 与首次业务结果。",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 2,
+    "min_available_revision": 0,
+    "request_sequence": 2,
+    "files": [
+      {
+        "file_id": "file_roadmap",
+        "path": "projects/roadmap.md",
+        "format": "md",
+        "current_version_id": "ver_roadmap_02"
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_roadmap_01",
+        "file_id": "file_roadmap",
+        "vault_revision": 1,
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "md",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_roadmap_02",
+        "file_id": "file_roadmap",
+        "vault_revision": 2,
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "base_version_id": "ver_roadmap_01",
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:06:00Z",
+        "metadata": {
+          "format": "md",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "created_by_device_id": "device_mac_0001"
+      },
+      {
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "created_by_device_id": "device_mac_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000001",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 1,
+        "operation": "create_file",
+        "file_id": "file_roadmap",
+        "path": "projects/roadmap.md",
+        "version_id": "ver_roadmap_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "operation_id": "op_create_roadmap",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      },
+      {
+        "change_id": "chg_000002",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 2,
+        "operation": "update_file_content",
+        "file_id": "file_roadmap",
+        "path": "projects/roadmap.md",
+        "version_id": "ver_roadmap_02",
+        "parent_version_id": "ver_roadmap_01",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "operation_id": "op_roadmap_v2_single_hash",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:06:00Z",
+        "created_at": "2026-11-21T09:06:00Z"
+      }
+    ],
+    "upload_sessions": [
+      {
+        "blob_reference": "upload_roadmap_v2",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227"
+      }
+    ],
+    "idempotency": [
+      {
+        "operation_id": "op_roadmap_v2_single_hash",
+        "request_id": "req_000001",
+        "fingerprint": "sha256:ef8fe151add51c4e0289884f959be42c2701670a711bb3bd5c1f99e43add7e08",
+        "request": {
+          "method": "POST",
+          "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+          "headers": {
+            "Idempotency-Key": "op_roadmap_v2_single_hash"
+          },
+          "body": {
+            "mode": "submit",
+            "vault_id": "vault_demo_0001",
+            "device_id": "device_mac_0001",
+            "operation_id": "op_roadmap_v2_single_hash",
+            "file_id": "file_roadmap",
+            "operation": "update_file_content",
+            "path": "projects/roadmap.md",
+            "base_revision": 1,
+            "blob_reference": "upload_roadmap_v2",
+            "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+            "content_size": 213,
+            "client_timestamp": "2026-11-21T09:06:00Z",
+            "metadata": {
+              "format": "md",
+              "line_ending": "lf"
+            },
+            "base_content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a"
+          }
+        },
+        "result": {
+          "protocol_version": "sync-v1",
+          "request_id": "req_000001",
+          "mode": "submit",
+          "replayed": false,
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_roadmap_v2_single_hash",
+          "file_id": "file_roadmap",
+          "path": "projects/roadmap.md",
+          "version_id": "ver_roadmap_02",
+          "parent_version_id": "ver_roadmap_01",
+          "change_id": "chg_000002",
+          "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_size": 213,
+          "vault_revision": 2
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "replay-single-hash-history",
+      "description": "原样重放只带 base_content_hash 的历史首次请求：必须 200、replayed=true 且返回首次业务结果。",
+      "content_file": "notes/roadmap-v2.md",
+      "expect_historical_replay": 0,
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_roadmap_v2_single_hash"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_roadmap_v2_single_hash",
+          "file_id": "file_roadmap",
+          "operation": "update_file_content",
+          "path": "projects/roadmap.md",
+          "base_revision": 1,
+          "blob_reference": "upload_roadmap_v2",
+          "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_size": 213,
+          "client_timestamp": "2026-11-21T09:06:00Z",
+          "metadata": {
+            "format": "md",
+            "line_ending": "lf"
+          },
+          "base_content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a"
+        }
+      },
+      "expected_status": 200,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": true,
+        "original_request_id": "req_000001",
+        "operation_id": "op_roadmap_v2_single_hash",
+        "file_id": "file_roadmap",
+        "version_id": "ver_roadmap_02",
+        "parent_version_id": "ver_roadmap_01",
+        "change_id": "chg_000002",
+        "vault_revision": 2
+      },
+      "expected_state": {
+        "vault_revision": 2,
+        "counts.versions": 2,
+        "counts.changes": 2,
+        "files.file_roadmap.current_version_id": "ver_roadmap_02"
+      }
+    }
+  ],
+  "version_samples": {
+    "ver_roadmap_01": "notes/roadmap-v1.md",
+    "ver_roadmap_02": "notes/roadmap-v2.md"
+  }
+}

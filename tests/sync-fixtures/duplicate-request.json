@@ -1,0 +1,218 @@
+{
+  "scenario": "duplicate-request",
+  "title": "重复请求",
+  "content_samples": {
+    "base": "notes/todo-v1.txt",
+    "submitted": "notes/todo-v2.txt"
+  },
+  "description": "首次提交成功后，此时旧基准已经落后于服务端当前版本；原样重放同一 operation_id 的请求，断言返回首次业务结果且 Blob、版本、Change、当前指针与 Vault revision 均无变化。",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 1,
+    "min_available_revision": 0,
+    "request_sequence": 1,
+    "files": [
+      {
+        "file_id": "file_todo",
+        "path": "notes/todo.txt",
+        "format": "txt",
+        "current_version_id": "ver_todo_01"
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_todo_01",
+        "file_id": "file_todo",
+        "vault_revision": 1,
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "txt",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "created_by_device_id": "device_mac_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000001",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 1,
+        "operation": "create_file",
+        "file_id": "file_todo",
+        "path": "notes/todo.txt",
+        "version_id": "ver_todo_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "operation_id": "op_create_todo",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      }
+    ],
+    "upload_sessions": [
+      {
+        "blob_reference": "upload_todo_v2",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_size": 137,
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "first-submit",
+      "description": "首次提交 todo-v2，基准为 ver_todo_01。",
+      "content_file": "notes/todo-v2.txt",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_todo_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_todo_v2_0001",
+          "file_id": "file_todo",
+          "operation": "update_file_content",
+          "path": "notes/todo.txt",
+          "base_revision": 1,
+          "blob_reference": "upload_todo_v2",
+          "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_size": 137,
+          "client_timestamp": "2026-11-21T09:05:00Z",
+          "metadata": {
+            "format": "txt",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_todo_01",
+          "base_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c"
+        }
+      },
+      "expected_status": 200,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": false,
+        "version_id": "ver_todo_02",
+        "parent_version_id": "ver_todo_01",
+        "change_id": "chg_000002",
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "vault_revision": 2
+      },
+      "expected_state": {
+        "vault_revision": 2,
+        "counts.versions": 2,
+        "counts.changes": 2,
+        "files.file_todo.current_version_id": "ver_todo_02"
+      }
+    },
+    {
+      "id": "replay-identical-request",
+      "description": "原样重放请求。首次结果先命中，不再进入文件基准判断，因此不会返回 FILE_VERSION_CONFLICT。",
+      "content_file": "notes/todo-v2.txt",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_todo_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_todo_v2_0001",
+          "file_id": "file_todo",
+          "operation": "update_file_content",
+          "path": "notes/todo.txt",
+          "base_revision": 1,
+          "blob_reference": "upload_todo_v2",
+          "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_size": 137,
+          "client_timestamp": "2026-11-21T09:05:00Z",
+          "metadata": {
+            "format": "txt",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_todo_01",
+          "base_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c"
+        }
+      },
+      "expected_status": 200,
+      "expect_replay_of_step": 0,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": true,
+        "version_id": "ver_todo_02",
+        "parent_version_id": "ver_todo_01",
+        "change_id": "chg_000002",
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "vault_revision": 2
+      }
+    },
+    {
+      "id": "replay-identical-request-again",
+      "description": "再重放一次（连续多次重试），仍必须返回同一首次结果且状态不变。",
+      "content_file": "notes/todo-v2.txt",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_todo_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_todo_v2_0001",
+          "file_id": "file_todo",
+          "operation": "update_file_content",
+          "path": "notes/todo.txt",
+          "base_revision": 1,
+          "blob_reference": "upload_todo_v2",
+          "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_size": 137,
+          "client_timestamp": "2026-11-21T09:05:00Z",
+          "metadata": {
+            "format": "txt",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_todo_01",
+          "base_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c"
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": true,
+        "version_id": "ver_todo_02",
+        "parent_version_id": "ver_todo_01",
+        "change_id": "chg_000002",
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "vault_revision": 2
+      },
+      "expect_replay_of_step": 0
+    }
+  ],
+  "version_samples": {
+    "ver_todo_01": "notes/todo-v1.txt"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "vault": {
+    "name": "写作",
+    "format": "json"
+  },
+  "editor": {
+    "fontSize": 14,
+    "lineEnding": "lf",
+    "autosaveMs": 800
+  },
+  "sidebar": {
+    "showBacklinks": true
+  }
+}

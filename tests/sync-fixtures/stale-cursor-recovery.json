@@ -1,0 +1,947 @@
+{
+  "scenario": "stale-cursor-recovery",
+  "title": "过期游标恢复",
+  "content_samples": {
+    "gamma.base": "notes/todo-v1.txt",
+    "gamma.after_snapshot": "notes/todo-v2.txt",
+    "alpha.current": "notes/roadmap-v2.md",
+    "beta.current": "data/settings-v2.json"
+  },
+  "description": "游标低于 min_available_revision 时返回 CURSOR_TOO_OLD 与 manifest 入口；获取 manifest 并重建文件映射后，在快照之后产生一条变更，从快照 revision 续拉时该变更恰好出现一次。另测游标恰好等于下界时可以正常增量，以及历史 operation_id 的全局占用。",
+  "initial_state": {
+    "vault_id": "vault_demo_0001",
+    "vault_revision": 6,
+    "min_available_revision": 3,
+    "request_sequence": 2,
+    "files": [
+      {
+        "file_id": "file_gamma",
+        "path": "notes/todo.txt",
+        "format": "txt",
+        "current_version_id": "ver_gamma_01"
+      },
+      {
+        "file_id": "file_alpha",
+        "path": "projects/roadmap.md",
+        "format": "md",
+        "current_version_id": "ver_alpha_02"
+      },
+      {
+        "file_id": "file_beta",
+        "path": "data/settings.json",
+        "format": "json",
+        "current_version_id": "ver_beta_01"
+      }
+    ],
+    "versions": [
+      {
+        "version_id": "ver_gamma_01",
+        "file_id": "file_gamma",
+        "vault_revision": 3,
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "txt",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_alpha_01",
+        "file_id": "file_alpha",
+        "vault_revision": 4,
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "base_version_id": null,
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "md",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_alpha_02",
+        "file_id": "file_alpha",
+        "vault_revision": 5,
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "base_version_id": "ver_alpha_01",
+        "created_by_device_id": "device_mac_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "md",
+          "line_ending": "lf"
+        }
+      },
+      {
+        "version_id": "ver_beta_01",
+        "file_id": "file_beta",
+        "vault_revision": 6,
+        "blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_size": 220,
+        "base_version_id": null,
+        "created_by_device_id": "device_web_0001",
+        "created_at": "2026-11-21T09:00:00Z",
+        "metadata": {
+          "format": "json",
+          "line_ending": "lf"
+        }
+      }
+    ],
+    "blobs": [
+      {
+        "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "created_by_device_id": "device_mac_0001"
+      },
+      {
+        "blob_id": "blob_019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "created_by_device_id": "device_mac_0001"
+      },
+      {
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "created_by_device_id": "device_mac_0001"
+      },
+      {
+        "blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "vault_id": "vault_demo_0001",
+        "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_size": 220,
+        "created_by_device_id": "device_web_0001"
+      }
+    ],
+    "changes": [
+      {
+        "change_id": "chg_000003",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 3,
+        "operation": "create_file",
+        "file_id": "file_gamma",
+        "path": "notes/todo.txt",
+        "version_id": "ver_gamma_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+        "content_size": 93,
+        "operation_id": "op_create_todo",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      },
+      {
+        "change_id": "chg_000004",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 4,
+        "operation": "create_file",
+        "file_id": "file_alpha",
+        "path": "projects/roadmap.md",
+        "version_id": "ver_alpha_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a",
+        "content_size": 134,
+        "operation_id": "op_create_roadmap",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      },
+      {
+        "change_id": "chg_000005",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 5,
+        "operation": "update_file_content",
+        "file_id": "file_alpha",
+        "path": "projects/roadmap.md",
+        "version_id": "ver_alpha_02",
+        "parent_version_id": "ver_alpha_01",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "operation_id": "op_roadmap_v2_0001",
+        "device_id": "device_mac_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      },
+      {
+        "change_id": "chg_000006",
+        "vault_id": "vault_demo_0001",
+        "vault_revision": 6,
+        "operation": "create_file",
+        "file_id": "file_beta",
+        "path": "data/settings.json",
+        "version_id": "ver_beta_01",
+        "parent_version_id": null,
+        "content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+        "content_size": 220,
+        "operation_id": "op_create_settings",
+        "device_id": "device_web_0001",
+        "client_timestamp": "2026-11-21T09:00:00Z",
+        "created_at": "2026-11-21T09:00:00Z"
+      }
+    ],
+    "upload_sessions": [
+      {
+        "blob_reference": "upload_todo_v2",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+        "content_size": 137,
+        "blob_id": "blob_e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db"
+      },
+      {
+        "blob_reference": "upload_roadmap_v2",
+        "vault_id": "vault_demo_0001",
+        "status": "completed",
+        "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+        "content_size": 213,
+        "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227"
+      }
+    ],
+    "reserved_operation_ids": [
+      "op_reserved_failed_upload"
+    ],
+    "idempotency": [
+      {
+        "operation_id": "op_roadmap_v2_0001",
+        "request_id": "req_000001",
+        "fingerprint": "sha256:27b41e9dc511129e0006a15f998703aa756309247c74760ecd65b2926e2d5439",
+        "request": {
+          "method": "POST",
+          "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+          "headers": {
+            "Idempotency-Key": "op_roadmap_v2_0001"
+          },
+          "body": {
+            "mode": "submit",
+            "vault_id": "vault_demo_0001",
+            "device_id": "device_mac_0001",
+            "operation_id": "op_roadmap_v2_0001",
+            "file_id": "file_alpha",
+            "operation": "update_file_content",
+            "path": "projects/roadmap.md",
+            "base_revision": 4,
+            "blob_reference": "upload_roadmap_v2",
+            "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+            "content_size": 213,
+            "client_timestamp": "2026-11-21T09:00:00Z",
+            "metadata": {
+              "format": "md",
+              "line_ending": "lf"
+            },
+            "base_version_id": "ver_alpha_01",
+            "base_content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a"
+          }
+        },
+        "result": {
+          "protocol_version": "sync-v1",
+          "request_id": "req_000001",
+          "mode": "submit",
+          "replayed": false,
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_roadmap_v2_0001",
+          "file_id": "file_alpha",
+          "path": "projects/roadmap.md",
+          "version_id": "ver_alpha_02",
+          "parent_version_id": "ver_alpha_01",
+          "change_id": "chg_000005",
+          "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_size": 213,
+          "vault_revision": 5
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "pull-at-lower-bound",
+      "description": "游标恰好等于 min_available_revision（3）时仍可增量，返回 4、5、6 三条 Change。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 3
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "from_revision": 3,
+        "to_revision": 6,
+        "min_available_revision": 3,
+        "changes": [
+          {
+            "change_id": "chg_000004",
+            "vault_revision": 4
+          },
+          {
+            "change_id": "chg_000005",
+            "vault_revision": 5
+          },
+          {
+            "change_id": "chg_000006",
+            "vault_revision": 6
+          }
+        ],
+        "has_more": false
+      },
+      "expected_state": {
+        "vault_revision": 6
+      }
+    },
+    {
+      "id": "pull-two-below-lower-bound",
+      "description": "游标 2 严格小于下界 3（距离为 1），同样必须返回 CURSOR_TOO_OLD；用于证明判定是严格小于而不是小于下界再减一。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 2
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "CURSOR_TOO_OLD",
+        "requested_revision": 2,
+        "min_available_revision": 3,
+        "current_vault_revision": 6,
+        "manifest_endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "method": "POST",
+        "allowed_method": "POST"
+      },
+      "expected_result": {
+        "code": "CURSOR_TOO_OLD",
+        "requested_revision": 2,
+        "min_available_revision": 3,
+        "current_vault_revision": 6
+      }
+    },
+    {
+      "id": "pull-below-lower-bound",
+      "description": "游标 1 严格小于下界 3，必须返回 CURSOR_TOO_OLD，并给出下界与 manifest 入口。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 1
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "CURSOR_TOO_OLD",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "requested_revision": 1,
+        "min_available_revision": 3,
+        "current_vault_revision": 6,
+        "manifest_endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest"
+      },
+      "expected_result": {
+        "code": "CURSOR_TOO_OLD",
+        "vault_id": "vault_demo_0001",
+        "requested_revision": 1,
+        "min_available_revision": 3,
+        "current_vault_revision": 6,
+        "manifest_endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest"
+      }
+    },
+    {
+      "id": "fetch-manifest-snapshot",
+      "description": "获取 manifest，按条目重建文件映射，并与快照 revision 上的服务端状态逐项核对。",
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "headers": {
+          "X-Device-Id": "device_mac_0001"
+        },
+        "query": {
+          "device_id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_manifest_restores_map": true,
+      "expected_result": {
+        "mode": "manifest",
+        "vault_id": "vault_demo_0001",
+        "snapshot_revision": 6,
+        "min_available_revision": 3,
+        "files": [
+          {
+            "file_id": "file_beta",
+            "path": "data/settings.json",
+            "format": "json",
+            "current_version_id": "ver_beta_01",
+            "current_content_hash": "sha256:93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+            "content_size": 220,
+            "blob_id": "blob_93ebd40144b3c07fa3e3da5336efdc92fbf276791700249011b923363ad552b4",
+            "is_deleted": false
+          },
+          {
+            "file_id": "file_gamma",
+            "path": "notes/todo.txt",
+            "format": "txt",
+            "current_version_id": "ver_gamma_01",
+            "current_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+            "content_size": 93,
+            "blob_id": "blob_811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c",
+            "is_deleted": false
+          },
+          {
+            "file_id": "file_alpha",
+            "path": "projects/roadmap.md",
+            "format": "md",
+            "current_version_id": "ver_alpha_02",
+            "current_content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+            "content_size": 213,
+            "blob_id": "blob_542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+            "is_deleted": false
+          }
+        ]
+      },
+      "expect_state_unchanged": true
+    },
+    {
+      "id": "change-after-snapshot",
+      "description": "快照之后 Mac 端把 notes/todo.txt 更新为 v2，产生 revision 7。",
+      "content_file": "notes/todo-v2.txt",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_todo_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_todo_v2_0001",
+          "file_id": "file_gamma",
+          "operation": "update_file_content",
+          "path": "notes/todo.txt",
+          "base_revision": 6,
+          "blob_reference": "upload_todo_v2",
+          "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_size": 137,
+          "client_timestamp": "2026-11-21T09:10:00Z",
+          "metadata": {
+            "format": "txt",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_gamma_01",
+          "base_content_hash": "sha256:811349c57bbe210e7f90aaa3c18abe9c9993557f11d61408104c392217c73f8c"
+        }
+      },
+      "expected_status": 200,
+      "expected_result": {
+        "mode": "submit",
+        "file_id": "file_gamma",
+        "version_id": "ver_gamma_02",
+        "parent_version_id": "ver_gamma_01",
+        "change_id": "chg_000007",
+        "vault_revision": 7
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.versions": 5,
+        "counts.changes": 5,
+        "files.file_gamma.current_version_id": "ver_gamma_02"
+      }
+    },
+    {
+      "id": "resume-from-snapshot-revision",
+      "description": "按 manifest 快照恢复后从 snapshot_revision 续拉，快照之后的变更恰好出现一次。请求游标不在此处硬编码：执行时从 fetch-manifest-snapshot 响应的 snapshot_revision 注入。",
+      "cursor_from_step": 3,
+      "cursor_from_field": "snapshot_revision",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "to_revision": 7,
+        "changes": [
+          {
+            "change_id": "chg_000007",
+            "vault_revision": 7,
+            "file_id": "file_gamma",
+            "version_id": "ver_gamma_02"
+          }
+        ],
+        "has_more": false
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5
+      }
+    },
+    {
+      "id": "fetch-manifest-after-resume",
+      "description": "续拉之后再次获取 manifest，快照 revision 已推进到 7；用于验证同一绑定逻辑在 revision 6 与 7 两个游标上都按实际响应取值。",
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "headers": {
+          "X-Device-Id": "device_mac_0001"
+        },
+        "query": {
+          "device_id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expect_manifest_restores_map": true,
+      "expected_result": {
+        "mode": "manifest",
+        "vault_id": "vault_demo_0001",
+        "snapshot_revision": 7,
+        "min_available_revision": 3
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5
+      }
+    },
+    {
+      "id": "resume-from-second-snapshot",
+      "description": "从第二个 manifest 响应的 snapshot_revision（7）续拉：快照已包含 revision 7 的变更，因此必须返回空数组。若执行器把游标写死为 6，就会多返回 chg_000007。",
+      "cursor_from_step": 6,
+      "cursor_from_field": "snapshot_revision",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "from_revision": 7,
+        "to_revision": 7,
+        "changes": [],
+        "has_more": false
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5
+      }
+    },
+    {
+      "id": "replay-historical-operation",
+      "description": "原样重放 revision 5 已成功的 op_roadmap_v2_0001：必须命中初态携带的幂等账本，返回首次结果（ver_alpha_02 / chg_000005 / revision 5），且不新增版本、Change 与 Blob。",
+      "content_file": "notes/roadmap-v2.md",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_roadmap_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_roadmap_v2_0001",
+          "file_id": "file_alpha",
+          "operation": "update_file_content",
+          "path": "projects/roadmap.md",
+          "base_revision": 4,
+          "blob_reference": "upload_roadmap_v2",
+          "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_size": 213,
+          "client_timestamp": "2026-11-21T09:00:00Z",
+          "metadata": {
+            "format": "md",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_alpha_01",
+          "base_content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a"
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "submit",
+        "replayed": true,
+        "original_request_id": "req_000001",
+        "operation_id": "op_roadmap_v2_0001",
+        "file_id": "file_alpha",
+        "version_id": "ver_alpha_02",
+        "parent_version_id": "ver_alpha_01",
+        "change_id": "chg_000005",
+        "vault_revision": 5
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5,
+        "counts.versions": 5,
+        "versions.ver_alpha_02.base_version_id": "ver_alpha_01"
+      },
+      "expect_historical_replay": 0
+    },
+    {
+      "id": "reuse-historical-operation-different-content",
+      "description": "复用历史 operation_id 但改变请求内容（client_timestamp），必须返回 IDEMPOTENCY_KEY_REUSED 并回指首次请求，不得写入任何状态。",
+      "content_file": "notes/roadmap-v2.md",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_roadmap_v2_0001"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_roadmap_v2_0001",
+          "file_id": "file_alpha",
+          "operation": "update_file_content",
+          "path": "projects/roadmap.md",
+          "base_revision": 4,
+          "blob_reference": "upload_roadmap_v2",
+          "content_hash": "sha256:542b2f6db9967dd8c083a9154064652f151e6ec9616264fe81e40ed2eb9b6227",
+          "content_size": 213,
+          "client_timestamp": "2026-11-21T09:45:00Z",
+          "metadata": {
+            "format": "md",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_alpha_01",
+          "base_content_hash": "sha256:019c10934398e428bdaa6baefcb14407cf446db3f4646f7e5b95d4aa2176299a"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "IDEMPOTENCY_KEY_REUSED",
+        "operation_id": "op_roadmap_v2_0001",
+        "change_id": "chg_000005",
+        "original_request_id": "req_000001",
+        "replayable": true,
+        "version_id": "ver_alpha_02",
+        "file_id": "file_alpha",
+        "vault_revision": 5,
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "method": "POST",
+        "allowed_method": "POST"
+      },
+      "expected_result": {
+        "code": "IDEMPOTENCY_KEY_REUSED",
+        "operation_id": "op_roadmap_v2_0001",
+        "change_id": "chg_000005",
+        "original_request_id": "req_000001",
+        "replayable": true,
+        "version_id": "ver_alpha_02",
+        "file_id": "file_alpha",
+        "vault_revision": 5
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5,
+        "counts.versions": 5
+      }
+    },
+    {
+      "id": "manifest-header-device-only",
+      "description": "manifest 的 device_id 可以只放在 X-Device-Id 请求头里。执行器必须保持「头就是头」的来源，不得把它复制进查询参数。",
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "headers": {
+          "x-device-id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "manifest",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "snapshot_revision": 7,
+        "min_available_revision": 3
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5
+      }
+    },
+    {
+      "id": "manifest-matching-query-vault",
+      "description": "查询参数重复携带与路由相同的 vault_id 时必须被允许，不能因为「查询里出现了 vault_id」就拒绝。",
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "headers": {
+          "X-Device-Id": "device_mac_0001"
+        },
+        "query": {
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001"
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "manifest",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "snapshot_revision": 7,
+        "min_available_revision": 3
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5
+      }
+    },
+    {
+      "id": "pull-with-matching-query-vault",
+      "description": "POST 拉取的查询串携带与路由一致的 vault_id 时必须放行；查询串不是请求体的字段来源。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "query": {
+          "vault_id": "vault_demo_0001"
+        },
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 7
+        }
+      },
+      "expected_status": 200,
+      "expect_state_unchanged": true,
+      "expected_result": {
+        "mode": "pull",
+        "vault_id": "vault_demo_0001",
+        "device_id": "device_mac_0001",
+        "from_revision": 7,
+        "to_revision": 7,
+        "changes": [],
+        "has_more": false
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5
+      }
+    },
+    {
+      "id": "reuse-reserved-operation-id",
+      "description": "reserved_operation_ids 声明了一个没有历史 Change 的已占用 ID：新的不同操作复用它必须返回 IDEMPOTENCY_KEY_REUSED，且不得新增 Change。",
+      "content_file": "notes/todo-v2.txt",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_reserved_failed_upload"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_reserved_failed_upload",
+          "file_id": "file_gamma",
+          "operation": "update_file_content",
+          "path": "notes/todo.txt",
+          "base_revision": 7,
+          "blob_reference": "upload_todo_v2",
+          "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_size": 137,
+          "client_timestamp": "2026-11-21T09:50:00Z",
+          "metadata": {
+            "format": "txt",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_gamma_02",
+          "base_content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "IDEMPOTENCY_KEY_REUSED",
+        "operation_id": "op_reserved_failed_upload",
+        "change_id": null,
+        "original_request_id": null,
+        "replayable": false
+      },
+      "expected_result": {
+        "code": "IDEMPOTENCY_KEY_REUSED",
+        "operation_id": "op_reserved_failed_upload",
+        "replayable": false
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5,
+        "counts.used_operations": 6
+      }
+    },
+    {
+      "id": "reuse-historical-create-operation",
+      "description": "历史 create_file 的 operation_id（op_create_roadmap）没有可重放的首次结果，但已被占用；用它发起 update_file_content 必须返回 IDEMPOTENCY_KEY_REUSED，不能新增第二条 Change。",
+      "content_file": "notes/todo-v2.txt",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {
+          "Idempotency-Key": "op_create_roadmap"
+        },
+        "body": {
+          "mode": "submit",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "operation_id": "op_create_roadmap",
+          "file_id": "file_gamma",
+          "operation": "update_file_content",
+          "path": "notes/todo.txt",
+          "base_revision": 7,
+          "blob_reference": "upload_todo_v2",
+          "content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db",
+          "content_size": 137,
+          "client_timestamp": "2026-11-21T09:55:00Z",
+          "metadata": {
+            "format": "txt",
+            "line_ending": "lf"
+          },
+          "base_version_id": "ver_gamma_02",
+          "base_content_hash": "sha256:e7a5e289ce04c32e9bfaf6727cb66f701b3cdab9d3fb4dca800fc09b84dae0db"
+        }
+      },
+      "expected_status": 409,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "IDEMPOTENCY_KEY_REUSED",
+        "operation_id": "op_create_roadmap",
+        "change_id": "chg_000004",
+        "replayable": false
+      },
+      "expected_result": {
+        "code": "IDEMPOTENCY_KEY_REUSED",
+        "operation_id": "op_create_roadmap",
+        "change_id": "chg_000004"
+      },
+      "expected_state": {
+        "vault_revision": 7,
+        "counts.changes": 5,
+        "counts.versions": 5,
+        "counts.used_operations": 6
+      }
+    },
+    {
+      "id": "manifest-query-vault-mismatch",
+      "description": "manifest 的查询参数 vault_id 与路由不一致时必须由模型返回 404 VAULT_MISMATCH；执行器不得提前拦截。",
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "headers": {
+          "X-Device-Id": "device_mac_0001"
+        },
+        "query": {
+          "device_id": "device_mac_0001",
+          "vault_id": "vault_other"
+        }
+      },
+      "expected_status": 404,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "VAULT_MISMATCH",
+        "vault_id": "vault_other",
+        "expected_vault_id": "vault_demo_0001",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/manifest",
+        "method": "GET",
+        "allowed_method": "GET"
+      },
+      "expected_result": {
+        "code": "VAULT_MISMATCH",
+        "vault_id": "vault_other",
+        "expected_vault_id": "vault_demo_0001"
+      }
+    },
+    {
+      "id": "pull-query-vault-mismatch",
+      "description": "POST pull 的查询参数 vault_id 与路由不一致时返回 404；请求体本身正确也不能放行。",
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "headers": {},
+        "query": {
+          "vault_id": "vault_other"
+        },
+        "body": {
+          "mode": "pull",
+          "vault_id": "vault_demo_0001",
+          "device_id": "device_mac_0001",
+          "last_server_revision": 7
+        }
+      },
+      "expected_status": 404,
+      "expect_state_unchanged": true,
+      "expect_error_fields": {
+        "code": "VAULT_MISMATCH",
+        "vault_id": "vault_other",
+        "expected_vault_id": "vault_demo_0001",
+        "endpoint": "/api/v1/vaults/vault_demo_0001/sync/changes",
+        "method": "POST",
+        "allowed_method": "POST"
+      },
+      "expected_result": {
+        "code": "VAULT_MISMATCH",
+        "vault_id": "vault_other",
+        "expected_vault_id": "vault_demo_0001"
+      }
+    }
+  ],
+  "version_samples": {
+    "ver_gamma_01": "notes/todo-v1.txt",
+    "ver_alpha_01": "notes/roadmap-v1.md",
+    "ver_alpha_02": "notes/roadmap-v2.md",
+    "ver_beta_01": "data/settings-v2.json"
+  }
+}
