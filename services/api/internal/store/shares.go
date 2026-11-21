@@ -35,6 +35,7 @@ type ShareRequest struct {
 	Vault     string   `json:"vault_id"`
 	Recipient string   `json:"recipient"`
 	Paths     []string `json:"paths"`
+	AssetIDs  []string `json:"asset_ids,omitempty"`
 }
 
 const shareSelect = `SELECT s.id,u.email,v.email,s.status,s.created_at,s.snapshot FROM shares s JOIN users u ON s.sender=u.id JOIN users v ON s.recipient=v.id `
@@ -76,13 +77,8 @@ func (r *Repository) ShareFiles(ctx context.Context, user, key string, request S
 	if err != nil {
 		return out, err
 	}
-	if recipient.ID == user || len(request.Paths) == 0 {
+	if recipient.ID == user {
 		return out, fileError(400, "INVALID_SHARE", "choose files and another recipient")
-	}
-	for _, p := range request.Paths {
-		if !PortablePath(strings.TrimSuffix(p, "/")) {
-			return out, fileError(400, "INVALID_PATH", "invalid snapshot path")
-		}
 	}
 	fingerprint, err := FingerprintRequest(request)
 	if err != nil {
@@ -114,59 +110,9 @@ func (r *Repository) ShareFiles(ctx context.Context, user, key string, request S
 			return out, err
 		}
 	}
-	rows, err := tx.QueryContext(ctx, activeFileQuery+` ORDER BY f.path`, request.Vault)
+	snap, err := r.selectSnapshot(ctx, tx, request.Vault, request.Paths, request.AssetIDs)
 	if err != nil {
 		return out, err
-	}
-	defer rows.Close()
-	snap := Snapshot{Files: []SnapshotFile{}, Assets: []Asset{}}
-	found := make(map[string]bool)
-	for rows.Next() {
-		f, err := scanFile(rows)
-		if err != nil {
-			return out, err
-		}
-		selected := false
-		for _, p := range request.Paths {
-			dir := strings.TrimSuffix(p, "/")
-			if f.Path == p || strings.HasPrefix(f.Path, dir+"/") {
-				selected = true
-				found[p] = true
-			}
-		}
-		if selected && f.CurrentVersionID != nil {
-			snap.Files = append(snap.Files, SnapshotFile{f.Path, *f.CurrentVersionID, f.CurrentContentHash, f.CurrentContentSize})
-		}
-	}
-	if err = rows.Err(); err != nil {
-		return out, err
-	}
-	rows.Close()
-	for _, p := range request.Paths {
-		if !found[p] {
-			return out, ErrNotFound
-		}
-	}
-	seen := map[string]bool{}
-	for _, f := range snap.Files {
-		if !strings.HasSuffix(strings.ToLower(f.Path), ".md") {
-			continue
-		}
-		data, err := r.readNoteBlob(ctx, request.Vault, f.Hash, f.Size)
-		if err != nil {
-			return out, err
-		}
-		for _, id := range r.assetReferences(data) {
-			if seen[id] {
-				continue
-			}
-			a, err := r.scanAsset(tx.QueryRowContext(ctx, assetSelect+`WHERE a.id=? AND a.vault_id=? AND a.is_deleted=0 AND u.status='completed'`, id, request.Vault))
-			if err != nil {
-				return out, err
-			}
-			snap.Assets = append(snap.Assets, a)
-			seen[id] = true
-		}
 	}
 	id, err := newID("share")
 	if err != nil {
@@ -280,41 +226,14 @@ func (r *Repository) AcceptShare(ctx context.Context, user, id, target, folder s
 	if err = json.Unmarshal([]byte(raw), &snap); err != nil {
 		return nil, err
 	}
-	links := make(map[string]string)
-	for _, a := range snap.Assets {
-		dest, err := r.copyAsset(ctx, tx, target, a)
-		if err != nil {
-			return nil, err
-		}
-		links[a.URL] = dest
+	results, links, err := r.importSnapshot(ctx, tx, source, target, folder, user, snap)
+	if err != nil {
+		return nil, err
 	}
-	for _, file := range snap.Files {
-		p := file.Path
-		if folder != "" {
-			p = folder + "/" + p
-		}
-		data, err := r.readNoteBlob(ctx, source, file.Hash, file.Size)
-		if err != nil {
+	for src, dest := range links {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO share_asset_copies(share_id,source_url,target_url) VALUES(?,?,?)`, id, src, dest); err != nil {
 			return nil, err
 		}
-		if strings.HasSuffix(strings.ToLower(file.Path), ".md") {
-			for old, newURL := range links {
-				data = bytes.ReplaceAll(data, []byte(old), []byte(newURL))
-			}
-		}
-		ref, err := r.putBytes(ctx, target, data)
-		if err != nil {
-			return nil, err
-		}
-		op, err := newID("op")
-		if err != nil {
-			return nil, err
-		}
-		result, err := writeFileTx(ctx, tx, target, "", "create_file", op, FileWrite{Device: "web_" + user, Path: p}, ref)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, result)
 	}
 	rawResult, err := json.Marshal(results)
 	if err != nil {
@@ -325,4 +244,121 @@ func (r *Repository) AcceptShare(ctx context.Context, user, id, target, folder s
 		return nil, err
 	}
 	return results, tx.Commit()
+}
+
+func (r *Repository) selectSnapshot(ctx context.Context, tx *sql.Tx, vault string, paths, assetIDs []string) (Snapshot, error) {
+	snap := Snapshot{Files: []SnapshotFile{}, Assets: []Asset{}}
+	if len(paths)+len(assetIDs) == 0 {
+		return snap, fileError(400, "INVALID_SHARE", "choose files, folders or attachments")
+	}
+	for _, p := range paths {
+		if !PortablePath(strings.TrimSuffix(p, "/")) {
+			return snap, fileError(400, "INVALID_PATH", "invalid snapshot path")
+		}
+	}
+	rows, err := tx.QueryContext(ctx, activeFileQuery+` ORDER BY f.path`, vault)
+	if err != nil {
+		return snap, err
+	}
+	defer rows.Close()
+
+	found := make(map[string]bool)
+	for rows.Next() {
+		f, err := scanFile(rows)
+		if err != nil {
+			return snap, err
+		}
+		selected := false
+		for _, p := range paths {
+			dir := strings.TrimSuffix(p, "/")
+			if f.Path == p || strings.HasPrefix(f.Path, dir+"/") {
+				selected = true
+				found[p] = true
+			}
+		}
+		if selected && f.CurrentVersionID != nil {
+			snap.Files = append(snap.Files, SnapshotFile{f.Path, *f.CurrentVersionID, f.CurrentContentHash, f.CurrentContentSize})
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return snap, err
+	}
+	rows.Close()
+	for _, p := range paths {
+		if !found[p] {
+			return snap, ErrNotFound
+		}
+	}
+	snap.Assets, err = r.snapshotAssets(ctx, tx, vault, snap.Files, assetIDs)
+	return snap, err
+}
+
+func (r *Repository) snapshotAssets(ctx context.Context, tx *sql.Tx, vault string, files []SnapshotFile, assetIDs []string) ([]Asset, error) {
+	assets := []Asset{}
+	ids := append([]string(nil), assetIDs...)
+	for _, f := range files {
+		if f.Version == "" || !strings.HasSuffix(strings.ToLower(f.Path), ".md") {
+			continue
+		}
+		data, err := r.readNoteBlob(ctx, vault, f.Hash, f.Size)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, r.assetReferences(data)...)
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		a, err := r.scanAsset(tx.QueryRowContext(ctx, assetSelect+`WHERE a.id=? AND a.vault_id=? AND a.is_deleted=0 AND u.status='completed'`, id, vault))
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, a)
+		seen[id] = true
+	}
+
+	return assets, nil
+}
+
+func (r *Repository) importSnapshot(ctx context.Context, tx *sql.Tx, source, target, folder, user string, snap Snapshot) ([]FileResult, map[string]string, error) {
+	results := []FileResult{}
+	links := make(map[string]string)
+	for _, a := range snap.Assets {
+		dest, err := r.copyAsset(ctx, tx, target, a)
+		if err != nil {
+			return nil, nil, err
+		}
+		links[a.URL] = dest
+	}
+	for _, file := range snap.Files {
+		p := file.Path
+		if folder != "" {
+			p = folder + "/" + p
+		}
+		data, err := r.readNoteBlob(ctx, source, file.Hash, file.Size)
+		if err != nil {
+			return nil, nil, err
+		}
+		if strings.HasSuffix(strings.ToLower(file.Path), ".md") {
+			for old, newURL := range links {
+				data = bytes.ReplaceAll(data, []byte(old), []byte(newURL))
+			}
+		}
+		ref, err := r.putBytes(ctx, target, data)
+		if err != nil {
+			return nil, nil, err
+		}
+		op, err := newID("op")
+		if err != nil {
+			return nil, nil, err
+		}
+		result, err := writeFileTx(ctx, tx, target, "", "create_file", op, FileWrite{Device: "web_" + user, Path: p}, ref)
+		if err != nil {
+			return nil, nil, err
+		}
+		results = append(results, result)
+	}
+	return results, links, nil
 }

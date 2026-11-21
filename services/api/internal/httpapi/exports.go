@@ -63,7 +63,7 @@ func (a *API) exports(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, j)
 		return
 	}
-	body, e := a.repository.OpenExport(ctx, vault, j)
+	body, e := a.repository.OpenExport(ctx, user.ID, vault, j, r.Method != http.MethodHead)
 	if e != nil {
 		resourceError(w, e)
 		return

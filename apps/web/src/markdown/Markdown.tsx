@@ -57,7 +57,7 @@ export type MarkdownIO = {
   image?: (src: string, alt: string) => ReactNode;
   link?: (href: string, label: string) => boolean;
 };
-function View({
+export function MarkdownView({
   text,
   io,
   offset = 0,
@@ -300,7 +300,7 @@ export function Document({
         <div className="live">
           {bounds ? (
             <>
-              <View
+              <MarkdownView
                 text={text.slice(0, bounds.start)}
                 io={io}
                 activate={activate}
@@ -321,7 +321,7 @@ export function Document({
                 }
               />
               <button onClick={() => setBlock(null)}>完成段落</button>
-              <View
+              <MarkdownView
                 text={text.slice(text.length - bounds.tail)}
                 offset={text.length - bounds.tail}
                 io={io}
@@ -330,7 +330,12 @@ export function Document({
               />
             </>
           ) : (
-            <View text={text} io={io} activate={activate} toggle={toggle} />
+            <MarkdownView
+              text={text}
+              io={io}
+              activate={activate}
+              toggle={toggle}
+            />
           )}
           <button
             onClick={() => {
@@ -344,7 +349,7 @@ export function Document({
           </button>
         </div>
       ) : markdown ? (
-        <View text={text} io={io} />
+        <MarkdownView text={text} io={io} />
       ) : (
         <pre>{text}</pre>
       )}

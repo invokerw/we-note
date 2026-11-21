@@ -130,6 +130,26 @@ impl Api {
         }
         Ok(checked(req.send()?)?.json()?)
     }
+    pub fn encrypted_vault(&self, id: Option<&str>, envelope: Option<Value>) -> Result<Value> {
+        let mut route = String::from("/api/v1/encrypted-vaults");
+        if let Some(id) = id {
+            super::identifier(id)?;
+            route.push('/');
+            route.push_str(id);
+        } else if envelope.is_some() {
+            bail!("missing encrypted vault id")
+        }
+        self.json(
+            if envelope.is_some() {
+                Method::PUT
+            } else {
+                Method::GET
+            },
+            &route,
+            envelope,
+            None,
+        )
+    }
     pub fn vaults(&self) -> Result<Value> {
         self.json(Method::GET, "/api/v1/vaults", None, None)
     }

@@ -16,7 +16,7 @@ export type Share = {
   sender: string;
   recipient: string;
   status: string;
-  snapshot: { files: { path: string }[] };
+  snapshot: { files: { path: string }[]; assets?: { name: string }[] };
 };
 type Session = {
   access_token: string;

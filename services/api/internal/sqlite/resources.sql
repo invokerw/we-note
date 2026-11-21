@@ -35,3 +35,97 @@ CREATE TABLE IF NOT EXISTS upload_parts (
  upload_id TEXT NOT NULL REFERENCES upload_part_leases(upload_id) ON DELETE CASCADE,
  number INTEGER NOT NULL, hash TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(upload_id,number)
 );
+
+CREATE TABLE IF NOT EXISTS share_links (
+ id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES users(id), vault TEXT NOT NULL REFERENCES vaults(id),
+ token_hash TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, snapshot TEXT NOT NULL, expires INTEGER NOT NULL,
+ max_downloads INTEGER NOT NULL, downloads INTEGER NOT NULL DEFAULT 0, allow_download INTEGER NOT NULL,
+ allow_import INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, operation_key TEXT, fingerprint TEXT NOT NULL,
+ UNIQUE(owner,operation_key)
+);
+CREATE TABLE IF NOT EXISTS share_link_sessions (
+ token_hash TEXT PRIMARY KEY, link TEXT NOT NULL REFERENCES share_links(id), expires INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_link_session_expiry ON share_link_sessions(expires);
+CREATE TABLE IF NOT EXISTS share_link_imports (
+ link TEXT NOT NULL REFERENCES share_links(id), target TEXT NOT NULL REFERENCES vaults(id),
+ files TEXT NOT NULL, PRIMARY KEY(link,target)
+);
+CREATE TABLE IF NOT EXISTS share_asset_copies (
+ share_id TEXT NOT NULL REFERENCES shares(id), source_url TEXT NOT NULL, target_url TEXT NOT NULL,
+ PRIMARY KEY(share_id,source_url)
+);
+CREATE TABLE IF NOT EXISTS share_publications (
+ share_id TEXT PRIMARY KEY REFERENCES shares(id), snapshot TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS share_copy_versions (
+ share_id TEXT NOT NULL REFERENCES shares(id), file_id TEXT NOT NULL REFERENCES files(id),
+ source_version TEXT NOT NULL REFERENCES file_versions(id), target_version TEXT NOT NULL REFERENCES file_versions(id),
+ PRIMARY KEY(share_id,file_id)
+);
+CREATE TABLE IF NOT EXISTS encrypted_vaults (
+ id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES users(id), revision INTEGER NOT NULL,
+ ciphertext BLOB NOT NULL, iv BLOB NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audit_events (
+ id INTEGER PRIMARY KEY, owner TEXT NOT NULL REFERENCES users(id), action TEXT NOT NULL, object_id TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_owner ON audit_events(owner,id DESC);
+CREATE TRIGGER IF NOT EXISTS audit_login AFTER INSERT ON sessions BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.user_id,'login',NEW.user_id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_device_add AFTER INSERT ON devices BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.user_id,'device.add',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_device_remove AFTER DELETE ON devices BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(OLD.user_id,'device.remove',OLD.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_export AFTER INSERT ON export_jobs BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.user_id,'export.create',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_share AFTER INSERT ON shares BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.sender,'share.send',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_received AFTER INSERT ON shares BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.recipient,'share.receive',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_status AFTER UPDATE OF status ON shares WHEN NEW.status<>OLD.status BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.sender,'share.' || NEW.status,NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_inbox AFTER UPDATE OF status ON shares WHEN NEW.status<>OLD.status BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.recipient,'share.' || NEW.status,NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_publish AFTER INSERT ON share_publications BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES((SELECT sender FROM shares WHERE id=NEW.share_id),'share.publish',NEW.share_id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_copy AFTER INSERT ON share_copy_versions BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES((SELECT recipient FROM shares WHERE id=NEW.share_id),'share.update',NEW.file_id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_link AFTER INSERT ON share_links BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.owner,'link.create',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_link_revoke AFTER UPDATE OF revoked ON share_links WHEN NEW.revoked<>OLD.revoked BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.owner,'link.revoke',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_link_download AFTER UPDATE OF downloads ON share_links BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.owner,'link.download',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_link_visit AFTER INSERT ON share_link_sessions BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES((SELECT owner FROM share_links WHERE id=NEW.link),'link.open',NEW.link);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_link_import AFTER INSERT ON share_link_imports BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES((SELECT owner FROM share_links WHERE id=NEW.link),'link.import',NEW.link);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_link_copy AFTER INSERT ON share_link_imports BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES((SELECT owner_user_id FROM vaults WHERE id=NEW.target),'link.import',NEW.link);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_delete_file AFTER UPDATE OF is_deleted ON files WHEN NEW.is_deleted=1 AND OLD.is_deleted=0 BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES((SELECT owner_user_id FROM vaults WHERE id=NEW.vault_id),'file.delete',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_delete_asset AFTER UPDATE OF is_deleted ON assets WHEN NEW.is_deleted=1 AND OLD.is_deleted=0 BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES((SELECT owner_user_id FROM vaults WHERE id=NEW.vault_id),'asset.delete',NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_encrypted AFTER INSERT ON encrypted_vaults BEGIN
+ INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.owner,'encrypted.create',NEW.id);
+END;

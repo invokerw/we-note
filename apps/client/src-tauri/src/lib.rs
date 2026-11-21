@@ -212,6 +212,37 @@ async fn notebook(
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
+async fn encrypted_vault(
+    origin: String,
+    token: String,
+    id: Option<String>,
+    envelope: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Api::new(&origin, &token)
+            .and_then(|api| api.encrypted_vault(id.as_deref(), envelope))
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn export_decrypted_file(
+    app: tauri::AppHandle,
+    name: String,
+    data: String,
+) -> Result<String, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let downloads = app.path().download_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = STANDARD.decode(data).map_err(|e| e.to_string())?;
+        wenote_sync::notebook::Notebook::export_download(&downloads, &name, &bytes)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
 async fn devices(
     origin: String,
     token: String,
@@ -246,6 +277,8 @@ pub fn run() {
             logout,
             sync,
             notebook,
+            encrypted_vault,
+            export_decrypted_file,
             devices,
             is_android,
             recent_notebook,

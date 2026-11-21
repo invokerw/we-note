@@ -28,3 +28,10 @@ func TestHashUsesUniqueSalt(t *testing.T) {
 		t.Fatal("password hashes reused the same salt")
 	}
 }
+
+func TestLegacyPassword(t *testing.T) {
+	const stored = "pbkdf2-sha256$120000$AAECAwQFBgcICQoLDA0ODw$m-HAmHNmOcAufbn4eNNdXDQP2l10RErmmxRxI1-CRo0"
+	if !Compare(stored, "older account") || Compare(stored, "wrong") {
+		t.Fatal("legacy account verification")
+	}
+}

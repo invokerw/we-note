@@ -108,6 +108,21 @@ try {
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await button("登录").click();
+  await button("打开加密笔记库").click();
+  await button("新建加密笔记库").click();
+  const recovery = await page
+    .getByLabel("恢复密钥", { exact: true })
+    .inputValue();
+  await page.getByLabel("我已保存恢复密钥").check();
+  await page.getByLabel("库名称").fill("Android 私有库");
+  await button("加密并保存").click();
+  await page.getByText("加密库已保存").waitFor();
+  await button("锁定笔记库").click();
+  await page.getByLabel("选择加密库").selectOption({ index: 1 });
+  await page.getByLabel("恢复密钥", { exact: true }).fill(recovery);
+  await button("解锁笔记库").click();
+  assert.equal(await page.getByLabel("库名称").inputValue(), "Android 私有库");
+  await button("返回同步设置").click();
   await button("立即同步").click();
   await page
     .locator("#status")

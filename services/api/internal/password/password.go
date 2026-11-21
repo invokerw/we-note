@@ -1,81 +1,74 @@
 package password
 
 import (
-	"crypto/hmac"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/argon2"
 )
 
-const (
-	algorithm  = "pbkdf2-sha256"
-	iterations = 120000
-	saltBytes  = 16
-	keyBytes   = 32
-)
+const argonPrefix = "$argon2id$v=19$m=65536,t=3,p=4$"
+const keyBytes = 32
 
-func Hash(plainText string) (string, error) {
-	if plainText == "" {
+// Cap simultaneous 64 MiB derivations on a personal server.
+var derivations = make(chan struct{}, 2)
+
+func deriveArgon(plain string, salt []byte) []byte {
+	derivations <- struct{}{}
+	defer func() { <-derivations }()
+	return argon2.IDKey([]byte(plain), salt, 3, 64*1024, 4, keyBytes)
+}
+func Hash(plain string) (string, error) {
+	if plain == "" {
 		return "", errors.New("password is required")
 	}
-	salt := make([]byte, saltBytes)
+	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
-		return "", fmt.Errorf("generate password salt: %w", err)
+		return "", err
 	}
-	derived := derive([]byte(plainText), salt, iterations, keyBytes)
-	encoding := base64.RawURLEncoding
-	return strings.Join([]string{
-		algorithm,
-		strconv.Itoa(iterations),
-		encoding.EncodeToString(salt),
-		encoding.EncodeToString(derived),
-	}, "$"), nil
+	enc := base64.RawStdEncoding
+	return argonPrefix + enc.EncodeToString(salt) + "$" + enc.EncodeToString(deriveArgon(plain, salt)), nil
 }
-
-func Compare(encoded, plainText string) bool {
-	parts := strings.Split(encoded, "$")
-	if len(parts) != 4 || parts[0] != algorithm || plainText == "" {
+func Compare(encoded, plain string) bool {
+	if plain == "" {
 		return false
 	}
-	parsedIterations, err := strconv.Atoi(parts[1])
-	if err != nil || parsedIterations < 1 {
-		return false
-	}
-	encoding := base64.RawURLEncoding
-	salt, err := encoding.DecodeString(parts[2])
-	if err != nil || len(salt) < 8 {
-		return false
-	}
-	expected, err := encoding.DecodeString(parts[3])
-	if err != nil || len(expected) == 0 {
-		return false
-	}
-	actual := derive([]byte(plainText), salt, parsedIterations, len(expected))
-	return subtle.ConstantTimeCompare(actual, expected) == 1
-}
-
-func derive(password, salt []byte, rounds, length int) []byte {
-	result := make([]byte, 0, length)
-	for block := uint32(1); len(result) < length; block++ {
-		mac := hmac.New(sha256.New, password)
-		mac.Write(salt)
-		mac.Write([]byte{byte(block >> 24), byte(block >> 16), byte(block >> 8), byte(block)})
-		u := mac.Sum(nil)
-		accumulator := append([]byte(nil), u...)
-		for round := 1; round < rounds; round++ {
-			mac = hmac.New(sha256.New, password)
-			mac.Write(u)
-			u = mac.Sum(nil)
-			for index := range accumulator {
-				accumulator[index] ^= u[index]
-			}
+	legacy := false
+	params, ok := strings.CutPrefix(encoded, argonPrefix)
+	enc := base64.RawStdEncoding
+	if !ok {
+		params, ok = strings.CutPrefix(encoded, "pbkdf2-sha256$120000$")
+		if !ok {
+			return false
 		}
-		result = append(result, accumulator...)
+		legacy = true
+		enc = base64.RawURLEncoding
 	}
-	return result[:length]
+	a, b, ok := strings.Cut(params, "$")
+	if !ok {
+		return false
+	}
+	salt, err := enc.DecodeString(a)
+	if err != nil || len(salt) != 16 {
+		return false
+	}
+	want, err := enc.DecodeString(b)
+	if err != nil || len(want) != keyBytes {
+		return false
+	}
+	var actual []byte
+	if legacy {
+		actual, err = pbkdf2.Key(sha256.New, plain, salt, 120000, keyBytes)
+		if err != nil {
+			return false
+		}
+	} else {
+		actual = deriveArgon(plain, salt)
+	}
+	return subtle.ConstantTimeCompare(actual, want) == 1
 }

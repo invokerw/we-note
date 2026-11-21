@@ -267,9 +267,19 @@ func (r *Repository) writeExportEntry(ctx context.Context, z *zip.Writer, vault 
 	}
 	return nil
 }
-func (r *Repository) OpenExport(ctx context.Context, vault string, j Export) (io.ReadCloser, error) {
+func (r *Repository) OpenExport(ctx context.Context, user, vault string, j Export, download bool) (io.ReadCloser, error) {
 	if j.Status != "completed" {
 		return nil, fileError(409, "EXPORT_NOT_READY", "archive is not ready")
 	}
-	return r.blobStore.OpenContext(ctx, vault, j.Hash)
+	body, err := r.blobStore.OpenContext(ctx, vault, j.Hash)
+	if err != nil {
+		return nil, err
+	}
+	if download {
+		if _, err = r.db.ExecContext(ctx, `INSERT INTO audit_events(owner,action,object_id) VALUES(?,'export.download',?)`, user, j.ID); err != nil {
+			body.Close()
+			return nil, err
+		}
+	}
+	return body, nil
 }

@@ -400,3 +400,54 @@ a {
   border-color: #214839;
   font-weight: bold;
 }
+
+.security-panel {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  overflow-wrap: anywhere;
+}
+.security-panel fieldset {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid #b7c7bd;
+  min-width: 0;
+}
+.security-panel label {
+  display: block;
+  margin: 0.75rem 0;
+}
+.security-panel :is(input:not([type="checkbox"]), textarea, select) {
+  display: block;
+  width: min(100%, 38rem);
+  max-width: 100%;
+  margin-top: 0.25rem;
+}
+.security-panel button,
+.copy-diff button {
+  margin: 0.25rem 0.5rem 0.25rem 0;
+}
+.security-panel pre,
+.copy-diff pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 26rem;
+  overflow: auto;
+}
+.security-panel img {
+  max-width: 100%;
+  max-height: 22rem;
+}
+.security-panel table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.security-panel :is(th, td) {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #b7c7bd;
+}
+.public-share {
+  background: white;
+  min-height: 100vh;
+}

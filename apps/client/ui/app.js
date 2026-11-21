@@ -27,6 +27,7 @@ const lastReport = () => localStorage.getItem(reportKey()) || "尚无同步记�
 function toggleSettings(on) {
   byId("login").hidden = on;
   byId("settings").hidden = !on;
+  byId("open-encrypted").hidden = !on;
   byId("device-panel").hidden = !on;
   byId("device-list").replaceChildren();
   byId("diagnostic").textContent = on ? lastReport() : "";
@@ -84,7 +85,7 @@ byId("login").onsubmit = async (event) => {
       email: byId("email").value,
       password: byId("password").value,
     });
-    if (!session.vaults.length) throw "请先在网页端创建笔记库，然后重新登录。";
+
     token = session.token;
     refreshToken = session.refresh;
     expires = Date.parse(session.expires);
@@ -95,7 +96,11 @@ byId("login").onsubmit = async (event) => {
     );
     toggleSettings(true);
     restoreFolder();
-    status("");
+    status(
+      session.vaults.length
+        ? ""
+        : "可直接打开加密库。同步普通笔记前请先在网页创建普通笔记库。",
+    );
   } catch (error) {
     status(String(error));
   } finally {
@@ -103,7 +108,13 @@ byId("login").onsubmit = async (event) => {
   }
 };
 async function sync() {
-  if (!navigator.onLine || busy || !token || !byId("settings").reportValidity())
+  if (
+    !navigator.onLine ||
+    busy ||
+    !token ||
+    !byId("vault").value ||
+    !byId("settings").reportValidity()
+  )
     return;
   busy = true;
   const vault = byId("vault").value,
@@ -298,3 +309,10 @@ byId("devices").onclick = async () => {
     status(String(e));
   }
 };
+
+byId("open-encrypted").onclick = () =>
+  window.dispatchEvent(
+    new CustomEvent("open-encrypted", {
+      detail: { access, origin: byId("origin").value.trim(), android },
+    }),
+  );

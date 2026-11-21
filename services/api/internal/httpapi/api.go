@@ -69,6 +69,8 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	}
 	api.exportRoutes(mux)
 	api.shareRoutes(mux)
+	api.linkRoutes(mux)
+	api.securityRoutes(mux)
 	return mux
 }
 

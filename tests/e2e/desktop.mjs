@@ -65,6 +65,7 @@ try {
       [process.execPath, ["apps/web/tests/phase1.mjs"]],
       [process.execPath, ["apps/web/tests/phase2.mjs"]],
       [process.execPath, ["apps/web/tests/phase4.mjs"]],
+      [process.execPath, ["apps/web/tests/phase5.mjs"]],
     );
   if (process.argv.includes("--android"))
     commands.push([process.execPath, ["apps/web/tests/android.mjs"]]);

@@ -9,6 +9,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/yuin/goldmark v1.7.13
 	go.yaml.in/yaml/v3 v3.0.4
+	golang.org/x/crypto v0.38.0
 	golang.org/x/text v0.25.0
 )
 
@@ -28,4 +29,5 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.53.0 // indirect
 	github.com/aws/smithy-go v1.28.9 // indirect
+	golang.org/x/sys v0.36.0 // indirect
 )

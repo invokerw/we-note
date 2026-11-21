@@ -1,3 +1,4 @@
+import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
@@ -607,5 +608,49 @@ window.addEventListener("open-notebook", (e) => {
         settings.hidden = false;
       }}
     />,
+  );
+});
+
+window.addEventListener("open-encrypted", (event) => {
+  const { access, origin, android } = (
+    event as CustomEvent<Binding & { origin: string }>
+  ).detail;
+  const settings = document.querySelector("body > main") as HTMLElement;
+  settings.hidden = true;
+  const io: EncryptedIO = async (id, envelope) =>
+    window.__TAURI__.core.invoke("encrypted_vault", {
+      origin,
+      token: await access(),
+      id: id ?? null,
+      envelope: envelope ?? null,
+    });
+  let dirty = false;
+  const changed = (value: boolean) => {
+    dirty = value;
+  };
+  const output: ExportFile = async (name, bytes) => {
+    const payload = { name, data: base64(bytes) };
+    if (android) {
+      await window.__TAURI__.core.invoke("mobile_control", {
+        action: "exportDocument",
+        payload,
+      });
+    } else {
+      await window.__TAURI__.core.invoke("export_decrypted_file", payload);
+    }
+  };
+  root.render(
+    <div className="local-workspace">
+      <button
+        onClick={() => {
+          if (dirty && !confirm("放弃未保存的加密库编辑？")) return;
+          root.render(null);
+          settings.hidden = false;
+        }}
+      >
+        返回同步设置
+      </button>
+      <EncryptedVaults io={io} dirty={changed} exportFile={output} />
+    </div>,
   );
 });

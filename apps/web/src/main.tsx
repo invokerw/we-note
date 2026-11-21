@@ -1,3 +1,12 @@
+import { useCallback } from "react";
+import {
+  Sharing,
+  Audit,
+  CopyUpdates,
+  PublicShare,
+  readShareLocation,
+} from "./Sharing";
+import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Manager from "./plugins/Manager";
@@ -129,6 +138,21 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [origin, setOrigin] = useState(location.origin);
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
+  const encryptedIO = useCallback<EncryptedIO>(
+    async (id, payload) =>
+      (
+        await request(
+          token,
+          "/api/v1/encrypted-vaults" + (id ? "/" + id : ""),
+          payload ? "PUT" : "GET",
+          payload,
+        )
+      ).json(),
+    [token],
+  );
+  const encryptedDirty = useCallback((value: boolean) => {
+    dirty.current = value;
+  }, []);
   const base = `/api/v1/vaults/${vault}`;
   async function run(f: () => Promise<void>) {
     try {
@@ -278,12 +302,17 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
             ["导出", "导出"],
             ["inbox", "收件箱"],
             ["sent", "已发送"],
+            ["sharing", "分享管理"],
+            ["audit", "审计日志"],
+            ["encrypted", "加密笔记库"],
             ["trash", "回收站"],
             ["插件", "插件"],
           ].map(([v, label]) => (
             <button
               key={v}
-              disabled={!vault}
+              disabled={
+                !vault && !["encrypted", "audit", "inbox", "sent"].includes(v)
+              }
               className={view === v ? "on" : ""}
               onClick={() => run(() => section(v))}
             >
@@ -425,6 +454,12 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               </button>
             </footer>
           </>
+        ) : view === "sharing" ? (
+          <Sharing key={vault} token={token} vault={vault} />
+        ) : view === "audit" ? (
+          <Audit token={token} />
+        ) : view === "encrypted" ? (
+          <EncryptedVaults io={encryptedIO} dirty={encryptedDirty} />
         ) : view === "插件" ? (
           <Manager />
         ) : ["搜索", "附件", "导出"].includes(view) ? (
@@ -491,7 +526,10 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 shares.map((s) => (
                   <section className="share" key={s.share_id}>
                     <strong>
-                      {s.snapshot.files.map((f) => f.path).join("、")}
+                      {[
+                        ...s.snapshot.files.map((f) => f.path),
+                        ...(s.snapshot.assets || []).map((a) => a.name),
+                      ].join("、")}
                     </strong>
                     <p>
                       {view === "inbox" ? s.sender : s.recipient} ·{" "}
@@ -506,6 +544,14 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                         )[s.status]
                       }
                     </p>
+                    {s.status === "accepted" && (
+                      <CopyUpdates
+                        token={token}
+                        share={s}
+                        sent={view === "sent"}
+                        changed={list}
+                      />
+                    )}
                     {s.status === "pending" &&
                       (view === "inbox" ? (
                         <>
@@ -573,9 +619,37 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   );
 }
 function App() {
+  const [shared, setShared] = useState(readShareLocation);
+  useEffect(() => {
+    const navigate = () => {
+      const route = readShareLocation();
+      setShared((old) =>
+        route && !route.secret && old?.id === route.id ? old : route,
+      );
+    };
+    window.addEventListener("hashchange", navigate);
+    window.addEventListener("popstate", navigate);
+    return () => {
+      window.removeEventListener("hashchange", navigate);
+      window.removeEventListener("popstate", navigate);
+    };
+  }, []);
+
   const [token, setToken] = useState(
     sessionStorage.getItem("wenote-session") || "",
   );
+  const auth = (
+    <Auth
+      login={(s) => {
+        sessionStorage.setItem("wenote-session", s);
+        setToken(s);
+      }}
+    />
+  );
+  if (shared)
+    return (
+      <PublicShare key={shared.id} entry={shared} token={token} login={auth} />
+    );
   return token ? (
     <Library
       token={token}
@@ -587,12 +661,7 @@ function App() {
       }}
     />
   ) : (
-    <Auth
-      login={(s) => {
-        sessionStorage.setItem("wenote-session", s);
-        setToken(s);
-      }}
-    />
+    auth
   );
 }
 createRoot(document.getElementById("root")!).render(<App />);

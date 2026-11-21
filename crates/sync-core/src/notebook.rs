@@ -234,11 +234,15 @@ impl Notebook {
         Self::publish_download(dir, &name, temp)
     }
     pub fn export_bytes(&self, dir: &Path, name: &str, bytes: &[u8]) -> Result<String> {
+        self.path(name)?;
+        Self::export_download(dir, name, bytes)
+    }
+    pub fn export_download(dir: &Path, name: &str, bytes: &[u8]) -> Result<String> {
         use std::io::Write;
         if name.contains('/') || bytes.len() > 16 << 20 {
             bail!("无效的导出文件")
         }
-        self.path(name)?;
+        disk::relative(name)?;
         fs::create_dir_all(dir)?;
         let mut temp = tempfile::NamedTempFile::new_in(dir)?;
         temp.write_all(bytes)?;
