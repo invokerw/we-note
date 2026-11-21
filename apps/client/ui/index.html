@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WeNote 桌面同步</title>
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>WeNote</header>
+      <h1>桌面同步</h1>
+      <form id="login">
+        <label
+          >服务地址<input
+            id="origin"
+            type="url"
+            value="http://localhost:8080"
+            required /></label
+        ><label
+          >邮箱<input
+            id="email"
+            type="email"
+            autocomplete="username"
+            required /></label
+        ><label
+          >密码<input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            required /></label
+        ><button>登录</button>
+      </form>
+      <form id="settings" hidden>
+        <label>笔记库<select id="vault"></select></label
+        ><label
+          >本地笔记目录<input
+            id="root"
+            required
+            placeholder="输入已有目录的完整路径" /></label
+        ><label class="checkbox"
+          ><input type="checkbox" id="auto" /> 每 15 秒自动同步</label
+        ><button>立即同步</button
+        ><button type="button" id="logout">退出账户</button>
+      </form>
+      <output id="status" aria-live="polite"></output>
+    </main>
+  </body>
+</html>

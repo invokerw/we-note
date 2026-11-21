@@ -1,0 +1,58 @@
+:root {
+  font:
+    16px/1.55 Inter,
+    system-ui,
+    sans-serif;
+  color: #253a32;
+  background: #f3f1e9;
+}
+main {
+  max-width: 31rem;
+  margin: 6vh auto;
+  padding: 2.5rem;
+  background: #fffef8;
+  border: 1px solid #d6dbd0;
+  border-radius: 16px;
+}
+header {
+  font-family: Georgia, serif;
+  color: #376b56;
+  font-weight: bold;
+}
+h1 {
+  font-size: 2.1rem;
+  margin: 0.55em 0;
+}
+label {
+  display: block;
+  margin: 1rem 0;
+  font-weight: 550;
+}
+input:not([type="checkbox"]),
+select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid #a9b4aa;
+  border-radius: 5px;
+  background: white;
+  font: inherit;
+}
+button {
+  font: inherit;
+  padding: 0.5rem 1.2rem;
+  background: #254d3e;
+  color: white;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  margin: 0.3rem 0.5rem 0.3rem 0;
+}
+output {
+  display: block;
+  margin-top: 1.2rem;
+  white-space: pre-wrap;
+}
+button:disabled {
+  opacity: 0.5;
+}

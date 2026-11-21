@@ -1,0 +1,241 @@
+:root {
+  font:
+    15px/1.6 Inter,
+    "PingFang SC",
+    "Microsoft YaHei",
+    system-ui,
+    sans-serif;
+  color: #263830;
+  background: #faf9f4;
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+button:hover,
+button:focus-visible,
+.on,
+.selected {
+  background: #dfe8da !important;
+  color: #234734;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+input,
+select {
+  border: 1px solid #bfc9ba;
+  border-radius: 5px;
+  background: #fffefa;
+  padding: 0.55rem;
+}
+button.primary {
+  background: #28543f;
+  color: white;
+}
+.brand {
+  font:
+    600 1.8rem Georgia,
+    serif;
+  color: #244c38;
+  letter-spacing: -0.07em;
+}
+.auth {
+  margin: 10vh auto;
+  padding: 3rem;
+  max-width: 26rem;
+  border: 1px solid #d8dfd1;
+  background: #fffef9;
+  border-radius: 12px;
+}
+.auth label {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 1rem;
+}
+.auth .primary {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 255px) 1fr;
+  min-height: 100vh;
+}
+aside {
+  background: #edf0e7;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #d4dcca;
+}
+.vault,
+.treehead,
+.row,
+header,
+.toolbar,
+footer,
+.message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.vault {
+  margin: 1.6rem 0;
+}
+.vault select {
+  min-width: 0;
+  flex: 1;
+}
+.sections {
+  display: grid;
+  gap: 0.15rem;
+}
+.sections button,
+.tree button {
+  text-align: left;
+}
+.treehead {
+  margin-top: 2rem;
+}
+.treehead strong,
+.crumb {
+  font-size: 0.84rem;
+  color: #5e7060;
+}
+.tree {
+  list-style: none;
+  padding-left: 0.7rem;
+  margin: 0.4rem 0;
+}
+.tree button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.tree details summary {
+  cursor: pointer;
+}
+.account {
+  margin-top: auto;
+  padding-top: 2rem;
+}
+.workspace {
+  min-width: 0;
+}
+.workspace header {
+  padding: 0.9rem 2rem;
+  border-bottom: 1px solid #d8dfd1;
+  color: #58705c;
+}
+.workspace article,
+.workspace footer {
+  max-width: 54rem;
+  margin: 2.8rem auto;
+  padding: 0 2.5rem;
+}
+h1 {
+  font-family: Georgia, "Songti SC", serif;
+  line-height: 1.3;
+  font-size: 2.35rem;
+  overflow-wrap: anywhere;
+}
+.toolbar {
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #d8dfd1;
+  justify-content: flex-start;
+}
+.toolbar nav {
+  margin-right: auto;
+}
+.reading {
+  font-size: 1.06rem;
+  line-height: 1.85;
+}
+.reading img {
+  max-width: 100%;
+}
+.source {
+  width: 100%;
+  min-height: 44vh;
+  padding: 1.2rem;
+  resize: vertical;
+  border: 1px solid #cbd6c6;
+  border-radius: 8px;
+  background: #fffefa;
+  font:
+    15px/1.7 ui-monospace,
+    monospace;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.share,
+.row {
+  padding: 1rem 0;
+  border-bottom: 1px solid #d8dfd1;
+}
+.message {
+  margin: 1rem 2rem;
+  background: #e6eddc;
+  padding: 0.5rem 1rem;
+}
+.workspace footer {
+  justify-content: flex-end;
+  border-top: 1px solid #d8dfd1;
+  padding-top: 1rem;
+}
+a {
+  color: #28674b;
+}
+@media (max-width: 700px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  aside {
+    padding: 1rem;
+  }
+  .sections {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .vault,
+  .treehead {
+    margin: 0.5rem 0;
+  }
+  .account {
+    padding: 0;
+  }
+  .workspace header,
+  .workspace article,
+  .workspace footer {
+    padding: 1rem;
+    margin: 0.5rem;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  .auth {
+    margin: 1rem;
+  }
+}

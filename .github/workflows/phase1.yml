@@ -1,0 +1,30 @@
+name: Phase 1 acceptance
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  desktop-and-web:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --prefix apps/web
+      - run: npm run build --prefix apps/web
+      - run: cargo build --locked --workspace
+      - run: go test ./...
+        working-directory: services/api
+      - run: go build -o ../../wenote-api.exe ./cmd/wenote-api
+        working-directory: services/api
+      - run: node tests/e2e/desktop.mjs --browser
+        env:
+          WENOTE_API: ./wenote-api.exe

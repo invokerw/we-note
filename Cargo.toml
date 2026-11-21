@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/sync-core", "apps/client/src-tauri"]
+resolver = "2"
