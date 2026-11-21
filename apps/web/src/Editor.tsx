@@ -120,6 +120,14 @@ export default function Editor({
     await changed();
     notify("已保存新版本");
   }
+  async function download(endpoint: string, name: string) {
+    const blob = await (await request(token, endpoint)).blob();
+    const link = document.createElement("a");
+    link.download = name;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
   async function asset(file: File) {
     const url = await uploadAsset(token, vault, file);
     edit(
@@ -166,6 +174,18 @@ export default function Editor({
             </button>
           ))}
         </nav>
+        {mode === "read" && (
+          <button
+            disabled={busy || !base}
+            onClick={() =>
+              run(() =>
+                download(path + "/versions/" + base + "/content", title),
+              )
+            }
+          >
+            下载原文件
+          </button>
+        )}
         {mode === "edit" && (
           <>
             <button
@@ -249,16 +269,12 @@ export default function Editor({
                   onClick={(e) => {
                     if (href?.startsWith(origin + "/assets/")) {
                       e.preventDefault();
-                      run(async () => {
-                        const blob = await (
-                          await request(token, new URL(href).pathname)
-                        ).blob();
-                        const link = document.createElement("a");
-                        link.download = String(children || "附件");
-                        link.href = URL.createObjectURL(blob);
-                        link.click();
-                        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-                      });
+                      run(() =>
+                        download(
+                          new URL(href).pathname,
+                          String(children || "附件"),
+                        ),
+                      );
                     }
                   }}
                 >

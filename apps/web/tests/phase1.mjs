@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
@@ -49,6 +50,11 @@ try {
   await a.waitForFunction(
     () => document.querySelector("article img")?.naturalWidth === 1,
   );
+  const downloaded = a.waitForEvent("download");
+  await button(a, "下载原文件").click();
+  const file = await downloaded;
+  assert.equal(file.suggestedFilename(), "验收.md");
+  assert.match(await readFile(await file.path(), "utf8"), /^# 浏览器快照/);
   const answers = [email, "daily/"];
   const dialogs = (d) => d.accept(answers.shift());
   a.on("dialog", dialogs);
