@@ -32,7 +32,7 @@ type File struct {
 	Format             string    `json:"format"`
 	CurrentVersionID   *string   `json:"current_version_id,omitempty"`
 	CurrentContentHash string    `json:"current_content_hash,omitempty"`
-	CurrentContentSize int64     `json:"current_content_size,omitempty"`
+	CurrentContentSize int64     `json:"current_content_size"`
 	CurrentBlobID      string    `json:"current_blob_id,omitempty"`
 	IsDeleted          bool      `json:"is_deleted"`
 	CreatedAt          time.Time `json:"created_at"`
