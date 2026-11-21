@@ -3,6 +3,7 @@ import Markdown from "react-markdown";
 import katex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { inspect, extensions, noteSyntax, type Branch } from "./document";
+import HeadingEditor from "./HeadingEditor";
 import Source from "./Source";
 
 let diagramEngine: Promise<(typeof import("mermaid"))["default"]> | undefined;
@@ -285,13 +286,16 @@ export function Document({
           onSelect={select}
         />
       ) : mode === "map" ? (
-        <nav aria-label="标题树思维导图" className="mindmap">
-          {info.outline.length ? (
-            <Branches items={info.outline} jump={jump} />
-          ) : (
-            <p>添加 Markdown 标题后即可生成思维导图。</p>
-          )}
-        </nav>
+        <>
+          <HeadingEditor text={text} edit={edit} />
+          <nav aria-label="标题树思维导图" className="mindmap">
+            {info.outline.length ? (
+              <Branches items={info.outline} jump={jump} />
+            ) : (
+              <p>添加 Markdown 标题后即可生成思维导图。</p>
+            )}
+          </nav>
+        </>
       ) : mode === "live" ? (
         <div className="live">
           {bounds ? (

@@ -1,0 +1,9 @@
+{
+  "id": "org.example.prefixed-text",
+  "name": "带标记的文本",
+  "version": "1.0.0",
+  "api_version": "1",
+  "file_extensions": [".txt"],
+  "capabilities": ["parse", "edit", "serialize", "export"],
+  "entry": { "core": "core.wasm" }
+}

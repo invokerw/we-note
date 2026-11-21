@@ -131,6 +131,8 @@ func contentTypeForFormat(format string) string {
 	switch format {
 	case "md":
 		return "text/markdown; charset=utf-8"
+	case "xmind":
+		return "application/vnd.xmind.workbook"
 	case "json":
 		return "application/json; charset=utf-8"
 	default:

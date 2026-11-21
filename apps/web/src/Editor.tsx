@@ -1,3 +1,6 @@
+import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
+import { browserExport } from "./plugins/archive";
+import { usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState } from "react";
 import { Document, modes, type Mode } from "./markdown/Markdown";
@@ -72,6 +75,8 @@ export default function Editor({
     [versions, setVersions] = useState<Version[]>([]),
     [history, setHistory] = useState(""),
     [busy, setBusy] = useState(false);
+  const special = usesPluginEditor(note.path);
+  const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const source = useRef(new TextFile("")),
     saved = useRef("");
   const assetPicker = useRef<HTMLInputElement>(null);
@@ -80,6 +85,12 @@ export default function Editor({
     request(token, path + "/content")
       .then(async (r) => {
         const buf = new Uint8Array(await r.arrayBuffer());
+        if (!live) return;
+        if (special) {
+          setBytes(buf);
+          setBase(r.headers.get("X-Version-Id") || note.current_version_id);
+          return;
+        }
         const str = new TextDecoder("utf-8", {
           fatal: true,
           ignoreBOM: true,
@@ -115,16 +126,20 @@ export default function Editor({
   }
   async function save() {
     const value = source.current.serialize();
+    await saveBytes(new TextEncoder().encode(value));
+    if (!alive.current) return;
+    saved.current = text;
+    dirty(false);
+  }
+  async function saveBytes(data: Uint8Array) {
     const out = await (
       await request(token, path + "/content", "PUT", {
         base_version_id: base,
-        content: base64(new TextEncoder().encode(value)),
+        content: base64(data),
       })
     ).json();
     if (!alive.current) return;
     setBase(out.version_id);
-    saved.current = text;
-    dirty(false);
     await changed();
     notify("已保存新版本");
   }
@@ -183,7 +198,7 @@ export default function Editor({
     <article
       onPasteCapture={(e) => {
         const dropped = Array.from(e.clipboardData.files);
-        if (editing && dropped.length) {
+        if (!special && editing && dropped.length) {
           e.preventDefault();
           e.stopPropagation();
           if (!busy) run(() => insert(dropped));
@@ -201,7 +216,11 @@ export default function Editor({
         }
       }}
       onKeyDown={(e) => {
-        if (editing && (e.ctrlKey || e.metaKey) && e.key === "s") {
+        if (
+          (editing || mode === "map") &&
+          (e.ctrlKey || e.metaKey) &&
+          e.key === "s"
+        ) {
           e.preventDefault();
           if (!busy && base) run(save);
         }
@@ -212,9 +231,11 @@ export default function Editor({
       <div className="toolbar">
         <nav>
           {[
-            ...modes.filter(
-              ([m]) => note.format === "md" || m === "read" || m === "edit",
-            ),
+            ...(special
+              ? [["read", "文档"]]
+              : modes.filter(
+                  ([m]) => note.format === "md" || m === "read" || m === "edit",
+                )),
             ["history", "历史"],
           ].map(([key, label]) => (
             <button
@@ -238,7 +259,15 @@ export default function Editor({
             </button>
           ))}
         </nav>
-        {mode === "read" && (
+        {!special && note.format === "md" && base && (
+          <MarkdownExport
+            path={note.path}
+            source={() => source.current.serialize()}
+            output={browserExport}
+            notify={notify}
+          />
+        )}
+        {!special && mode === "read" && (
           <button
             disabled={busy || !base}
             onClick={() =>
@@ -250,14 +279,16 @@ export default function Editor({
             下载原文件
           </button>
         )}
-        {editing && (
+        {(editing || mode === "map") && (
           <>
-            <button
-              disabled={busy || !base}
-              onClick={() => assetPicker.current?.click()}
-            >
-              插入附件
-            </button>
+            {editing && (
+              <button
+                disabled={busy || !base}
+                onClick={() => assetPicker.current?.click()}
+              >
+                插入附件
+              </button>
+            )}
             <button
               className="primary"
               disabled={busy || !base}
@@ -278,6 +309,18 @@ export default function Editor({
           e.target.value = "";
         }}
       />
+      {special && bytes && (
+        <div hidden={mode === "history"}>
+          <PluginEditor
+            path={note.path}
+            bytes={bytes}
+            save={saveBytes}
+            output={browserExport}
+            dirty={dirty}
+            notify={notify}
+          />
+        </div>
+      )}
       {mode === "history" ? (
         <section>
           <ul>
@@ -285,7 +328,18 @@ export default function Editor({
               <li key={v.version_id}>
                 <button
                   onClick={() =>
-                    run(async () =>
+                    run(async () => {
+                      if (
+                        note.format === "xmind" ||
+                        (special && note.format !== "json")
+                      ) {
+                        await download(
+                          token,
+                          path + "/versions/" + v.version_id + "/content",
+                          title,
+                        );
+                        return;
+                      }
                       setHistory(
                         await (
                           await request(
@@ -293,8 +347,8 @@ export default function Editor({
                             path + "/versions/" + v.version_id + "/content",
                           )
                         ).text(),
-                      ),
-                    )
+                      );
+                    })
                   }
                 >
                   版本 {v.vault_revision} ·{" "}
@@ -305,7 +359,7 @@ export default function Editor({
           </ul>
           <pre>{history}</pre>
         </section>
-      ) : (
+      ) : special ? null : (
         <div inert={!base || busy}>
           <Document
             markdown={note.format === "md"}

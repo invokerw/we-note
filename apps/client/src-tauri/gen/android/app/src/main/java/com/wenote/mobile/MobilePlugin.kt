@@ -8,6 +8,8 @@ import android.content.Intent
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
+import androidx.activity.result.ActivityResult
+import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
@@ -180,6 +182,44 @@ class MobilePlugin(private val host: Activity) : Plugin(host) {
             }
             binding
         }
+
+    @Command
+    fun exportDocument(invoke: Invoke) {
+        val args = invoke.getArgs()
+        val name = args.getString("name")
+        val mime =
+            when (name.substringAfterLast('.').lowercase()) {
+                "xmind" -> "application/vnd.xmind.workbook"
+                "json" -> "application/json"
+                "md" -> "text/markdown"
+                else -> "text/plain"
+            }
+        val intent =
+            Intent(Intent.ACTION_CREATE_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType(mime)
+                .putExtra(Intent.EXTRA_TITLE, name)
+        startActivityForResult(invoke, intent, "documentSelected")
+    }
+
+    @ActivityCallback
+    private fun documentSelected(invoke: Invoke, result: ActivityResult) {
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            invoke.resolve()
+            return
+        }
+        call(invoke) {
+            val bytes =
+                android.util.Base64.decode(
+                    invoke.getArgs().getString("data"),
+                    android.util.Base64.DEFAULT,
+                )
+            require(bytes.size <= 16 * 1024 * 1024)
+            requireNotNull(host.contentResolver.openOutputStream(uri, "wt")).use { it.write(bytes) }
+            null
+        }
+    }
 
     @Command
     fun share(invoke: Invoke) {

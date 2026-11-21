@@ -129,9 +129,12 @@ func (r *Repository) refreshIndex(ctx context.Context, vault string) error {
 		return err
 	}
 	for _, f := range items {
-		data, e := r.readNoteBlob(ctx, vault, f.hash, f.size)
-		if e != nil {
-			return e
+		var data []byte
+		if f.format != "xmind" {
+			data, err = r.readNoteBlob(ctx, vault, f.hash, f.size)
+			if err != nil {
+				return err
+			}
 		}
 		var m Metadata
 		if f.format == "md" {

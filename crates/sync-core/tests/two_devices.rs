@@ -158,6 +158,25 @@ fn two_devices_and_web_converge() -> Result<()> {
     assert_eq!(fs::read(b.join(note))?, fs::read(a.join(note))?);
     let matches = book.catalog(&token, "/search?q=离线保存", None)?;
     assert_eq!(matches[0]["file_id"], book.file_id(note)?.unwrap());
+    // These disjoint edits would merge cleanly as lines, but a workbook is an opaque archive.
+    let map = "maps/roadmap.XMind";
+    let original = b"PK\xff\nbase\nfirst\nsecond\nlast\n";
+    let first = b"PK\xff\nbase\nA\nsecond\nlast\n";
+    let second = b"PK\xff\nbase\nfirst\nsecond\nB\n";
+    let map_hash = book.save_bytes(map, None, original)?;
+    sync_a()?;
+    sync_b()?;
+    assert_eq!(fs::read(b.join(map))?, original);
+    book.save_bytes(map, Some(&map_hash), first)?;
+    fs::write(b.join(map), second)?;
+    sync_a()?;
+    let copies = sync_b()?.conflicts;
+    assert_eq!(copies.len(), 1);
+    assert_eq!(fs::read(b.join(map))?, first);
+    assert_eq!(fs::read(b.join(&copies[0]))?, second);
+    sync_b()?;
+    sync_a()?;
+    assert_eq!(fs::read(a.join(&copies[0]))?, second);
     let url = book.upload(&token, "tiny.bin", "application/octet-stream", "YWJj")?;
     assert_eq!(book.image(&url, "")?["data"], "YWJj");
     let id = url.rsplit('/').next().unwrap();

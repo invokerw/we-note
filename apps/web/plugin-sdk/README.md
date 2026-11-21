@@ -1,0 +1,24 @@
+# WeNote 文件插件 SDK v1
+
+在 `apps/web` 运行 `npm ci` 和 `node plugin-sdk/pack.mjs plugin-sdk/example /tmp/prefixed-text.zip` 可生成示例插件。从「插件」选择 ZIP，核对来源文件名、SHA-256、扩展名和权限后授权安装。示例打开第一行为 `WN1` 的 TXT，编辑时隐藏标记，保存时写回标记。
+
+包根目录需要 `manifest.json` 和 `core.wasm`。清单示例见 `example/manifest.json`。`api_version` 为字符串 `1`，版本使用三段数字。此版宿主接受 `.md`、`.txt`、`.json` 和 `.xmind`。本地安装的插件优先于同格式的内置编辑器，禁用或卸载后恢复内置处理。相同 ID 的包经重新授权后替换旧版。包和启用状态保存在当前浏览器或客户端配置中。
+
+## WASM 接口
+
+每次调用使用独立 Worker 和实例。插件只导入 `env.memory`，宿主提供固定 512 页（32 MiB）的内存。输入位于地址 0，最大 16 MiB。函数返回 `i64`，高 32 位为无符号输出地址，低 32 位为输出字节数。输出可以复用输入缓冲。宿主检查输出边界，单次调用限时 2.5 秒。包的压缩和展开大小均限 512 KiB。
+
+| 导出函数 | 输入 | 输出 |
+| --- | --- | --- |
+| `open(i32 ptr, i32 len) -> i64` | 当前文件的原始字节 | UTF-8 编辑文本 |
+| `serialize(i32 ptr, i32 len) -> i64` | 当前编辑文本的 UTF-8 字节 | 保存到原文件的字节 |
+
+`parse` 是必需权限。声明 `edit` 和 `serialize` 后宿主允许修改、保存。`export` 启用编辑结果导出。只读插件可以只声明 `parse`。清单 API 和导入、导出接口在安装前校验。渲染由宿主文本控件完成。网络、凭据、其他文件以及原生桥接均无对应的 WASM 导入。
+
+## 内置格式
+
+JSON 编辑器按源文本区间格式化和替换节点，保留数字字面量精度。JSON Pointer 空字符串表示根节点，`~0` 和 `~1` 分别表示键中的 `~` 和 `/`。
+
+XMind 编辑器支持以 `content.json` 存储工作表的 ZIP 文件。保存时复制其余包条目并保留未识别的 JSON 字段。旧版仅含 `content.xml` 的文件可下载原件，在 XMind 中转换为新版后编辑。Markdown 导出采用当前工作表的主题标题、子主题和纯文本备注。样式、关系线、概要、嵌入资源和其他工作表保存在 `.xmind` 中。超过六层的主题树导出 Markdown 时会提示层级限制。Markdown 转换按文档级标题分段，正文放入主题备注。
+
+兼容性验收使用 `tests/fixtures/sdk-workbook.xmind`。该样本由 XMind 的 `xmind-sdk` 1.2.71 生成，包含两个工作表、主题标记、富文本备注和 PNG 资源。

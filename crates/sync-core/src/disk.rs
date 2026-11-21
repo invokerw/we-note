@@ -85,7 +85,7 @@ pub fn scan(root: &Path) -> Result<BTreeMap<String, String>> {
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        if !matches!(ext.as_str(), "md" | "txt" | "json") {
+        if !matches!(ext.as_str(), "md" | "txt" | "json" | "xmind") {
             continue;
         }
         let p = path

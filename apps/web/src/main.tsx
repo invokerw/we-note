@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import Manager from "./plugins/Manager";
+import { initialBytes } from "./plugins/xmind";
 import Editor from "./Editor";
 import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Share, Vault } from "./api";
@@ -277,6 +279,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
             ["inbox", "收件箱"],
             ["sent", "已发送"],
             ["trash", "回收站"],
+            ["插件", "插件"],
           ].map(([v, label]) => (
             <button
               key={v}
@@ -297,7 +300,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                   run(async () => {
                     if (!leave()) return;
                     const p = prompt("新笔记路径", "未命名.md");
-                    if (p) await create(p, new Uint8Array());
+                    if (p) await create(p, initialBytes(p));
                   })
                 }
               >
@@ -324,7 +327,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
             <div>
               <button
                 onClick={() => {
-                  if (leave()) picker.current?.click();
+                  picker.current?.click();
                 }}
               >
                 上传笔记
@@ -337,13 +340,14 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           ref={picker}
           hidden
           type="file"
-          accept=".md,.txt,.json"
+          accept=".md,.txt,.json,.xmind"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f)
               run(async () => {
                 const path = prompt("保存路径", f.name);
-                if (path)
+                if (f.size > 16 << 20) throw Error("笔记超过 16 MiB");
+                if (path && leave())
                   await create(path, new Uint8Array(await f.arrayBuffer()));
               });
             e.target.value = "";
@@ -360,7 +364,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         {view === "files" && note ? (
           <>
             <Editor
-              key={note.file_id}
+              key={note.file_id + note.path}
               {...{
                 note,
                 files,
@@ -421,6 +425,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               </button>
             </footer>
           </>
+        ) : view === "插件" ? (
+          <Manager />
         ) : ["搜索", "附件", "导出"].includes(view) ? (
           <LibraryResources
             key={vault + view}
@@ -448,7 +454,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 {vault
                   ? files.length
                     ? "从左侧文件树选择一篇笔记。"
-                    : "点击「新建笔记」，或上传已有的 Markdown、TXT 文件。"
+                    : "点击「新建笔记」，或上传已有的 Markdown、TXT、JSON 或 XMind 文件。"
                   : "点击左侧的 ＋ 创建笔记库。"}
               </p>
             )}

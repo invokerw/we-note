@@ -1224,7 +1224,7 @@ test('协议常量覆盖第 9.3 节操作名，且 v1 只执行 update_file_cont
   assert.equal(ENDPOINTS.changes, '/api/v1/vaults/{vault_id}/sync/changes');
   assert.equal(ENDPOINTS.manifest, '/api/v1/vaults/{vault_id}/sync/manifest');
   assert.deepEqual(METHODS, { changes: 'POST', manifest: 'GET' });
-  assert.deepEqual(METADATA_FORMATS, ['md', 'txt', 'json']);
+  assert.deepEqual(METADATA_FORMATS, ['md', 'txt', 'json', 'xmind']);
   assert.deepEqual(LINE_ENDINGS, ['lf', 'crlf']);
   assert.deepEqual(UPLOAD_STATUSES, ['pending', 'completed', 'failed']);
 });
@@ -4347,7 +4347,7 @@ test('历史首次请求必须通过完整字段校验，且通过后原样重�
   );
   assert.ok(
     validateInitialState(tamperBody((body) => { body.metadata = { ...body.metadata, format: 'rtf' }; })).some(
-      (problem) => problem.includes('metadata.format "rtf" 必须是 md / txt / json 之一'),
+      (problem) => problem.includes('metadata.format "rtf" 必须是 md / txt / json / xmind 之一'),
     ),
     '首次请求的 metadata.format 必须由枚举校验直接拒绝',
   );
@@ -4885,7 +4885,7 @@ test('initial_state.files 的 path 与 format 必须符合协议取值域（INIT
     );
   }
 
-  // 2. format 不在 md / txt / json 内。
+  // 2. format 不在 md / txt / json / xmind 内。
   for (const badFormat of ['rtf', 'MD', '', 'markdown', 'html']) {
     const tampered = clone();
     tampered.files.find((file) => file.file_id === 'file_alpha').format = badFormat;
@@ -4894,7 +4894,7 @@ test('initial_state.files 的 path 与 format 必须符合协议取值域（INIT
     assert.ok(
       problems.some(
         (problem) =>
-          problem.includes(`文件 file_alpha 的 format ${JSON.stringify(badFormat)} 必须是 md / txt / json 之一`),
+          problem.includes(`文件 file_alpha 的 format ${JSON.stringify(badFormat)} 必须是 md / txt / json / xmind 之一`),
       ),
       `format=${JSON.stringify(badFormat)} 必须由文件级取值域校验拒绝，实际 ${JSON.stringify(problems)}`,
     );

@@ -60,8 +60,8 @@ func PortablePath(p string) bool {
 }
 func fileFormat(p string) (string, error) {
 	ext := strings.ToLower(strings.TrimPrefix(path.Ext(p), "."))
-	if !PortablePath(p) || (ext != "md" && ext != "txt" && ext != "json") {
-		return "", fileError(400, "INVALID_PATH", "expected a portable relative Markdown, TXT or JSON path")
+	if !PortablePath(p) || (ext != "md" && ext != "txt" && ext != "json" && ext != "xmind") {
+		return "", fileError(400, "INVALID_PATH", "expected a portable relative Markdown, TXT, JSON or XMind path")
 	}
 	return ext, nil
 }
@@ -170,12 +170,14 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 	if used {
 		return result, fileError(409, "IDEMPOTENCY_KEY_REUSED", "operation already used")
 	}
-	if err := r.validateAssetReferences(ctx, tx, vault, input.Content); err != nil {
-		return result, err
-	}
 	result, err = writeFileTx(ctx, tx, vault, id, operation, key, input, ref)
 	if err != nil {
 		return result, err
+	}
+	if !strings.EqualFold(path.Ext(result.Path), ".xmind") {
+		if err := r.validateAssetReferences(ctx, tx, vault, input.Content); err != nil {
+			return result, err
+		}
 	}
 	out, err := json.Marshal(result)
 	if err != nil {

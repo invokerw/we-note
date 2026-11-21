@@ -1,3 +1,8 @@
+import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
+import { fromBase64, type ExportFile } from "./plugins/archive";
+import { usesPluginEditor } from "./plugins/registry";
+import { initialBytes } from "./plugins/xmind";
+import Manager from "./plugins/Manager";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
@@ -90,11 +95,13 @@ function Workspace({
   const [view, setView] = useState("笔记"),
     [newPath, setNewPath] = useState<string | null>(null),
     [links, setLinks] = useState<Hit[]>([]);
+  const [pluginBytes, setPluginBytes] = useState<Uint8Array | null>(null),
+    [pluginDirty, setPluginDirty] = useState(false);
   const source = useRef(new TextFile("")),
     selection = useRef<[number, number]>([0, 0]),
     picker = useRef<HTMLInputElement>(null);
   const vault = binding.vault,
-    dirty = text !== saved,
+    dirty = pluginDirty || text !== saved,
     editing = mode === "live" || mode === "edit";
   const leave = () => !dirty || confirm("放弃尚未保存的编辑？");
   const client = useMemo<ResourceClient>(
@@ -162,10 +169,15 @@ function Workspace({
   }
   async function open(p: string, discardConfirmed = false) {
     if (!discardConfirmed && !leave()) return;
-    const result = await local<{ text: string; hash: string }>(vault, "read", {
-      path: p,
-    });
-    source.current = new TextFile(result.text);
+    const special = usesPluginEditor(p);
+    const result = await local<{ text?: string; data?: string; hash: string }>(
+      vault,
+      special ? "read_bytes" : "read",
+      { path: p },
+    );
+    setPluginBytes(special ? fromBase64(result.data!) : null);
+    setPluginDirty(false);
+    source.current = new TextFile(result.text || "");
     setText(source.current.text);
     setSaved(source.current.text);
     setBase(result.hash);
@@ -175,6 +187,35 @@ function Workspace({
     selection.current = [0, 0];
     setMode("read");
     notify("");
+  }
+  const output: ExportFile = async (name, bytes) => {
+    if (binding.android) {
+      await window.__TAURI__.core.invoke("mobile_control", {
+        action: "exportDocument",
+        payload: { name, data: base64(bytes) },
+      });
+      return;
+    }
+    const dest = await local<string>(vault, "export_bytes", {
+      name,
+      data: base64(bytes),
+    });
+    notify("已保存到 " + dest);
+  };
+  async function savePlugin(data: Uint8Array) {
+    setBusy(true);
+    try {
+      setBase(
+        await local<string>(vault, "save_bytes", {
+          path,
+          base,
+          data: base64(data),
+        }),
+      );
+      notify("已保存到本地目录");
+    } finally {
+      setBusy(false);
+    }
   }
   async function save() {
     const raw = source.current.serialize();
@@ -251,7 +292,12 @@ function Workspace({
     <div
       className="workspace local-workspace"
       onPasteCapture={(e) => {
-        if (view === "笔记" && editing && e.clipboardData.files.length) {
+        if (
+          !pluginBytes &&
+          view === "笔记" &&
+          editing &&
+          e.clipboardData.files.length
+        ) {
           e.preventDefault();
           e.stopPropagation();
           run(() => attach(Array.from(e.clipboardData.files)));
@@ -261,6 +307,7 @@ function Workspace({
         if (
           view === "笔记" &&
           path &&
+          !pluginBytes &&
           (e.ctrlKey || e.metaKey) &&
           e.key === "s"
         ) {
@@ -272,8 +319,21 @@ function Workspace({
       <header>
         <strong>本地笔记库</strong>
         <nav>
-          {["笔记", "搜索", "附件", "导出"].map((v) => (
-            <button key={v} disabled={busy} onClick={() => setView(v)}>
+          {["笔记", "搜索", "附件", "导出", "插件"].map((v) => (
+            <button
+              key={v}
+              disabled={busy}
+              onClick={() => {
+                if (v !== view && (pluginBytes || v === "插件")) {
+                  if (!leave()) return;
+                  choose("");
+                  setPluginBytes(null);
+                  setPluginDirty(false);
+                  setSaved(text);
+                }
+                setView(v);
+              }}
+            >
               {v}
             </button>
           ))}
@@ -288,7 +348,9 @@ function Workspace({
         </button>
       </header>
       {message && <p role="status">{message}</p>}
-      {view !== "笔记" ? (
+      {view === "插件" ? (
+        <Manager />
+      ) : view !== "笔记" ? (
         <Resources
           key={view}
           client={client}
@@ -321,20 +383,14 @@ function Workspace({
                   e.preventDefault();
                   run(async () => {
                     if (!leave()) return;
-                    const hash = await local<string>(vault, "save", {
+                    await local(vault, "save_bytes", {
                       path: newPath,
                       base: null,
-                      text: "",
+                      data: base64(initialBytes(newPath)),
                     });
-                    source.current = new TextFile("");
-                    choose(newPath);
-                    setText("");
-                    setSaved("");
-                    setBase(hash);
+                    await open(newPath, true);
                     setMode("edit");
-                    setLinks([]);
                     setNewPath(null);
-                    selection.current = [0, 0];
                     await load();
                   });
                 }}
@@ -354,57 +410,50 @@ function Workspace({
                 </button>
               </form>
             )}
-            {binding.android && (
-              <>
-                <label>
-                  导入笔记
-                  <input
-                    type="file"
-                    accept=".md,.txt,.json"
-                    disabled={busy}
-                    onChange={(e) => {
-                      const f = e.currentTarget.files?.[0];
-                      e.currentTarget.value = "";
-                      if (!f) return;
-                      run(async () => {
-                        if (!leave()) return;
-                        if (f.size > 16 << 20) throw Error("笔记超过 16 MiB");
-                        const raw = new TextDecoder("utf-8", {
-                          fatal: true,
-                          ignoreBOM: true,
-                        }).decode(await f.arrayBuffer());
-                        await local(vault, "save", {
-                          path: f.name,
-                          base: null,
-                          text: raw,
-                        });
-                        await load();
-                        await open(f.name, true);
-                      });
-                    }}
-                  />
-                </label>
-                {path && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      run(async () => {
-                        if (new Blob([text]).size > 256 * 1024)
-                          throw Error("系统文本分享限 256 KiB");
-                        await window.__TAURI__.core.invoke("mobile_control", {
-                          action: "share",
-                          payload: {
-                            title: path,
-                            text: source.current.serialize(),
-                          },
-                        });
-                      })
-                    }
-                  >
-                    系统分享
-                  </button>
-                )}
-              </>
+            <label>
+              导入笔记
+              <input
+                type="file"
+                accept=".md,.txt,.json,.xmind"
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0];
+                  e.currentTarget.value = "";
+                  if (!f) return;
+                  run(async () => {
+                    if (!leave()) return;
+                    if (f.size > 16 << 20) throw Error("笔记超过 16 MiB");
+                    const raw = new Uint8Array(await f.arrayBuffer());
+                    await local(vault, "save_bytes", {
+                      path: f.name,
+                      base: null,
+                      data: base64(raw),
+                    });
+                    await load();
+                    await open(f.name, true);
+                  });
+                }}
+              />
+            </label>
+            {binding.android && !pluginBytes && path && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    if (new Blob([text]).size > 256 * 1024)
+                      throw Error("系统文本分享限 256 KiB");
+                    await window.__TAURI__.core.invoke("mobile_control", {
+                      action: "share",
+                      payload: {
+                        title: path,
+                        text: source.current.serialize(),
+                      },
+                    });
+                  })
+                }
+              >
+                系统分享
+              </button>
             )}
             <button disabled={busy} onClick={() => run(load)}>
               刷新列表
@@ -413,88 +462,112 @@ function Workspace({
           {path && (
             <>
               <h1>{path}</h1>
-              <nav className="toolbar">
-                {modes
-                  .filter(
-                    ([v]) =>
-                      /\.md$/i.test(path) || v === "edit" || v === "read",
-                  )
-                  .map(([v, label]) => (
-                    <button
-                      key={v}
-                      disabled={busy}
-                      className={mode === v ? "on" : ""}
-                      onClick={() => setMode(v)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                {editing && (
-                  <>
-                    <button
-                      disabled={busy}
-                      onClick={() => picker.current?.click()}
-                    >
-                      插入附件
-                    </button>
-                    <button
-                      disabled={busy}
-                      className="primary"
-                      onClick={() => run(save)}
-                    >
-                      保存
-                    </button>
-                  </>
-                )}
-              </nav>
-              <input
-                type="file"
-                hidden
-                ref={picker}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) run(() => attach([f]));
-                  e.target.value = "";
-                }}
-              />
-              <div inert={busy}>
-                <Document
+              {pluginBytes ? (
+                <PluginEditor
                   key={path}
-                  markdown={/\.md$/i.test(path)}
-                  text={text}
-                  edit={edit}
-                  mode={mode}
-                  setMode={setMode}
-                  select={(a, b) => {
-                    selection.current = [a, b];
-                  }}
-                  io={{
-                    image: (src, alt) => (
-                      <LocalImage binding={binding} src={src} alt={alt} />
-                    ),
-                    link: (href) => {
-                      if (
-                        /^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(href)
-                      ) {
-                        run(async () => {
-                          await client.save(
-                            "asset",
-                            new URL(href).pathname.split("/").at(-1)!,
-                            "附件",
-                          );
-                        });
-                        return true;
-                      }
-                      if (/^[\w+.-]+:/.test(href)) return false;
-                      const raw = linkTarget(href);
-                      const found = resolvePath(path, raw, files);
-                      if (found) run(() => open(found));
-                      else notify("找不到目标笔记 · " + raw);
-                      return true;
-                    },
-                  }}
+                  path={path}
+                  bytes={pluginBytes}
+                  save={savePlugin}
+                  output={output}
+                  dirty={setPluginDirty}
+                  notify={notify}
                 />
-              </div>
+              ) : (
+                <>
+                  <nav className="toolbar">
+                    {/\.md$/i.test(path) && (
+                      <MarkdownExport
+                        path={path}
+                        source={() => source.current.serialize()}
+                        output={output}
+                        notify={notify}
+                      />
+                    )}
+                    {modes
+                      .filter(
+                        ([v]) =>
+                          /\.md$/i.test(path) || v === "edit" || v === "read",
+                      )
+                      .map(([v, label]) => (
+                        <button
+                          key={v}
+                          disabled={busy}
+                          className={mode === v ? "on" : ""}
+                          onClick={() => setMode(v)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    {(editing || mode === "map") && (
+                      <>
+                        {editing && (
+                          <button
+                            disabled={busy}
+                            onClick={() => picker.current?.click()}
+                          >
+                            插入附件
+                          </button>
+                        )}
+                        <button
+                          disabled={busy}
+                          className="primary"
+                          onClick={() => run(save)}
+                        >
+                          保存
+                        </button>
+                      </>
+                    )}
+                  </nav>
+                  <input
+                    type="file"
+                    hidden
+                    ref={picker}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) run(() => attach([f]));
+                      e.target.value = "";
+                    }}
+                  />
+                  <div inert={busy}>
+                    <Document
+                      key={path}
+                      markdown={/\.md$/i.test(path)}
+                      text={text}
+                      edit={edit}
+                      mode={mode}
+                      setMode={setMode}
+                      select={(a, b) => {
+                        selection.current = [a, b];
+                      }}
+                      io={{
+                        image: (src, alt) => (
+                          <LocalImage binding={binding} src={src} alt={alt} />
+                        ),
+                        link: (href) => {
+                          if (
+                            /^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(href)
+                          ) {
+                            run(async () => {
+                              await client.save(
+                                "asset",
+                                new URL(href).pathname.split("/").at(-1)!,
+                                "附件",
+                              );
+                            });
+                            return true;
+                          }
+                          if (/^[\w+.-]+:/.test(href)) return false;
+                          const raw = linkTarget(href);
+                          const found = resolvePath(path, raw, files);
+                          if (found) run(() => open(found));
+                          else notify("找不到目标笔记 · " + raw);
+                          return true;
+                        },
+                      }}
+                    />
+                  </div>
+                </>
+              )}
               <details
                 onToggle={(e) => {
                   if (e.currentTarget.open) run(backlinks);

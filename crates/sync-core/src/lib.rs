@@ -332,6 +332,11 @@ impl Sync<'_> {
         };
         if remote.hash != base.hash {
             let theirs = self.content(&r.file_id, &remote)?;
+            if r.path.to_ascii_lowercase().ends_with(".xmind") {
+                self.keep_conflict(&r.path, &data)?;
+                disk::replace(self.root, &r.path, Some(&hash), &theirs)?;
+                return self.remember(r.file_id.clone(), remote);
+            }
             let ancestor = self.content(&r.file_id, &base)?;
             match diffy::merge_bytes(&ancestor, &data, &theirs) {
                 Ok(merged) => {

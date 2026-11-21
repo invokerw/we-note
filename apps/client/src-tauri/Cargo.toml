@@ -8,6 +8,8 @@ name = "wenote_client"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
+base64 = "0.22"
+anyhow = "1"
 tauri = { version = "2", features = [] }
 wenote-sync = { path = "../../../crates/sync-core" }
 serde_json = "1"

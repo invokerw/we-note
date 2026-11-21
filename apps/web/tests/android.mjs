@@ -1,4 +1,7 @@
 // Run against a disposable emulator with the debug APK installed.
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { pack } from "../plugin-sdk/pack.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -85,6 +88,18 @@ try {
       content: Buffer.from("第一版").toString("base64"),
     })
   ).json();
+  const mapName = `mobile-${randomUUID().slice(0, 8)}.xmind`;
+  const mapBytes = await readFile(
+    new URL("./fixtures/sdk-workbook.xmind", import.meta.url),
+  );
+  await api(base + "/files", "POST", {
+    path: mapName,
+    content: mapBytes.toString("base64"),
+  });
+  await api(base + "/files", "POST", {
+    path: "插件.txt",
+    content: Buffer.from("WN1\n离线插件").toString("base64"),
+  });
   adb("reverse", port, port);
   let page = await launch();
   console.log("Android login page loaded");
@@ -115,6 +130,84 @@ try {
   await button("保存").click();
   await page.getByText("已保存到本地目录").waitFor();
   console.log("Offline restart and save passed");
+  const pickLocal = (p) =>
+    page.getByLabel("本地笔记", { exact: true }).selectOption(p);
+  await pickLocal(mapName);
+  await page.getByLabel("主题标题").fill("手机离线导图");
+  await button("保存").click();
+  await pickLocal("原稿.md");
+  await pickLocal(mapName);
+  assert.equal(await page.getByLabel("主题标题").inputValue(), "手机离线导图");
+  await button("导出 Markdown").click();
+  let picker = false;
+  for (let i = 0; i < 30; i++) {
+    picker = /mCurrentFocus=Window\{[^\n]*documentsui/i.test(
+      adb("shell", "dumpsys", "window"),
+    );
+    if (picker) break;
+    await delay(200);
+  }
+  assert.ok(picker, "Android document export picker opened");
+  const hierarchy = "/data/local/tmp/wenote-export-picker.xml";
+  adb("shell", "uiautomator", "dump", hierarchy);
+  const layout = adb("shell", "cat", hierarchy);
+  const save = layout.match(
+    /<node\b[^>]*resource-id="[^"]*:(?:id\/button_save|id\/button1)"[^>]*>/,
+  )?.[0];
+  assert.ok(save, "Document picker has a Save button");
+  const [, left, top, right, bottom] = save
+    .match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)
+    .map(Number);
+  adb(
+    "shell",
+    "input",
+    "tap",
+    String(Math.floor((left + right) / 2)),
+    String(Math.floor((top + bottom) / 2)),
+  );
+  const out = mapName.replace(/\.xmind$/, ".md");
+  let exported = "";
+  for (let i = 0; i < 25; i++) {
+    const file = adb(
+      "shell",
+      "find",
+      "/storage/emulated/0/Download",
+      "-name",
+      out,
+    ).trim();
+    if (file) {
+      exported = adb("shell", "cat", file);
+      if (exported.includes("周五验收")) break;
+    }
+    await delay(200);
+  }
+  assert.match(exported, /# 手机离线导图/);
+  await button("插件").click();
+  const sample = await pack(
+    fileURLToPath(new URL("../plugin-sdk/example", import.meta.url)),
+  );
+  await page.getByLabel("安装本地插件包").evaluate((input, b64) => {
+    const dt = new DataTransfer();
+    dt.items.add(
+      new File(
+        [Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))],
+        "example.zip",
+        { type: "application/zip" },
+      ),
+    );
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, Buffer.from(sample).toString("base64"));
+  await button("授权并安装").click();
+  await button("笔记").click();
+  await pickLocal("插件.txt");
+  assert.equal(await page.getByLabel("插件文档").inputValue(), "离线插件");
+  await page.getByLabel("插件文档").fill("离线保存成功");
+  await button("保存").click();
+  await pickLocal("原稿.md");
+  console.log(
+    "Android offline XMind, document picker and installed WASM codec passed",
+  );
   await button("系统分享").click();
   for (let i = 0; i < 20; i++) {
     if (

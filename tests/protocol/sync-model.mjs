@@ -145,7 +145,7 @@ const daysInMonth = (year, month) => {
 };
 
 /** `metadata.format` 的 v1 取值，后续可扩展；`metadata.line_ending` 的取值是封闭枚举。 */
-export const METADATA_FORMATS = ['md', 'txt', 'json'];
+export const METADATA_FORMATS = ['md', 'txt', 'json', 'xmind'];
 export const LINE_ENDINGS = ['lf', 'crlf'];
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.length > 0;

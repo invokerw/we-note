@@ -83,9 +83,9 @@ impl Notebook {
                 .unwrap_or("")
                 .to_ascii_lowercase()
                 .as_str(),
-            "md" | "txt" | "json"
+            "md" | "txt" | "json" | "xmind"
         ) {
-            bail!("请选择 Markdown、TXT 或 JSON 笔记")
+            bail!("请选择 Markdown、TXT、JSON 或 XMind 笔记")
         };
         disk::local_path(&self.root, path)
     }
@@ -98,7 +98,18 @@ impl Notebook {
         Ok(json!({"hash":digest(raw.as_bytes()),"text":raw}))
     }
     pub fn save(&self, path: &str, base: Option<&str>, text: &str) -> Result<String> {
-        if text.len() > 16 << 20 {
+        self.save_bytes(path, base, text.as_bytes())
+    }
+    pub fn read_bytes(&self, path: &str) -> Result<Value> {
+        let path = self.path(path)?;
+        if fs::metadata(&path)?.len() > 16 << 20 {
+            bail!("笔记超过 16 MiB")
+        }
+        let bytes = fs::read(path)?;
+        Ok(json!({"hash":digest(&bytes),"data":STANDARD.encode(bytes)}))
+    }
+    pub fn save_bytes(&self, path: &str, base: Option<&str>, bytes: &[u8]) -> Result<String> {
+        if bytes.len() > 16 << 20 {
             bail!("笔记超过 16 MiB")
         };
         self.path(path)?;
@@ -106,9 +117,9 @@ impl Notebook {
             .write(true)
             .open(self.state_dir.join("lock"))?;
         lock.try_lock_exclusive().context("正在同步，请稍后保存")?;
-        disk::replace(&self.root, path, base, text.as_bytes())
+        disk::replace(&self.root, path, base, bytes)
             .context("文件已被修改或移动，请保留草稿并重新打开笔记")?;
-        Ok(digest(text.as_bytes()))
+        Ok(digest(bytes))
     }
     fn cache(&self) -> PathBuf {
         self.state_dir.join("asset-cache")
@@ -220,7 +231,25 @@ impl Notebook {
             meta["content_size"].as_u64().context("missing size")?,
             meta["content_hash"].as_str().context("missing hash")?,
         )?;
-        let path = Path::new(&name);
+        Self::publish_download(dir, &name, temp)
+    }
+    pub fn export_bytes(&self, dir: &Path, name: &str, bytes: &[u8]) -> Result<String> {
+        use std::io::Write;
+        if name.contains('/') || bytes.len() > 16 << 20 {
+            bail!("无效的导出文件")
+        }
+        self.path(name)?;
+        fs::create_dir_all(dir)?;
+        let mut temp = tempfile::NamedTempFile::new_in(dir)?;
+        temp.write_all(bytes)?;
+        Self::publish_download(dir, name, temp)
+    }
+    fn publish_download(
+        dir: &Path,
+        name: &str,
+        mut temp: tempfile::NamedTempFile,
+    ) -> Result<String> {
+        let path = Path::new(name);
         let stem = path
             .file_stem()
             .context("missing file name")?
@@ -231,7 +260,7 @@ impl Notebook {
             .unwrap_or_default();
         for n in 0..1000 {
             let dest = dir.join(if n == 0 {
-                name.clone()
+                name.to_owned()
             } else {
                 format!("{stem} ({n}){ext}")
             });

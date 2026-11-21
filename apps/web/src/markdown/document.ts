@@ -140,3 +140,27 @@ export function resolvePath(from: string, raw: string, paths: string[]) {
   const matches = paths.filter((p) => p.split("/").at(-1) === name);
   if (matches.length === 1) return matches[0];
 }
+
+/** Only document-level headings delimit sections. Keep code and quoted headings in their body. */
+export function markdownHeadings(source: string) {
+  return parser
+    .parse(source)
+    .children.flatMap((node) =>
+      node.type === "heading"
+        ? [
+            {
+              title: toString(node),
+              level: node.depth,
+              start: node.position!.start.offset!,
+              end: node.position!.end.offset!,
+            },
+          ]
+        : [],
+    );
+}
+
+export function headingText(value: string) {
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .replace(/([\\`*_{}\[\]<>#!~|&])/g, "\\$1");
+}

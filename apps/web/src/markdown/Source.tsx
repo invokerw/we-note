@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { EditorView } from "@codemirror/view";
+import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { basicSetup } from "codemirror";
 export default function Source({
@@ -8,12 +9,14 @@ export default function Source({
   onSelect,
   label,
   focus = false,
+  language = "markdown",
 }: {
   text: string;
   onChange: (v: string) => void;
   onSelect: (start: number, end: number) => void;
   label: string;
   focus?: boolean;
+  language?: "markdown" | "json";
 }) {
   const host = useRef<HTMLDivElement>(null),
     view = useRef<EditorView | null>(null),
@@ -25,7 +28,7 @@ export default function Source({
       doc: text,
       extensions: [
         basicSetup,
-        markdown(),
+        language === "json" ? json() : markdown(),
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({
           "aria-label": label,

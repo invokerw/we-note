@@ -517,7 +517,7 @@ func parseMetadata(raw json.RawMessage) (model.Metadata, *store.SyncError) {
 		return model.Metadata{}, invalidRequest([]string{"metadata"})
 	}
 	format, ok := jsonString(metadata["format"])
-	if !ok || (format != "md" && format != "txt" && format != "json") {
+	if !ok || (format != "md" && format != "txt" && format != "json" && format != "xmind") {
 		return model.Metadata{}, invalidRequest([]string{"metadata.format"})
 	}
 	lineEnding, present, valid := optionalString(metadata, "line_ending")

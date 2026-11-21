@@ -111,6 +111,18 @@ enum LocalAction {
     FileId {
         path: String,
     },
+    ReadBytes {
+        path: String,
+    },
+    SaveBytes {
+        path: String,
+        base: Option<String>,
+        data: String,
+    },
+    ExportBytes {
+        name: String,
+        data: String,
+    },
     List,
     Read {
         path: String,
@@ -148,6 +160,7 @@ async fn notebook(
                 return Err("请登录此笔记目录绑定的服务".into());
             }
         }
+        use base64::{engine::general_purpose::STANDARD, Engine};
         use LocalAction::*;
         match operation {
             UploadKey { slot, complete } => book.upload_key(&slot, complete.as_deref()),
@@ -164,6 +177,20 @@ async fn notebook(
                 .download(&downloads.map_err(|e| e.to_string())?, &token, &kind, &id)
                 .map(serde_json::Value::String),
             FileId { path } => book.file_id(&path).map(|id| serde_json::json!(id)),
+            ReadBytes { path } => book.read_bytes(&path),
+            SaveBytes { path, base, data } => STANDARD
+                .decode(data)
+                .map_err(anyhow::Error::from)
+                .and_then(|bytes| book.save_bytes(&path, base.as_deref(), &bytes))
+                .map(serde_json::Value::String),
+            ExportBytes { name, data } => {
+                let dir = downloads.map_err(|e| e.to_string())?;
+                STANDARD
+                    .decode(data)
+                    .map_err(anyhow::Error::from)
+                    .and_then(|bytes| book.export_bytes(&dir, &name, &bytes))
+                    .map(serde_json::Value::String)
+            }
             List => book.files().map(|v| serde_json::json!(v)),
             Read { path } => book.read(&path),
             Save { path, base, text } => book
