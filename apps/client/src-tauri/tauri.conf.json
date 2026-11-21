@@ -2,13 +2,24 @@
   "productName": "WeNote",
   "version": "0.1.0",
   "identifier": "com.wenote.desktop",
-  "build": { "frontendDist": "../ui" },
+  "build": {
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "npm --prefix ../web run build:desktop"
+  },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{ "title": "WeNote", "width": 740, "height": 670 }],
+    "windows": [
+      {
+        "title": "WeNote",
+        "width": 1040,
+        "height": 780
+      }
+    ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; media-src 'self' blob:; frame-src blob:"
     }
   },
-  "bundle": { "active": false }
+  "bundle": {
+    "active": false
+  }
 }

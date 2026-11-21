@@ -1,0 +1,447 @@
+import { TextFile } from "./markdown/textFile";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { createRoot } from "react-dom/client";
+import { Document, modes, type Mode } from "./markdown/Markdown";
+import { resolvePath, linkTarget } from "./markdown/document";
+import { Resources, type ResourceClient, type Hit } from "./Resources";
+import { base64 } from "./api";
+import "./style.css";
+
+type Binding = { vault: string; access: () => Promise<string> };
+declare global {
+  interface Window {
+    __TAURI__: {
+      core: { invoke: <T>(name: string, args: unknown) => Promise<T> };
+    };
+  }
+}
+function local<T>(
+  vault: string,
+  action: string,
+  args: Record<string, unknown> = {},
+) {
+  return window.__TAURI__.core.invoke<T>("notebook", {
+    vault,
+    sessionOrigin: args.token ? localStorage.getItem("origin") : null,
+    operation: { action, ...args },
+  });
+}
+function LocalImage({
+  binding,
+  src,
+  alt,
+}: {
+  binding: Binding;
+  src: string;
+  alt: string;
+}) {
+  const [url, set] = useState("");
+  useEffect(() => {
+    let live = true;
+    set("");
+    if (/^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(src)) {
+      binding
+        .access()
+        .catch(() => "")
+        .then((token) =>
+          local<{ type: string; data: string }>(binding.vault, "image", {
+            url: src,
+            token,
+          }),
+        )
+        .then((a) => {
+          if (live && a.type.startsWith("image/"))
+            set(`data:${a.type};base64,${a.data}`);
+        })
+        .catch(() => {
+          if (live) set(src);
+        });
+    } else if (src.startsWith("https://")) set(src);
+    return () => {
+      live = false;
+    };
+  }, [binding, src]);
+  return url ? (
+    <img src={url} alt={alt} referrerPolicy="no-referrer" />
+  ) : (
+    <span>{alt}</span>
+  );
+}
+function Workspace({
+  binding,
+  close,
+}: {
+  binding: Binding;
+  close: () => void;
+}) {
+  const [files, list] = useState<string[]>([]),
+    [path, choose] = useState(""),
+    [text, setText] = useState(""),
+    [saved, setSaved] = useState(""),
+    [base, setBase] = useState<string | null>(null),
+    [mode, setMode] = useState<Mode>("read"),
+    [message, notify] = useState(""),
+    [busy, setBusy] = useState(false);
+  const [view, setView] = useState("笔记"),
+    [newPath, setNewPath] = useState<string | null>(null),
+    [links, setLinks] = useState<Hit[]>([]);
+  const source = useRef(new TextFile("")),
+    selection = useRef<[number, number]>([0, 0]),
+    picker = useRef<HTMLInputElement>(null);
+  const vault = binding.vault,
+    dirty = text !== saved,
+    editing = mode === "live" || mode === "edit";
+  const leave = () => !dirty || confirm("放弃尚未保存的编辑？");
+  const client = useMemo<ResourceClient>(
+    () => ({
+      json: async (route, scope) =>
+        local(vault, "catalog", {
+          token: await binding.access(),
+          route,
+          scope,
+        }),
+      blob: async (id) => {
+        const r = await local<{ type: string; data: string }>(vault, "asset", {
+          id,
+          token: await binding.access(),
+        });
+        return new Blob(
+          [Uint8Array.from(atob(r.data), (c) => c.charCodeAt(0))],
+          { type: r.type },
+        );
+      },
+      save: async (kind, id) => {
+        const dest = await local<string>(vault, "download", {
+          kind,
+          id,
+          token: await binding.access(),
+        });
+        notify("已保存到 " + dest);
+      },
+    }),
+    [binding],
+  );
+  async function backlinks() {
+    const id = await local<string | null>(vault, "file_id", { path });
+    setLinks(
+      id
+        ? await client.json(
+            "/links/backlinks?file_id=" + encodeURIComponent(id),
+          )
+        : [],
+    );
+  }
+  async function load() {
+    list(await local<string[]>(vault, "list"));
+  }
+  useEffect(() => {
+    load().catch((e) => notify(String(e)));
+  }, [vault]);
+  useEffect(() => {
+    function warn(e: BeforeUnloadEvent) {
+      if (dirty) e.preventDefault();
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  async function run(fn: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      notify(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function open(p: string) {
+    if (!leave()) return;
+    const result = await local<{ text: string; hash: string }>(vault, "read", {
+      path: p,
+    });
+    source.current = new TextFile(result.text);
+    setText(source.current.text);
+    setSaved(source.current.text);
+    setBase(result.hash);
+    choose(p);
+    setView("笔记");
+    setLinks([]);
+    selection.current = [0, 0];
+    setMode("read");
+    notify("");
+  }
+  async function save() {
+    const raw = source.current.serialize();
+    const hash = await local<string>(vault, "save", { path, base, text: raw });
+    setBase(hash);
+    setSaved(text);
+    await load();
+    notify("已保存到本地目录");
+  }
+  function edit(next: string) {
+    source.current.edit(next);
+    setText(next);
+  }
+  async function attach(input: File[]) {
+    const token = await binding.access();
+    const links = [];
+    for (const f of input) {
+      const url = await local<string>(vault, "upload", {
+        token,
+        name: f.name,
+        media: f.type || "application/octet-stream",
+        data: base64(new Uint8Array(await f.arrayBuffer())),
+      });
+      links.push(
+        (f.type.startsWith("image/") ? "!" : "") +
+          "[" +
+          f.name.replace(/[\\\[\]\r\n]/g, "_") +
+          "](" +
+          url +
+          ")",
+      );
+    }
+    const [start, end] = selection.current;
+    const value = "\n" + links.join("\n") + "\n";
+    edit(text.slice(0, start) + value + text.slice(end));
+    selection.current = [start + value.length, start + value.length];
+    setMode("edit");
+  }
+  return (
+    <div
+      className="workspace local-workspace"
+      onPasteCapture={(e) => {
+        if (view === "笔记" && editing && e.clipboardData.files.length) {
+          e.preventDefault();
+          e.stopPropagation();
+          run(() => attach(Array.from(e.clipboardData.files)));
+        }
+      }}
+      onKeyDown={(e) => {
+        if (
+          view === "笔记" &&
+          path &&
+          (e.ctrlKey || e.metaKey) &&
+          e.key === "s"
+        ) {
+          e.preventDefault();
+          run(save);
+        }
+      }}
+    >
+      <header>
+        <strong>本地笔记库</strong>
+        <nav>
+          {["笔记", "搜索", "附件", "导出"].map((v) => (
+            <button key={v} disabled={busy} onClick={() => setView(v)}>
+              {v}
+            </button>
+          ))}
+        </nav>
+        <button
+          disabled={busy}
+          onClick={() => {
+            if (leave()) close();
+          }}
+        >
+          返回同步
+        </button>
+      </header>
+      {message && <p role="status">{message}</p>}
+      {view !== "笔记" ? (
+        <Resources
+          key={view}
+          client={client}
+          view={view}
+          open={(h) => run(() => open(h.path))}
+          notify={notify}
+        />
+      ) : (
+        <article>
+          <div className="toolbar">
+            <select
+              aria-label="本地笔记"
+              value={path}
+              disabled={busy}
+              onChange={(e) => run(() => open(e.target.value))}
+            >
+              <option value="" disabled>
+                选择笔记
+              </option>
+              {files.map((p) => (
+                <option key={p}>{p}</option>
+              ))}
+            </select>
+            <button disabled={busy} onClick={() => setNewPath("未命名.md")}>
+              新建笔记
+            </button>
+            {newPath !== null && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  run(async () => {
+                    if (!leave()) return;
+                    const hash = await local<string>(vault, "save", {
+                      path: newPath,
+                      base: null,
+                      text: "",
+                    });
+                    source.current = new TextFile("");
+                    choose(newPath);
+                    setText("");
+                    setSaved("");
+                    setBase(hash);
+                    setMode("edit");
+                    setLinks([]);
+                    setNewPath(null);
+                    selection.current = [0, 0];
+                    await load();
+                  });
+                }}
+              >
+                <label>
+                  新笔记路径
+                  <input
+                    autoFocus
+                    required
+                    value={newPath}
+                    onChange={(e) => setNewPath(e.target.value)}
+                  />
+                </label>
+                <button disabled={busy}>创建</button>
+                <button type="button" onClick={() => setNewPath(null)}>
+                  取消
+                </button>
+              </form>
+            )}
+            <button disabled={busy} onClick={() => run(load)}>
+              刷新列表
+            </button>
+          </div>
+          {path && (
+            <>
+              <h1>{path}</h1>
+              <nav className="toolbar">
+                {modes
+                  .filter(
+                    ([v]) =>
+                      /\.md$/i.test(path) || v === "edit" || v === "read",
+                  )
+                  .map(([v, label]) => (
+                    <button
+                      key={v}
+                      disabled={busy}
+                      className={mode === v ? "on" : ""}
+                      onClick={() => setMode(v)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                {editing && (
+                  <>
+                    <button
+                      disabled={busy}
+                      onClick={() => picker.current?.click()}
+                    >
+                      插入附件
+                    </button>
+                    <button
+                      disabled={busy}
+                      className="primary"
+                      onClick={() => run(save)}
+                    >
+                      保存
+                    </button>
+                  </>
+                )}
+              </nav>
+              <input
+                type="file"
+                hidden
+                ref={picker}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) run(() => attach([f]));
+                  e.target.value = "";
+                }}
+              />
+              <div inert={busy}>
+                <Document
+                  key={path}
+                  markdown={/\.md$/i.test(path)}
+                  text={text}
+                  edit={edit}
+                  mode={mode}
+                  setMode={setMode}
+                  select={(a, b) => {
+                    selection.current = [a, b];
+                  }}
+                  io={{
+                    image: (src, alt) => (
+                      <LocalImage binding={binding} src={src} alt={alt} />
+                    ),
+                    link: (href) => {
+                      if (
+                        /^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(href)
+                      ) {
+                        run(async () => {
+                          await client.save(
+                            "asset",
+                            new URL(href).pathname.split("/").at(-1)!,
+                            "附件",
+                          );
+                        });
+                        return true;
+                      }
+                      if (/^[\w+.-]+:/.test(href)) return false;
+                      const raw = linkTarget(href);
+                      const found = resolvePath(path, raw, files);
+                      if (found) run(() => open(found));
+                      else notify("找不到目标笔记 · " + raw);
+                      return true;
+                    },
+                  }}
+                />
+              </div>
+              <details
+                onToggle={(e) => {
+                  if (e.currentTarget.open) run(backlinks);
+                }}
+              >
+                <summary>反向链接</summary>
+                {links.length ? (
+                  links.map((h) => (
+                    <button
+                      key={h.file_id}
+                      onClick={() => run(() => open(h.path))}
+                    >
+                      {h.path}
+                    </button>
+                  ))
+                ) : (
+                  <p>没有笔记链接到此处。</p>
+                )}
+              </details>
+            </>
+          )}
+        </article>
+      )}
+    </div>
+  );
+}
+const root = createRoot(document.getElementById("desktop-editor")!);
+window.addEventListener("open-notebook", (e) => {
+  const binding = (e as CustomEvent<Binding>).detail,
+    settings = document.querySelector("body > main") as HTMLElement;
+  settings.hidden = true;
+  root.render(
+    <Workspace
+      binding={binding}
+      close={() => {
+        root.render(null);
+        settings.hidden = false;
+      }}
+    />,
+  );
+});

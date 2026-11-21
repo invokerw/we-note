@@ -173,3 +173,91 @@ impl Api {
         Ok(bytes)
     }
 }
+
+impl Api {
+    pub(crate) fn asset_bytes(&self, vault: &str, id: &str) -> Result<(String, Vec<u8>)> {
+        let meta = self.json(
+            Method::GET,
+            &format!("/api/v1/vaults/{vault}/assets/{id}"),
+            None,
+            None,
+        )?;
+        let response = checked(
+            self.client
+                .get(format!("{}/assets/{id}", self.origin))
+                .bearer_auth(&self.token)
+                .send()?,
+        )?;
+        let bytes = response.bytes()?;
+        if Some(super::digest(&bytes).as_str()) != meta["content_hash"].as_str() {
+            bail!("附件校验失败")
+        };
+        Ok((
+            meta["media_type"]
+                .as_str()
+                .context("missing media type")?
+                .into(),
+            bytes.to_vec(),
+        ))
+    }
+    pub(crate) fn upload_asset(
+        &self,
+        vault: &str,
+        name: &str,
+        media: &str,
+        bytes: &[u8],
+    ) -> Result<String> {
+        let base = format!("/api/v1/vaults/{vault}/assets");
+        let meta=self.json(Method::POST,&format!("{base}/uploads"),Some(json!({"name":name,"media_type":media,"content_hash":super::digest(bytes),"content_size":bytes.len()})),Some(&uuid::Uuid::new_v4().to_string()))?;
+        let id = meta["asset_id"].as_str().context("missing asset ID")?;
+        super::identifier(id)?;
+        checked(
+            self.client
+                .post(format!("{}{base}/{id}/complete", self.origin))
+                .bearer_auth(&self.token)
+                .body(bytes.to_vec())
+                .send()?,
+        )?;
+        Ok(meta["canonical_url"]
+            .as_str()
+            .context("missing asset URL")?
+            .into())
+    }
+}
+
+impl Api {
+    pub(crate) fn copy_download(
+        &self,
+        route: &str,
+        file: &mut std::fs::File,
+        size: u64,
+        hash: &str,
+    ) -> Result<()> {
+        use sha2::{Digest, Sha256};
+        use std::io::{Read, Write};
+        let mut response = checked(
+            self.client
+                .get(format!("{}{route}", self.origin))
+                .bearer_auth(&self.token)
+                .send()?,
+        )?
+        .take(size.saturating_add(1));
+        let mut buffer = [0; 32768];
+        let mut digest = Sha256::new();
+        let mut total = 0u64;
+        loop {
+            let n = response.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            };
+            file.write_all(&buffer[..n])?;
+            digest.update(&buffer[..n]);
+            total += n as u64
+        }
+        if total != size || format!("sha256:{:x}", digest.finalize()) != hash {
+            bail!("下载内容校验失败")
+        };
+        file.sync_all()?;
+        Ok(())
+    }
+}

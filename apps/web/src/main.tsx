@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Editor from "./Editor";
+import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Share, Vault } from "./api";
 import "./style.css";
 function Auth({ login }: { login: (s: string) => void }) {
@@ -207,11 +208,16 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     setNote(f);
   }
   function select(n: Note) {
+    if (view === "files" && note?.file_id === n.file_id) return;
     if (leave()) {
       setView("files");
       setNote(n);
       msg("");
     }
+  }
+  function open(id: string) {
+    const f = files.find((n) => n.file_id === id);
+    if (f) select(f);
   }
   async function share() {
     const recipient = prompt("接收者邮箱");
@@ -265,6 +271,9 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         <nav className="sections">
           {[
             ["files", "文件"],
+            ["搜索", "搜索"],
+            ["附件", "附件"],
+            ["导出", "导出"],
             ["inbox", "收件箱"],
             ["sent", "已发送"],
             ["trash", "回收站"],
@@ -354,6 +363,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               key={note.file_id}
               {...{
                 note,
+                files,
+                open,
                 token,
                 vault,
                 origin,
@@ -410,6 +421,15 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               </button>
             </footer>
           </>
+        ) : ["搜索", "附件", "导出"].includes(view) ? (
+          <LibraryResources
+            key={vault + view}
+            view={view}
+            base={base}
+            token={token}
+            open={open}
+            notify={msg}
+          />
         ) : (
           <article>
             <h1>

@@ -3,7 +3,7 @@ use reqwest::Method;
 use serde_json::json;
 use std::fs;
 use uuid::Uuid;
-use wenote_sync::{synchronize, Api};
+use wenote_sync::{notebook::Notebook, synchronize, Api};
 
 // Run against a disposable, freshly started WeNote server using the acceptance script.
 #[test]
@@ -33,7 +33,8 @@ fn two_devices_and_web_converge() -> Result<()> {
     let b = temp.path().join("Windows");
     fs::create_dir_all(a.join("daily"))?;
     fs::create_dir(&b)?;
-    let sync_a = || synchronize(&origin, &token, vault, &a, &temp.path().join("state-a"));
+    let state_root = temp.path().join("state-a");
+    let sync_a = || synchronize(&origin, &token, vault, &a, &state_root.join(vault));
     let sync_b = || synchronize(&origin, &token, vault, &b, &temp.path().join("state-b"));
     let path = "daily/早安.md";
     let original = b"# title\r\n\r\none\r\ntwo\r\nthree\r\nfour\r\nfive\r\n";
@@ -142,5 +143,43 @@ fn two_devices_and_web_converge() -> Result<()> {
         "offline edit to first"
     );
     assert_eq!(sync_b()?.uploaded, 0);
+    // The native editor reopens an existing binding without a session, then syncs its raw bytes.
+    let book = Notebook::open(&state_root, vault)?;
+    let note = "notes/离线笔记.md";
+    let raw = "\u{feff}# 本地编辑\r\n\r\n离线保存\r\n";
+    let hash = book.save(note, None, raw)?;
+    assert_eq!(book.read(note)?["text"], raw);
+    assert!(book.files()?.contains(&note.to_string()));
+    assert!(book.save("../outside.md", None, "bad").is_err());
+    fs::write(a.join(note), format!("{raw}本地外部修改\r\n"))?;
+    assert!(book.save(note, Some(&hash), "stale").is_err());
+    sync_a()?;
+    sync_b()?;
+    assert_eq!(fs::read(b.join(note))?, fs::read(a.join(note))?);
+    let matches = book.catalog(&token, "/search?q=离线保存", None)?;
+    assert_eq!(matches[0]["file_id"], book.file_id(note)?.unwrap());
+    let url = book.upload(&token, "tiny.bin", "application/octet-stream", "YWJj")?;
+    assert_eq!(book.image(&url, "")?["data"], "YWJj");
+    let id = url.rsplit('/').next().unwrap();
+    assert_eq!(book.asset(id, &token)?["data"], "YWJj");
+    let dir = temp.path().join("downloads");
+    let downloaded = book.download(&dir, &token, "asset", id)?;
+    assert_eq!(fs::read(downloaded)?, b"abc");
+    let second = book.download(&dir, &token, "asset", id)?;
+    assert!(second.ends_with("tiny (1).bin"));
+    let job = book.catalog(&token, "/exports", Some("all".into()))?;
+    let job_id = job["job_id"].as_str().context("export ID")?;
+    let mut ready = false;
+    for _ in 0..100 {
+        let jobs = book.catalog(&token, "/exports", None)?;
+        if jobs[0]["status"] == "completed" {
+            ready = true;
+            break;
+        };
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(ready);
+    let zip = book.download(&dir, &token, "export", job_id)?;
+    assert!(fs::read(zip)?.starts_with(b"PK"));
     Ok(())
 }

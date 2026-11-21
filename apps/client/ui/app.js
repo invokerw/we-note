@@ -50,15 +50,7 @@ async function sync() {
     root = byId("root").value;
   status("正在同步…");
   try {
-    if (Date.now() + 60000 >= expires) {
-      const s = await invoke("refresh", {
-        origin: byId("origin").value.trim(),
-        token: refreshToken,
-      });
-      token = s.access_token;
-      refreshToken = s.refresh_token;
-      expires = Date.parse(s.expires_at);
-    }
+    await access();
     const result = await invoke("sync", {
       origin: byId("origin").value.trim(),
       token,
@@ -66,6 +58,8 @@ async function sync() {
       root,
     });
     localStorage.setItem("folder:" + vault, root);
+    localStorage.setItem("last-notebook", vault);
+    byId("open-editor").hidden = false;
     status(
       `上次同步 ${new Date().toLocaleTimeString()} · 上传 ${result.uploaded} · 下载 ${result.downloaded}` +
         (result.conflicts.length
@@ -97,3 +91,45 @@ byId("logout").onclick = () => {
 setInterval(() => {
   if (byId("auto").checked) sync();
 }, 15000);
+
+byId("open-editor").hidden = !localStorage.getItem("last-notebook");
+let renewal;
+async function access() {
+  if (!token) throw Error("请登录笔记库以访问在线资源");
+  if (Date.now() + 60000 < expires) return token;
+  if (!renewal) {
+    const original = refreshToken;
+    renewal = invoke("refresh", {
+      origin: byId("origin").value.trim(),
+      token: original,
+    })
+      .then((s) => {
+        if (refreshToken !== original) throw Error("账户已切换");
+        token = s.access_token;
+        refreshToken = s.refresh_token;
+        expires = Date.parse(s.expires_at);
+        return token;
+      })
+      .finally(() => {
+        renewal = undefined;
+      });
+  }
+  return renewal;
+}
+byId("open-editor").onclick = () => {
+  const vault = token
+    ? byId("vault").value
+    : localStorage.getItem("last-notebook");
+  window.dispatchEvent(
+    new CustomEvent("open-notebook", {
+      detail: {
+        vault,
+        access: async () => {
+          if (vault !== byId("vault").value)
+            throw Error("请登录这个笔记库以访问在线资源");
+          return access();
+        },
+      },
+    }),
+  );
+};

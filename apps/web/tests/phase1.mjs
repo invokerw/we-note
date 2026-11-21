@@ -41,7 +41,7 @@ try {
     .locator("article input[type=file]")
     .setInputFiles({ name: "sample.png", mimeType: "image/png", buffer: png });
   await a.waitForFunction(() =>
-    document.querySelector("textarea")?.value.includes("/assets/"),
+    document.querySelector(".cm-content")?.textContent.includes("/assets/"),
   );
   await button(a, "保存").click();
   await a.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();

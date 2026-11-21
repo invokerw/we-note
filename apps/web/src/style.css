@@ -239,3 +239,128 @@ a {
     margin: 1rem;
   }
 }
+.source {
+  padding: 0;
+  resize: none;
+  min-height: 0;
+  overflow: hidden;
+}
+.source .cm-content {
+  min-height: 40vh;
+  padding: 0.8rem 0;
+}
+.live .cm-content {
+  min-height: 4rem;
+}
+.source .cm-editor {
+  font:
+    15px/1.7 ui-monospace,
+    monospace;
+}
+.metadata,
+.backlinks {
+  font-size: 0.94rem;
+  color: #47604d;
+  margin: 1rem 0;
+}
+.metadata summary,
+.backlinks summary {
+  cursor: pointer;
+}
+.metadata dl div {
+  display: flex;
+  gap: 1rem;
+}
+.metadata dt {
+  font-weight: bold;
+}
+.metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.reading table {
+  border-collapse: collapse;
+}
+.reading td,
+.reading th {
+  border: 1px solid #cbd6c6;
+  padding: 0.35rem 0.65rem;
+}
+.reading .callout {
+  border-left: 4px solid #668469;
+  padding: 0.7rem 1rem;
+  background: #edf2e8;
+  margin: 1rem 0;
+}
+.reading .callout p {
+  margin: 0;
+}
+.reading blockquote[data-kind]::before {
+  content: attr(data-kind);
+  font-weight: bold;
+}
+.reading .contains-task-list {
+  list-style: none;
+}
+.reading .diagram {
+  max-width: 100%;
+  max-height: 36rem;
+}
+.live .reading > [data-block-start] {
+  cursor: text;
+}
+.live .reading > [data-block-start]:hover {
+  outline: 1px dashed #b0c4ae;
+}
+.mindmap {
+  overflow: auto;
+  padding: 1rem;
+}
+.mindmap ul {
+  padding-left: 1.8rem;
+  list-style: none;
+}
+.mindmap li {
+  position: relative;
+  border-left: 1px solid #a5bdab;
+  padding: 0.45rem 0 0.45rem 1.3rem;
+}
+.mindmap li:before {
+  content: "";
+  position: absolute;
+  top: 1.5rem;
+  left: 0;
+  width: 1.2rem;
+  border-top: 1px solid #a5bdab;
+}
+.mindmap button {
+  background: #e8f0e4;
+  border: 1px solid #cbd6c6;
+}
+.toolbar,
+.toolbar nav,
+.taglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.asset-row {
+  padding: 1rem 0;
+  border-bottom: 1px solid #cbd6c6;
+}
+.asset-row small {
+  display: block;
+}
+.asset-row img,
+.asset-row video,
+.asset-row iframe {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+}
+.taglist {
+  margin: 1rem 0;
+}
+.taglist [aria-pressed="true"] {
+  background: #dce9d7;
+}

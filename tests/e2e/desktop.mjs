@@ -61,7 +61,10 @@ try {
     ],
   ];
   if (process.argv.includes("--browser"))
-    commands.push([process.execPath, ["apps/web/tests/phase1.mjs"]]);
+    commands.push(
+      [process.execPath, ["apps/web/tests/phase1.mjs"]],
+      [process.execPath, ["apps/web/tests/phase2.mjs"]],
+    );
   for (const [command, args] of commands) {
     const runner = spawn(command, args, {
       stdio: "inherit",

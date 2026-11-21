@@ -1,9 +1,14 @@
+import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState } from "react";
-import Markdown from "react-markdown";
+import { Document, modes, type Mode } from "./markdown/Markdown";
+import { resolvePath, linkTarget } from "./markdown/document";
+import { download, type Hit } from "./Resources";
 import { base64, Note, request, uploadAsset, Version } from "./api";
 
 type Props = {
   note: Note;
+  files: Note[];
+  open: (id: string) => void;
   token: string;
   vault: string;
   origin: string;
@@ -51,6 +56,8 @@ function AssetImage({
 }
 export default function Editor({
   note,
+  files,
+  open,
   token,
   vault,
   origin,
@@ -65,22 +72,22 @@ export default function Editor({
     [versions, setVersions] = useState<Version[]>([]),
     [history, setHistory] = useState(""),
     [busy, setBusy] = useState(false);
-  const schema = useRef({ bom: false, crlf: false, saved: "" });
+  const source = useRef(new TextFile("")),
+    saved = useRef("");
   const assetPicker = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let live = true;
     request(token, path + "/content")
       .then(async (r) => {
         const buf = new Uint8Array(await r.arrayBuffer());
-        const str = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+        const str = new TextDecoder("utf-8", {
+          fatal: true,
+          ignoreBOM: true,
+        }).decode(buf);
         if (live) {
-          const value = str.replace(/\r\n/g, "\n");
-          schema.current = {
-            bom: buf[0] === 239 && buf[1] === 187 && buf[2] === 191,
-            crlf: str.includes("\r\n"),
-            saved: value,
-          };
-          setText(value);
+          source.current = new TextFile(str);
+          saved.current = source.current.text;
+          setText(source.current.text);
           setBase(r.headers.get("X-Version-Id") || note.current_version_id);
         }
       })
@@ -92,8 +99,9 @@ export default function Editor({
     };
   }, [token, path]);
   function edit(value: string) {
+    source.current.edit(value);
     setText(value);
-    dirty(value !== schema.current.saved);
+    dirty(value !== saved.current);
   }
   async function run(f: () => Promise<void>) {
     setBusy(true);
@@ -106,55 +114,111 @@ export default function Editor({
     }
   }
   async function save() {
-    let value = schema.current.crlf ? text.replace(/\n/g, "\r\n") : text;
-    if (schema.current.bom) value = "\uFEFF" + value;
+    const value = source.current.serialize();
     const out = await (
       await request(token, path + "/content", "PUT", {
         base_version_id: base,
         content: base64(new TextEncoder().encode(value)),
       })
     ).json();
+    if (!alive.current) return;
     setBase(out.version_id);
-    schema.current.saved = text;
+    saved.current = text;
     dirty(false);
     await changed();
     notify("已保存新版本");
   }
-  async function download(endpoint: string, name: string) {
-    const blob = await (await request(token, endpoint)).blob();
-    const link = document.createElement("a");
-    link.download = name;
-    link.href = URL.createObjectURL(blob);
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  }
-  async function asset(file: File) {
-    const url = await uploadAsset(token, vault, file);
-    edit(
-      text +
-        "\n" +
+  const selection = useRef<[number, number]>([0, 0]);
+  const [links, setLinks] = useState<Hit[]>([]);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  async function insert(files: File[]) {
+    const [start, end] = selection.current;
+    const parts = [];
+    for (const file of files) {
+      const url = await uploadAsset(token, vault, file);
+      parts.push(
         (file.type.startsWith("image/") ? "!" : "") +
-        "[" +
-        file.name.replace(/[[\]]/g, "") +
-        "](" +
-        url +
-        ")\n",
-    );
+          "[" +
+          file.name.replace(/[\\[\]\r\n]/g, "_") +
+          "](" +
+          url +
+          ")",
+      );
+    }
+    if (!alive.current) return;
+    const inserted = "\n" + parts.join("\n") + "\n";
+    edit(text.slice(0, start) + inserted + text.slice(end));
+    selection.current = [start + inserted.length, start + inserted.length];
     setMode("edit");
+  }
+  const editing = mode === "edit" || mode === "live";
+  function navigate(href: string, label: string) {
+    if (href.startsWith(origin + "/assets/")) {
+      run(() => download(token, new URL(href).pathname, label || "附件"));
+      return true;
+    }
+    if (href.startsWith("#user-content-")) return false;
+    if (!/^[\w+.-]+:|^\/\//.test(href)) {
+      const raw = linkTarget(href);
+      const target = resolvePath(
+        note.path,
+        raw,
+        files.map((f) => f.path),
+      );
+      const f = files.find((n) => n.path === target);
+      if (f) open(f.file_id);
+      else notify("找不到目标笔记 · " + raw);
+      return true;
+    }
+    return false;
   }
   const title = note.path.split("/").at(-1)!;
   return (
-    <article>
+    <article
+      onPasteCapture={(e) => {
+        const dropped = Array.from(e.clipboardData.files);
+        if (editing && dropped.length) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!busy) run(() => insert(dropped));
+        }
+      }}
+      onDragOver={(e) => {
+        if (editing && e.dataTransfer.types.includes("Files"))
+          e.preventDefault();
+      }}
+      onDropCapture={(e) => {
+        if (editing && e.dataTransfer.files.length) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!busy) run(() => insert(Array.from(e.dataTransfer.files)));
+        }
+      }}
+      onKeyDown={(e) => {
+        if (editing && (e.ctrlKey || e.metaKey) && e.key === "s") {
+          e.preventDefault();
+          if (!busy && base) run(save);
+        }
+      }}
+    >
       <div className="crumb">{note.path}</div>
       <h1>{title}</h1>
       <div className="toolbar">
         <nav>
           {[
-            ["read", "阅读"],
-            ["edit", "源码"],
+            ...modes.filter(
+              ([m]) => note.format === "md" || m === "read" || m === "edit",
+            ),
             ["history", "历史"],
           ].map(([key, label]) => (
             <button
+              disabled={busy}
               key={key}
               className={mode === key ? "on" : ""}
               onClick={() =>
@@ -179,14 +243,14 @@ export default function Editor({
             disabled={busy || !base}
             onClick={() =>
               run(() =>
-                download(path + "/versions/" + base + "/content", title),
+                download(token, path + "/versions/" + base + "/content", title),
               )
             }
           >
             下载原文件
           </button>
         )}
-        {mode === "edit" && (
+        {editing && (
           <>
             <button
               disabled={busy || !base}
@@ -210,19 +274,11 @@ export default function Editor({
         ref={assetPicker}
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) run(() => asset(f));
+          if (f) run(() => insert([f]));
           e.target.value = "";
         }}
       />
-      {mode === "edit" ? (
-        <textarea
-          aria-label="笔记源码"
-          className="source"
-          disabled={!base || busy}
-          value={text}
-          onChange={(e) => edit(e.target.value)}
-        />
-      ) : mode === "history" ? (
+      {mode === "history" ? (
         <section>
           <ul>
             {versions.map((v) => (
@@ -249,46 +305,53 @@ export default function Editor({
           </ul>
           <pre>{history}</pre>
         </section>
-      ) : note.format === "md" ? (
-        <div className="reading">
-          <Markdown
-            components={{
-              img: ({ src, alt }) => (
-                <AssetImage
-                  src={typeof src === "string" ? src : undefined}
-                  alt={alt}
-                  token={token}
-                  origin={origin}
-                />
-              ),
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  rel="noreferrer"
-                  target="_blank"
-                  onClick={(e) => {
-                    if (href?.startsWith(origin + "/assets/")) {
-                      e.preventDefault();
-                      run(() =>
-                        download(
-                          new URL(href).pathname,
-                          String(children || "附件"),
-                        ),
-                      );
-                    }
-                  }}
-                >
-                  {children}
-                </a>
-              ),
-            }}
-          >
-            {text}
-          </Markdown>
-        </div>
       ) : (
-        <pre>{text}</pre>
+        <div inert={!base || busy}>
+          <Document
+            markdown={note.format === "md"}
+            text={text}
+            edit={edit}
+            mode={mode as Mode}
+            setMode={setMode}
+            select={(a, b) => {
+              selection.current = [a, b];
+            }}
+            io={{
+              image: (src, alt) => (
+                <AssetImage src={src} alt={alt} token={token} origin={origin} />
+              ),
+              link: navigate,
+            }}
+          />
+        </div>
       )}
+      <details
+        className="backlinks"
+        onToggle={(e) => {
+          if (e.currentTarget.open)
+            run(async () =>
+              setLinks(
+                await (
+                  await request(
+                    token,
+                    `/api/v1/vaults/${vault}/links/backlinks?file_id=${note.file_id}`,
+                  )
+                ).json(),
+              ),
+            );
+        }}
+      >
+        <summary>反向链接</summary>
+        {links.length ? (
+          links.map((f) => (
+            <button key={f.file_id} onClick={() => open(f.file_id)}>
+              {f.path}
+            </button>
+          ))
+        ) : (
+          <p>没有笔记链接到此处。</p>
+        )}
+      </details>
     </article>
   );
 }

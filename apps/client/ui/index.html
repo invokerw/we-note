@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>WeNote 桌面同步</title>
     <link rel="stylesheet" href="style.css" />
-    <script defer src="app.js"></script>
+    <script type="module" src="./app.js"></script>
+    <script type="module" src="../../web/src/desktop.tsx"></script>
   </head>
   <body>
     <main>
@@ -44,7 +45,9 @@
         ><button>立即同步</button
         ><button type="button" id="logout">退出账户</button>
       </form>
+      <button type="button" hidden id="open-editor">打开本地编辑器</button>
       <output id="status" aria-live="polite"></output>
     </main>
+    <div id="desktop-editor"></div>
   </body>
 </html>

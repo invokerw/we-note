@@ -56,3 +56,13 @@ output {
 button:disabled {
   opacity: 0.5;
 }
+body > main[hidden] {
+  display: none;
+}
+.local-workspace {
+  max-width: 64rem;
+  margin: auto;
+}
+.local-workspace select {
+  width: auto;
+}

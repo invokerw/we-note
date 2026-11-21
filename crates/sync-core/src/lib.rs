@@ -1,5 +1,6 @@
 mod api;
 mod disk;
+pub mod notebook;
 use anyhow::{bail, Context, Result};
 pub use api::Api;
 use api::{Receipt, Remote};
