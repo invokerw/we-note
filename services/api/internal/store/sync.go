@@ -252,6 +252,9 @@ func (r *Repository) CompleteUploadSession(ctx context.Context, vaultID, uploadI
 		_ = tx.Rollback()
 		return r.uploadSession(ctx, vaultID, uploadID)
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM upload_part_leases WHERE upload_id=?`, uploadID); err != nil {
+		return model.UploadSession{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return model.UploadSession{}, fmt.Errorf("commit upload completion: %w", err)
 	}

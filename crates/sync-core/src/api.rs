@@ -261,3 +261,88 @@ impl Api {
         Ok(())
     }
 }
+
+#[derive(Deserialize)]
+#[serde(tag = "step", rename_all = "snake_case")]
+pub enum AssetTransfer {
+    User,
+    Create {
+        meta: Value,
+        key: String,
+    },
+    Parts {
+        id: String,
+    },
+    Put {
+        id: String,
+        number: u32,
+        range: String,
+        hash: String,
+        data: String,
+    },
+    Assemble {
+        id: String,
+    },
+}
+impl Api {
+    pub fn transfer(&self, vault: &str, request: AssetTransfer) -> Result<Value> {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        use AssetTransfer::*;
+        super::identifier(vault)?;
+        let base = format!("/api/v1/vaults/{vault}/assets");
+        match request {
+            User => self.json(Method::GET, "/api/v1/me", None, None),
+            Create { meta, key } => self.json(
+                Method::POST,
+                &format!("{base}/uploads"),
+                Some(meta),
+                Some(&key),
+            ),
+            Parts { id } => {
+                super::identifier(&id)?;
+                self.json(Method::GET, &format!("{base}/{id}/parts"), None, None)
+            }
+            Put {
+                id,
+                number,
+                range,
+                hash,
+                data,
+            } => {
+                super::identifier(&id)?;
+                checked(
+                    self.client
+                        .put(format!("{}{base}/{id}/parts/{number}", self.origin))
+                        .bearer_auth(&self.token)
+                        .header("Content-Range", range)
+                        .header("X-Part-Hash", hash)
+                        .body(STANDARD.decode(data)?)
+                        .send()?,
+                )?;
+                Ok(Value::Null)
+            }
+            Assemble { id } => {
+                super::identifier(&id)?;
+                checked(
+                    self.client
+                        .post(format!("{}{base}/{id}/assemble", self.origin))
+                        .bearer_auth(&self.token)
+                        .send()?,
+                )?;
+                Ok(Value::Null)
+            }
+        }
+    }
+    pub fn devices(&self, remove: Option<&str>) -> Result<Value> {
+        if let Some(id) = remove {
+            super::identifier(id)?;
+            checked(
+                self.client
+                    .delete(format!("{}/api/v1/devices/{id}", self.origin))
+                    .bearer_auth(&self.token)
+                    .send()?,
+            )?;
+        }
+        self.json(Method::GET, "/api/v1/devices", None, None)
+    }
+}

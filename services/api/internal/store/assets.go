@@ -55,7 +55,7 @@ func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaTy
 		return a, ErrNotFound
 	}
 	mt, _, err := mime.ParseMediaType(mediaType)
-	if err != nil || name == "" || len(name) > 255 || size < 0 || size > 64<<20 || !syncHashPattern.MatchString(hash) {
+	if err != nil || name == "" || len(name) > 255 || size < 0 || size > MaxAssetSize || !syncHashPattern.MatchString(hash) {
 		return a, fileError(400, "INVALID_ASSET", "invalid asset name, size, media type or SHA-256")
 	}
 	tx, err := r.db.BeginTx(ctx, nil)

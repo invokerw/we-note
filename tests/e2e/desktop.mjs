@@ -65,6 +65,8 @@ try {
       [process.execPath, ["apps/web/tests/phase1.mjs"]],
       [process.execPath, ["apps/web/tests/phase2.mjs"]],
     );
+  if (process.argv.includes("--android"))
+    commands.push([process.execPath, ["apps/web/tests/android.mjs"]]);
   for (const [command, args] of commands) {
     const runner = spawn(command, args, {
       stdio: "inherit",

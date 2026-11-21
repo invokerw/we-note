@@ -162,6 +162,51 @@ try {
   const wait = page.waitForEvent("download");
   await button("下载 ZIP").click();
   assert.equal((await wait).suggestedFilename(), "wenote-all.zip");
+  await button("路线.md").click();
+  await button("源码").click();
+  const file = {
+    name: "resume.bin",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.alloc((4 << 20) + 17, 0x6a),
+  };
+  const seen = [];
+  let interrupt = true;
+  await page.route("**/assets/*/parts/*", (route) => {
+    const number = Number(route.request().url().split("/").pop());
+    seen.push(number);
+    if (interrupt && number === 2)
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "模拟传输中断" }),
+      });
+    return route.continue();
+  });
+  const picker = page.locator("input[type=file]").last();
+  await picker.setInputFiles(file);
+  await page.getByText(/模拟传输中断/).waitFor();
+  interrupt = false;
+  seen.length = 0;
+  await page.reload();
+  await button("路线.md").click();
+  await button("源码").click();
+  await picker.setInputFiles(file);
+  await page.waitForFunction(() =>
+    document.querySelector(".cm-content")?.textContent.includes("resume.bin"),
+  );
+  assert.deepEqual(seen.sort(), [2, 4]);
+  const assets = await (await api(base + "/assets")).json();
+  const completed = assets.filter((a) => a.name === "resume.bin");
+  assert.equal(completed.length, 1);
+  assert.deepEqual(
+    Buffer.from(
+      await (await api("/assets/" + completed[0].asset_id)).arrayBuffer(),
+    ),
+    file.buffer,
+  );
+  console.log(
+    "Multipart browser acceptance passed: reload, missing parts only, verified original bytes.",
+  );
   assert.deepEqual(errors, []);
   console.log(
     "Phase 2 browser acceptance passed: rich Markdown, byte-preserving live edits, heading map, links, search, clipboard, asset preview and ZIP download.",

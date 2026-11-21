@@ -32,6 +32,43 @@ impl Notebook {
             vault: vault.into(),
         })
     }
+    pub fn remember_recent(data: &Path, vault: &str) -> Result<()> {
+        identifier(vault)?;
+        disk::atomic(&data.join("recent-vault"), vault.as_bytes())
+    }
+    pub fn recent(data: &Path) -> Result<Option<Value>> {
+        let Some(bytes) = disk::current(&data.join("recent-vault"))? else {
+            return Ok(None);
+        };
+        let vault = std::str::from_utf8(&bytes)?;
+        let book = Self::open(data, vault)?;
+        Ok(Some(json!({"vault":vault,"origin":book.origin()})))
+    }
+    pub fn upload_key(&self, slot: &str, complete: Option<&str>) -> Result<Value> {
+        let lock = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(self.state_dir.join("upload.lock"))?;
+        lock.lock_exclusive()?;
+        let path = self
+            .state_dir
+            .join("pending-attachments")
+            .join(&digest(slot.as_bytes())[7..]);
+        let prior = disk::current(&path)?;
+        if let Some(key) = complete {
+            if prior.as_deref() == Some(key.as_bytes()) {
+                fs::remove_file(path)?;
+            }
+            return Ok(Value::Null);
+        }
+        if let Some(bytes) = prior {
+            return Ok(json!(String::from_utf8(bytes)?));
+        }
+        let key = uuid::Uuid::new_v4().to_string();
+        disk::atomic(&path, key.as_bytes())?;
+        Ok(json!(key))
+    }
     pub fn origin(&self) -> &str {
         &self.origin
     }

@@ -1,0 +1,41 @@
+name: Android acceptance
+on: [workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+      - run: |
+          sdkmanager 'platforms;android-36' 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;27.2.12479018'
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          rustup target add x86_64-linux-android
+          npm ci --prefix apps/client
+          npm ci --prefix apps/web
+      - run: npm exec -- tauri android build --debug --apk --target x86_64
+        working-directory: apps/client
+      - run: go build -o /tmp/wenote-api ./cmd/wenote-api
+        working-directory: services/api
+      - run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          script: |
+            adb install $(find apps/client/src-tauri/gen/android/app/build/outputs/apk -name '*debug.apk' -print -quit)
+            ANDROID_SERIAL=$(adb get-serialno) WENOTE_API=/tmp/wenote-api node tests/e2e/desktop.mjs --android

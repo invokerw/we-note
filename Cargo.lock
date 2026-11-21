@@ -4496,6 +4496,8 @@ dependencies = [
 name = "wenote-desktop"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "jni",
  "serde",
  "serde_json",
  "tauri",

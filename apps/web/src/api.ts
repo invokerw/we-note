@@ -1,3 +1,4 @@
+import { multipart, multipartThreshold } from "./multipart";
 export type Vault = { id: string; name: string };
 export type Note = {
   file_id: string;
@@ -58,6 +59,7 @@ export async function request(
   path: string,
   method = "GET",
   body?: unknown,
+  extraHeaders: Record<string, string> = {},
 ) {
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = "Bearer " + (await accessToken(token));
@@ -66,7 +68,7 @@ export async function request(
   if (method !== "GET") headers["Idempotency-Key"] = crypto.randomUUID();
   const response = await fetch(path, {
     method,
-    headers,
+    headers: { ...headers, ...extraHeaders },
     body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
   });
   if (!response.ok) {
@@ -85,13 +87,48 @@ export function base64(data: Uint8Array) {
     s += String.fromCharCode(...data.subarray(i, i + 8192));
   return btoa(s);
 }
-export async function uploadAsset(token: string, vault: string, file: File) {
+export async function uploadAsset(
+  token: string,
+  vault: string,
+  file: File,
+  progress?: (message: string) => void,
+) {
+  const path = `/api/v1/vaults/${vault}/assets`;
+  if (file.size >= multipartThreshold) {
+    const user = await (await request(token, "/api/v1/me")).json();
+    return multipart(
+      file,
+      [location.origin, vault, user.id],
+      {
+        create: async (meta, key) =>
+          (
+            await request(token, path + "/uploads", "POST", meta, {
+              "Idempotency-Key": key,
+            })
+          ).json(),
+        parts: async (id) =>
+          (await request(token, `${path}/${id}/parts`)).json(),
+        put: async (id, n, range, hash, data) => {
+          await request(
+            token,
+            `${path}/${id}/parts/${n}`,
+            "PUT",
+            new Blob([data]),
+            { "Content-Range": range, "X-Part-Hash": hash },
+          );
+        },
+        assemble: async (id) => {
+          await request(token, `${path}/${id}/assemble`, "POST");
+        },
+      },
+      progress,
+    );
+  }
   const data = await file.arrayBuffer();
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
   const hash =
     "sha256:" +
     Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
-  const path = `/api/v1/vaults/${vault}/assets`;
   const asset = await (
     await request(token, path + "/uploads", "POST", {
       name: file.name,

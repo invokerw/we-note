@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"fmt"
+	"github.com/weifei/we-note/services/api/internal/store"
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -93,4 +95,51 @@ func (a *API) asset(w http.ResponseWriter, r *http.Request) {
 			panic(http.ErrAbortHandler)
 		}
 	}
+}
+
+func (a *API) assetParts(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	vault := r.PathValue("vault_id")
+	allowed, err := a.repository.UserCanWriteVault(ctx, user.ID, vault)
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	if !allowed {
+		resourceError(w, store.ErrNotFound)
+		return
+	}
+	asset, err := a.repository.AssetForUser(ctx, user.ID, vault, r.PathValue("asset_id"))
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		parts, err := a.repository.AssetParts(ctx, asset)
+		if err != nil {
+			resourceError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"part_size": store.PartSize, "completed_parts": parts, "status": asset.Status})
+		return
+	case http.MethodPut:
+		number, e := strconv.Atoi(r.PathValue("number"))
+		if e != nil {
+			writeError(w, 400, "INVALID_PART", "invalid part number")
+			return
+		}
+		err = a.repository.PutAssetPart(ctx, asset, number, r.Header.Get("Content-Range"), r.Header.Get("X-Part-Hash"), r.Body)
+	case http.MethodPost:
+		err = a.repository.AssembleAsset(ctx, asset)
+	}
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	w.WriteHeader(204)
 }

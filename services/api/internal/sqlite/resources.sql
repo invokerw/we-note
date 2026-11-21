@@ -26,3 +26,12 @@ CREATE TABLE IF NOT EXISTS export_jobs (
  status TEXT NOT NULL DEFAULT 'pending', hash TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL DEFAULT 0,
  UNIQUE(user_id,vault_id,operation_key)
 );
+
+CREATE TABLE IF NOT EXISTS upload_part_leases (
+ upload_id TEXT PRIMARY KEY REFERENCES upload_sessions(id) ON DELETE CASCADE, expires INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS upload_parts_expiry ON upload_part_leases(expires);
+CREATE TABLE IF NOT EXISTS upload_parts (
+ upload_id TEXT NOT NULL REFERENCES upload_part_leases(upload_id) ON DELETE CASCADE,
+ number INTEGER NOT NULL, hash TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(upload_id,number)
+);

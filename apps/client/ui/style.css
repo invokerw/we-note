@@ -66,3 +66,16 @@ body > main[hidden] {
 .local-workspace select {
   width: auto;
 }
+[hidden] {
+  display: none !important;
+}
+#device-list {
+  padding-left: 1.3em;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  main {
+    margin: 1rem auto;
+    padding: 1.25rem;
+  }
+}

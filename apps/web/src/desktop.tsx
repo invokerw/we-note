@@ -4,10 +4,15 @@ import { createRoot } from "react-dom/client";
 import { Document, modes, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { Resources, type ResourceClient, type Hit } from "./Resources";
+import { multipart, multipartThreshold } from "./multipart";
 import { base64 } from "./api";
 import "./style.css";
 
-type Binding = { vault: string; access: () => Promise<string> };
+type Binding = {
+  android?: boolean;
+  vault: string;
+  access: () => Promise<string>;
+};
 declare global {
   interface Window {
     __TAURI__: {
@@ -155,8 +160,8 @@ function Workspace({
       setBusy(false);
     }
   }
-  async function open(p: string) {
-    if (!leave()) return;
+  async function open(p: string, discardConfirmed = false) {
+    if (!discardConfirmed && !leave()) return;
     const result = await local<{ text: string; hash: string }>(vault, "read", {
       path: p,
     });
@@ -187,12 +192,46 @@ function Workspace({
     const token = await binding.access();
     const links = [];
     for (const f of input) {
-      const url = await local<string>(vault, "upload", {
-        token,
-        name: f.name,
-        media: f.type || "application/octet-stream",
-        data: base64(new Uint8Array(await f.arrayBuffer())),
-      });
+      const transfer = async <T,>(
+        step: string,
+        args: Record<string, unknown> = {},
+      ) =>
+        local<T>(vault, "transfer", {
+          token: await binding.access(),
+          request: { step, ...args },
+        });
+      const url =
+        f.size >= multipartThreshold
+          ? await multipart(
+              f,
+              [
+                localStorage.getItem("origin") || "",
+                vault,
+                (await transfer<{ id: string }>("user")).id,
+              ],
+              {
+                create: (meta, key) => transfer("create", { meta, key }),
+                parts: (id) => transfer("parts", { id }),
+                put: (id, number, range, hash, data) =>
+                  transfer("put", {
+                    id,
+                    number,
+                    range,
+                    hash,
+                    data: base64(data),
+                  }),
+                assemble: (id) => transfer("assemble", { id }),
+              },
+              notify,
+              (slot, complete) =>
+                local(vault, "upload_key", { slot, complete }),
+            )
+          : await local<string>(vault, "upload", {
+              token,
+              name: f.name,
+              media: f.type || "application/octet-stream",
+              data: base64(new Uint8Array(await f.arrayBuffer())),
+            });
       links.push(
         (f.type.startsWith("image/") ? "!" : "") +
           "[" +
@@ -314,6 +353,58 @@ function Workspace({
                   取消
                 </button>
               </form>
+            )}
+            {binding.android && (
+              <>
+                <label>
+                  导入笔记
+                  <input
+                    type="file"
+                    accept=".md,.txt,.json"
+                    disabled={busy}
+                    onChange={(e) => {
+                      const f = e.currentTarget.files?.[0];
+                      e.currentTarget.value = "";
+                      if (!f) return;
+                      run(async () => {
+                        if (!leave()) return;
+                        if (f.size > 16 << 20) throw Error("笔记超过 16 MiB");
+                        const raw = new TextDecoder("utf-8", {
+                          fatal: true,
+                          ignoreBOM: true,
+                        }).decode(await f.arrayBuffer());
+                        await local(vault, "save", {
+                          path: f.name,
+                          base: null,
+                          text: raw,
+                        });
+                        await load();
+                        await open(f.name, true);
+                      });
+                    }}
+                  />
+                </label>
+                {path && (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => {
+                        if (new Blob([text]).size > 256 * 1024)
+                          throw Error("系统文本分享限 256 KiB");
+                        await window.__TAURI__.core.invoke("mobile_control", {
+                          action: "share",
+                          payload: {
+                            title: path,
+                            text: source.current.serialize(),
+                          },
+                        });
+                      })
+                    }
+                  >
+                    系统分享
+                  </button>
+                )}
+              </>
             )}
             <button disabled={busy} onClick={() => run(load)}>
               刷新列表

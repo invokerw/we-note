@@ -141,7 +141,7 @@ export default function Editor({
     const [start, end] = selection.current;
     const parts = [];
     for (const file of files) {
-      const url = await uploadAsset(token, vault, file);
+      const url = await uploadAsset(token, vault, file, notify);
       parts.push(
         (file.type.startsWith("image/") ? "!" : "") +
           "[" +

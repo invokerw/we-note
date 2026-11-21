@@ -2,7 +2,7 @@ mod api;
 mod disk;
 pub mod notebook;
 use anyhow::{bail, Context, Result};
-pub use api::Api;
+pub use api::{Api, AssetTransfer};
 use api::{Receipt, Remote};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use fs2::FileExt;
@@ -56,6 +56,7 @@ struct State {
 }
 #[derive(Serialize, Default)]
 pub struct Report {
+    pub device_id: String,
     pub uploaded: usize,
     pub downloaded: usize,
     pub conflicts: Vec<String>,
@@ -361,6 +362,26 @@ pub fn synchronize(
     root: &Path,
     state_dir: &Path,
 ) -> Result<Report> {
+    synchronize_while(origin, token, vault, root, state_dir, || true)
+}
+
+/// Finish the current file operation before yielding a stopped background job.
+pub fn synchronize_while(
+    origin: &str,
+    token: &str,
+    vault: &str,
+    root: &Path,
+    state_dir: &Path,
+    active: impl Fn() -> bool,
+) -> Result<Report> {
+    let check = || {
+        if active() {
+            Ok(())
+        } else {
+            bail!("同步任务已停止")
+        }
+    };
+    check()?;
     identifier(vault)?;
     let root = root.canonicalize().context("打开本地目录")?;
     if !root.is_dir() {
@@ -401,6 +422,7 @@ pub fn synchronize(
         state,
         report: Report::default(),
     };
+    check()?;
     sync.flush()?;
     sync.save()?;
     let mut local = disk::scan(&root)?;
@@ -418,9 +440,11 @@ pub fn synchronize(
         .map(|entry| (entry.path.clone(), entry.hash.clone()))
         .collect();
     for remote in &manifest.files {
+        check()?;
         sync.reconcile(remote, &mut local, &paths, &prior_hashes)?
     }
     for (path, hash) in local {
+        check()?;
         let bytes = fs::read(disk::local_path(&root, &path)?)?;
         if digest(&bytes) != hash {
             bail!("文件在扫描后已修改 {path}")
@@ -429,6 +453,7 @@ pub fn synchronize(
     }
     sync.state.revision = manifest.snapshot_revision;
     sync.report.revision = manifest.snapshot_revision;
+    sync.report.device_id = sync.state.device.clone();
     sync.save()?;
     Ok(sync.report)
 }

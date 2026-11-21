@@ -60,4 +60,16 @@ The file tree lists active files in path order. File content reads return the cu
 
 Run the tests from this directory with `go test ./...`. Start the development server with `go run ./cmd/wenote-api`. The server stores local blobs under `./data/storage` by default and accepts `-blobs` to change that path.
 
-File creation accepts `path` and a base64 `content` string. Editing, moving, deleting and restoring take `base_version_id` or `base_content_hash`. Clients can send `base_path` to detect a concurrent move and `Idempotency-Key` to replay an acknowledged write. The write response includes the file ID, path, version, content hash and Vault revision. The JSON file write endpoint accepts notes up to 16 MiB. Asset uploads accept up to 64 MiB and verify the declared size and digest before completion.
+File creation accepts `path` and a base64 `content` string. Editing, moving, deleting and restoring take `base_version_id` or `base_content_hash`. Clients can send `base_path` to detect a concurrent move and `Idempotency-Key` to replay an acknowledged write. The write response includes the file ID, path, version, content hash and Vault revision. The JSON file write endpoint accepts notes up to 16 MiB. Asset uploads accept up to 256 MiB and verify the declared size and digest before completion.
+
+### Resumable attachments
+
+Create the asset with `POST /api/v1/vaults/{vault_id}/assets/uploads`, retaining the same `Idempotency-Key` on retry. For a pending asset, use these endpoints under `/api/v1/vaults/{vault_id}/assets/{asset_id}` with the same vault write credentials.
+
+| Request | Response |
+| --- | --- |
+| `GET /parts` | Returns `part_size`, `completed_parts` (zero-based indices), and `status`. |
+| `PUT /parts/{number}` | Accepts the raw bytes, an exact `Content-Range: bytes start-end/total`, and `X-Part-Hash: sha256:<hex>`. Identical retries return 204. Conflicting bytes for an accepted part return 409. |
+| `POST /assemble` | Verifies all parts in order and publishes the original blob. Success and replay return 204. Missing parts or a mismatched SHA-256 return 409. |
+
+The staging lease lasts 24 hours from the most recent accepted part. After expiry clients can send all parts again with the same asset ID. Expired rows are reclaimed when new parts arrive. Whole-body `POST /complete` continues to accept existing clients.
