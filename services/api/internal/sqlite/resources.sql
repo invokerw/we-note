@@ -16,3 +16,13 @@ CREATE TABLE IF NOT EXISTS refresh_sessions (
  session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS note_index (
+ file_id TEXT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE, version_id TEXT NOT NULL,
+ format TEXT NOT NULL, body TEXT NOT NULL, metadata TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS export_jobs (
+ id TEXT PRIMARY KEY, vault_id TEXT NOT NULL REFERENCES vaults(id), user_id TEXT NOT NULL REFERENCES users(id),
+ operation_key TEXT, scope TEXT NOT NULL, created_at TEXT NOT NULL, snapshot TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending', hash TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL DEFAULT 0,
+ UNIQUE(user_id,vault_id,operation_key)
+);

@@ -1,0 +1,275 @@
+package store
+
+import (
+	"archive/zip"
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path"
+	"strings"
+	"time"
+)
+
+type Export struct {
+	ID      string `json:"job_id"`
+	Scope   string `json:"scope"`
+	Created string `json:"created_at"`
+	Status  string `json:"status"`
+	Hash    string `json:"content_hash,omitempty"`
+	Size    int64  `json:"content_size"`
+}
+type exportEntry struct {
+	Path    string `json:"path"`
+	ID      string `json:"id"`
+	Version string `json:"version_id,omitempty"`
+	Hash    string `json:"content_hash"`
+	Size    int64  `json:"content_size"`
+	Name    string `json:"original_name,omitempty"`
+	URL     string `json:"canonical_url,omitempty"`
+}
+type exportSnapshot struct {
+	Created string        `json:"exported_at"`
+	Scope   string        `json:"scope"`
+	Files   []exportEntry `json:"files"`
+	Assets  []exportEntry `json:"assets"`
+}
+
+const exportColumns = `SELECT id,scope,created_at,status,hash,size FROM export_jobs `
+
+func scanExport(row scanner) (Export, error) {
+	var j Export
+	err := row.Scan(&j.ID, &j.Scope, &j.Created, &j.Status, &j.Hash, &j.Size)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return j, err
+}
+func (r *Repository) Exports(ctx context.Context, user, vault string) ([]Export, error) {
+	rows, err := r.db.QueryContext(ctx, exportColumns+`WHERE vault_id=? AND user_id=? ORDER BY created_at DESC`, vault, user)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Export{}
+	for rows.Next() {
+		j, e := scanExport(rows)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+func (r *Repository) Export(ctx context.Context, user, vault, id string) (Export, error) {
+	return scanExport(r.db.QueryRowContext(ctx, exportColumns+`WHERE vault_id=? AND user_id=? AND id=?`, vault, user, id))
+}
+func (r *Repository) CanExport(ctx context.Context, user, vault string) (bool, error) {
+	var ok bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspace_members WHERE vault_id=? AND user_id=? AND role IN ('owner','editor','exporter'))`, vault, user).Scan(&ok)
+	return ok, err
+}
+func (r *Repository) CreateExport(ctx context.Context, user, vault, key, scope string) (Export, error) {
+	var j Export
+	if scope != "notes" && scope != "assets" && scope != "all" {
+		return j, fileError(400, "INVALID_SCOPE", "expected notes, assets or all")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return j, err
+	}
+	defer tx.Rollback()
+	if key != "" {
+		existing, e := scanExport(tx.QueryRowContext(ctx, exportColumns+`WHERE vault_id=? AND user_id=? AND operation_key=?`, vault, user, key))
+		if e == nil {
+			if existing.Scope != scope {
+				return j, fileError(409, "IDEMPOTENCY_KEY_REUSED", "export scope changed")
+			}
+			return existing, nil
+		}
+		if !errors.Is(e, ErrNotFound) {
+			return j, e
+		}
+	}
+	j.ID, err = newID("export")
+	if err != nil {
+		return j, err
+	}
+	j.Created = formatTime(time.Now().UTC())
+	j.Scope = scope
+	j.Status = "pending"
+	snap := exportSnapshot{j.Created, scope, []exportEntry{}, []exportEntry{}}
+	if scope != "assets" {
+		rows, e := tx.QueryContext(ctx, activeFileQuery+` ORDER BY f.path`, vault)
+		if e != nil {
+			return j, e
+		}
+		defer rows.Close()
+		for rows.Next() {
+			f, e := scanFile(rows)
+			if e != nil {
+				return j, e
+			}
+			if f.CurrentVersionID == nil || !PortablePath(f.Path) {
+				return j, errors.New("invalid file in export")
+			}
+			snap.Files = append(snap.Files, exportEntry{Path: "notes/" + f.Path, ID: f.ID, Version: *f.CurrentVersionID, Hash: f.CurrentContentHash, Size: f.CurrentContentSize})
+		}
+		if e = rows.Err(); e != nil {
+			return j, e
+		}
+		rows.Close()
+	}
+	if scope != "notes" {
+		rows, e := tx.QueryContext(ctx, assetSelect+` WHERE a.vault_id=? AND a.is_deleted=0 AND u.status='completed' ORDER BY a.id`, vault)
+		if e != nil {
+			return j, e
+		}
+		defer rows.Close()
+		for rows.Next() {
+			a, e := r.scanAsset(rows)
+			if e != nil {
+				return j, e
+			}
+			name := path.Base(strings.ReplaceAll(a.Name, `\`, "/"))
+			if !PortablePath(name) {
+				name = "attachment"
+			}
+			snap.Assets = append(snap.Assets, exportEntry{Path: "assets/" + a.ID + "/" + name, ID: a.ID, Hash: a.Hash, Size: a.Size, Name: a.Name, URL: a.URL})
+		}
+		if e = rows.Err(); e != nil {
+			return j, e
+		}
+		rows.Close()
+	}
+	raw, err := json.Marshal(snap)
+	if err != nil {
+		return j, err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO export_jobs(id,vault_id,user_id,operation_key,scope,created_at,snapshot) VALUES(?,?,?,NULLIF(?,''),?,?,?)`, j.ID, vault, user, key, scope, j.Created, string(raw))
+	if err != nil {
+		return j, err
+	}
+	return j, tx.Commit()
+}
+
+// Pending snapshots are durable. A process restart resumes from the same immutable input blobs.
+func (r *Repository) RunExports() {
+	r.exportMu.Lock()
+	defer r.exportMu.Unlock()
+	if r.exportRunning {
+		return
+	}
+	r.exportRunning = true
+	go r.processExports()
+}
+func (r *Repository) processExports() {
+	ctx := context.Background()
+	for {
+		var id, vault string
+		var raw []byte
+		r.exportMu.Lock()
+		err := r.db.QueryRowContext(ctx, `SELECT id,vault_id,snapshot FROM export_jobs WHERE status='pending' ORDER BY created_at LIMIT 1`).Scan(&id, &vault, &raw)
+		if err != nil {
+			r.exportRunning = false
+			r.exportMu.Unlock()
+			if !errors.Is(err, sql.ErrNoRows) {
+				log.Printf("export queue: %v", err)
+			}
+			return
+		}
+		r.exportMu.Unlock()
+		hash, size, err := r.buildArchive(ctx, vault, raw)
+		status := "completed"
+		if err != nil {
+			log.Printf("export %s: %v", id, err)
+			status = "failed"
+		}
+		if _, err = r.db.ExecContext(ctx, `UPDATE export_jobs SET status=?,hash=?,size=? WHERE id=?`, status, hash, size, id); err != nil {
+			log.Printf("record export: %v", err)
+			r.exportMu.Lock()
+			r.exportRunning = false
+			r.exportMu.Unlock()
+			return
+		}
+	}
+}
+func (r *Repository) buildArchive(ctx context.Context, vault string, raw []byte) (string, int64, error) {
+	var snap exportSnapshot
+	if e := json.Unmarshal(raw, &snap); e != nil {
+		return "", 0, e
+	}
+	tmp, e := os.CreateTemp("", "wenote-export-*.zip")
+	if e != nil {
+		return "", 0, e
+	}
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	hash := sha256.New()
+	z := zip.NewWriter(io.MultiWriter(tmp, hash))
+	for _, entry := range append(append([]exportEntry{}, snap.Files...), snap.Assets...) {
+		if e := r.writeExportEntry(ctx, z, vault, entry); e != nil {
+			return "", 0, e
+		}
+	}
+	manifest, e := z.Create("manifest.json")
+	if e != nil {
+		return "", 0, e
+	}
+	if e = json.NewEncoder(manifest).Encode(snap); e != nil {
+		return "", 0, e
+	}
+	if snap.Scope != "notes" {
+		w, e := z.Create("asset-manifest.json")
+		if e != nil {
+			return "", 0, e
+		}
+		if e = json.NewEncoder(w).Encode(snap.Assets); e != nil {
+			return "", 0, e
+		}
+	}
+	if e = z.Close(); e != nil {
+		return "", 0, e
+	}
+	size, e := tmp.Seek(0, io.SeekCurrent)
+	if e != nil {
+		return "", 0, e
+	}
+	if _, e = tmp.Seek(0, io.SeekStart); e != nil {
+		return "", 0, e
+	}
+	digest := fmt.Sprintf("sha256:%x", hash.Sum(nil))
+	_, e = r.blobStore.Put(ctx, vault, digest, size, tmp)
+	return digest, size, e
+}
+func (r *Repository) writeExportEntry(ctx context.Context, z *zip.Writer, vault string, f exportEntry) error {
+	src, e := r.blobStore.OpenContext(ctx, vault, f.Hash)
+	if e != nil {
+		return e
+	}
+	defer src.Close()
+	w, e := z.Create(f.Path)
+	if e != nil {
+		return e
+	}
+	hash := sha256.New()
+	n, e := io.Copy(io.MultiWriter(w, hash), io.LimitReader(src, f.Size+1))
+	if e != nil {
+		return e
+	}
+	if n != f.Size || fmt.Sprintf("sha256:%x", hash.Sum(nil)) != f.Hash {
+		return errors.New("export source integrity mismatch")
+	}
+	return nil
+}
+func (r *Repository) OpenExport(ctx context.Context, vault string, j Export) (io.ReadCloser, error) {
+	if j.Status != "completed" {
+		return nil, fileError(409, "EXPORT_NOT_READY", "archive is not ready")
+	}
+	return r.blobStore.OpenContext(ctx, vault, j.Hash)
+}

@@ -56,6 +56,7 @@ func main() {
 	if err := repository.SetPublicBase(*publicBase); err != nil {
 		log.Fatal(err)
 	}
+	repository.RunExports()
 	mux := httpapi.NewMux(repository)
 	if *webDir != "" {
 		web := http.FileServer(http.Dir(*webDir))

@@ -153,3 +153,20 @@ func (r *Repository) validateAssetReferences(ctx context.Context, tx *sql.Tx, va
 }
 
 func (r *Repository) PublicBase() string { return r.publicBase }
+
+func (r *Repository) ListAssets(ctx context.Context, vault string) ([]Asset, error) {
+	rows, err := r.db.QueryContext(ctx, assetSelect+` WHERE a.vault_id=? AND a.is_deleted=0 AND u.status='completed' ORDER BY a.name,a.id`, vault)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	assets := []Asset{}
+	for rows.Next() {
+		a, err := r.scanAsset(rows)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, a)
+	}
+	return assets, rows.Err()
+}

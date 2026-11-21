@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/weifei/we-note/services/api/internal/blob"
@@ -24,9 +25,11 @@ var (
 )
 
 type Repository struct {
-	db         *sqlite.Database
-	blobStore  blob.Store
-	publicBase string
+	db            *sqlite.Database
+	blobStore     blob.Store
+	publicBase    string
+	exportMu      sync.Mutex
+	exportRunning bool
 }
 
 func NewRepository(db *sqlite.Database, blobStores ...blob.Store) *Repository {

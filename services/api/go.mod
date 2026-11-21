@@ -7,6 +7,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.21
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.116.0
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/yuin/goldmark v1.7.13
+	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/text v0.25.0
 )
 

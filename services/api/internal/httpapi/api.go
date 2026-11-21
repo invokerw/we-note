@@ -61,6 +61,10 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/config", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]string{"public_url": repository.PublicBase()})
 	})
+	for _, route := range []string{"assets", "search", "tags", "outline", "links/backlinks"} {
+		mux.HandleFunc("GET /api/v1/vaults/{vault_id}/"+route, api.knowledge)
+	}
+	api.exportRoutes(mux)
 	api.shareRoutes(mux)
 	return mux
 }
