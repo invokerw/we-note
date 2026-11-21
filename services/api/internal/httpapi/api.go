@@ -27,6 +27,8 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.Handle("GET /healthz", HealthHandler{})
 	mux.HandleFunc("POST /api/v1/auth/register", api.register)
 	mux.HandleFunc("POST /api/v1/auth/login", api.login)
+	mux.HandleFunc("POST /api/v1/auth/refresh", api.refresh)
+	mux.HandleFunc("POST /api/v1/auth/logout", api.logout)
 	mux.HandleFunc("GET /api/v1/me", api.me)
 	mux.HandleFunc("GET /api/v1/vaults", api.listVaults)
 	mux.HandleFunc("POST /api/v1/vaults", api.createVault)
@@ -41,9 +43,25 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.HandleFunc("/api/v1/vaults/{vault_id}/sync/upload-sessions", api.createUploadSession)
 	mux.HandleFunc("/api/v1/vaults/{vault_id}/sync/upload-sessions/{upload_id}", api.getUploadSession)
 	mux.HandleFunc("/api/v1/vaults/{vault_id}/sync/upload-sessions/{upload_id}/complete", api.completeUploadSession)
+	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/files", api.writeFile("create_file"))
+	mux.HandleFunc("PUT /api/v1/vaults/{vault_id}/files/{file_id}/content", api.writeFile("update_file_content"))
+	mux.HandleFunc("PATCH /api/v1/vaults/{vault_id}/files/{file_id}", api.writeFile("move_file"))
+	mux.HandleFunc("DELETE /api/v1/vaults/{vault_id}/files/{file_id}", api.writeFile("delete_file"))
+	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/files/{file_id}/restore", api.writeFile("restore_file"))
+	mux.HandleFunc("GET /api/v1/vaults/{vault_id}/trash", api.trash)
+	mux.HandleFunc("GET /api/v1/vaults/{vault_id}/files/{file_id}/versions/{version_id}/content", api.versionContent)
+	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/assets/uploads", api.createAsset)
+	mux.HandleFunc("GET /api/v1/vaults/{vault_id}/assets/{asset_id}", api.asset)
+	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/assets/{asset_id}/complete", api.asset)
+	mux.HandleFunc("DELETE /api/v1/vaults/{vault_id}/assets/{asset_id}", api.asset)
+	mux.HandleFunc("GET /assets/{asset_id}", api.asset)
 	mux.HandleFunc("GET /api/v1/devices", api.listDevices)
 	mux.HandleFunc("POST /api/v1/devices", api.createDevice)
 	mux.HandleFunc("DELETE /api/v1/devices/{device_id}", api.deleteDevice)
+	mux.HandleFunc("GET /api/v1/config", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]string{"public_url": repository.PublicBase()})
+	})
+	api.shareRoutes(mux)
 	return mux
 }
 
@@ -226,11 +244,14 @@ func (a *API) authenticatedUser(w http.ResponseWriter, r *http.Request) (model.U
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	return decodeJSONLimit(w, r, target, 1<<20)
+}
+func decodeJSONLimit(w http.ResponseWriter, r *http.Request, target any, size int64) error {
 	if r.Body == nil {
 		return fmt.Errorf("request body is required")
 	}
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, size))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("invalid JSON body: %w", err)
@@ -251,4 +272,35 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
+}
+
+func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Token string `json:"refresh_token"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		writeError(w, 400, "INVALID_REQUEST", "refresh token required")
+		return
+	}
+	out, err := a.repository.Refresh(r.Context(), in.Token)
+	if errors.Is(err, store.ErrUnauthorized) {
+		writeError(w, 401, "UNAUTHORIZED", "session expired")
+		return
+	}
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, out)
+}
+func (a *API) logout(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.authenticatedUser(w, r); !ok {
+		return
+	}
+	if err := a.repository.Logout(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")); err != nil {
+		resourceError(w, err)
+		return
+	}
+	w.WriteHeader(204)
 }

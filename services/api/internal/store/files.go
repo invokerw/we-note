@@ -83,7 +83,7 @@ func (r *Repository) OpenFileContent(ctx context.Context, vaultID, fileID string
 	if r.blobStore == nil {
 		return model.FileVersion{}, nil, errors.New("blob store is not configured")
 	}
-	reader, err := r.blobStore.Open(vaultID, version.ContentHash)
+	reader, err := r.blobStore.OpenContext(ctx, vaultID, version.ContentHash)
 	if err != nil {
 		return model.FileVersion{}, nil, fmt.Errorf("open file content: %w", err)
 	}
@@ -147,4 +147,16 @@ func scanFileVersion(row scanner) (model.FileVersion, error) {
 		return model.FileVersion{}, err
 	}
 	return version, nil
+}
+
+func (r *Repository) OpenVersion(ctx context.Context, vault, file, version string) (model.FileVersion, io.ReadCloser, error) {
+	v, err := r.FileVersion(ctx, vault, file, version)
+	if err != nil {
+		return v, nil, err
+	}
+	if r.blobStore == nil {
+		return v, nil, errors.New("blob store not configured")
+	}
+	body, err := r.blobStore.OpenContext(ctx, vault, v.ContentHash)
+	return v, body, err
 }

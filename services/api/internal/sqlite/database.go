@@ -3,10 +3,17 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+//go:embed 003.sql
+var fileMigration string
+
+//go:embed resources.sql
+var resourcesSchema string
 
 type Database struct {
 	*sql.DB
@@ -188,7 +195,49 @@ CREATE INDEX IF NOT EXISTS idx_sync_operations_change ON sync_operations(vault_i
 	if _, err := db.ExecContext(ctx, `INSERT OR IGNORE INTO schema_migrations(version) VALUES (1), (2)`); err != nil {
 		return fmt.Errorf("record schema migration: %w", err)
 	}
-	return nil
+	if err := db.migrateFileStorage(ctx); err != nil {
+		return err
+	}
+	_, err := db.ExecContext(ctx, resourcesSchema)
+	return err
+}
+
+func (db *Database) migrateFileStorage(ctx context.Context) error {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, `PRAGMA foreign_keys=OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), `PRAGMA foreign_keys=ON`)
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var applied bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=3)`).Scan(&applied); err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, fileMigration); err != nil {
+		return fmt.Errorf("migrate file storage: %w", err)
+	}
+	var violations int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM pragma_foreign_key_check`).Scan(&violations); err != nil {
+		return err
+	}
+	if violations != 0 {
+		return fmt.Errorf("file migration found %d invalid references", violations)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version) VALUES (3)`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func ensureCompatibilityColumns(ctx context.Context, db *Database) error {

@@ -63,8 +63,8 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Fatalf("migration row count = %d, want 2", count)
+	if count != 3 {
+		t.Fatalf("migration row count = %d, want 3", count)
 	}
 }
 
@@ -85,5 +85,35 @@ func TestForeignKeyRejectsUnknownVaultOwner(t *testing.T) {
 	}
 	if err == sql.ErrNoRows {
 		t.Fatal("unexpected query error")
+	}
+}
+
+func TestFileMigrationPreservesPopulatedVersionChain(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Exercise the rebuild with the same references and rows an existing installation holds.
+	_, err = db.Exec(`INSERT INTO users VALUES ('u','a@b','hash','now');INSERT INTO vaults(id,owner_user_id,name,created_at) VALUES('v','u','one','now'),('w','u','two','now');INSERT INTO blobs VALUES('b','v','hash',0,'key','now');INSERT INTO files(id,vault_id,path,format,current_version_id,created_at,updated_at) VALUES('f','v','a.md','md','a','now','now');INSERT INTO file_versions(id,vault_id,file_id,blob_id,content_hash,content_size,vault_revision,created_at) VALUES('a','v','f','b','hash',0,1,'now');DELETE FROM schema_migrations WHERE version=3; DROP TABLE file_requests;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO blobs VALUES('b','w','hash',0,'key2','now')`); err != nil {
+		t.Fatal("cross-vault identical blob", err)
+	}
+	var n int
+	if err = db.QueryRow(`SELECT count(*) FROM files f JOIN file_versions v ON v.id=f.current_version_id JOIN blobs b ON b.id=v.blob_id AND b.vault_id=v.vault_id`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("lost version chain: %d %v", n, err)
+	}
+	if _, err = db.Exec(`DELETE FROM blobs WHERE vault_id='v'`); err == nil {
+		t.Fatal("foreign key enforcement disabled after rebuild")
 	}
 }

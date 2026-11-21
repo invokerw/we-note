@@ -24,16 +24,17 @@ var (
 )
 
 type Repository struct {
-	db        *sqlite.Database
-	blobStore *blob.LocalStore
+	db         *sqlite.Database
+	blobStore  blob.Store
+	publicBase string
 }
 
-func NewRepository(db *sqlite.Database, blobStores ...*blob.LocalStore) *Repository {
-	var blobStore *blob.LocalStore
+func NewRepository(db *sqlite.Database, blobStores ...blob.Store) *Repository {
+	var blobStore blob.Store
 	if len(blobStores) > 0 {
 		blobStore = blobStores[0]
 	}
-	return &Repository{db: db, blobStore: blobStore}
+	return &Repository{db: db, blobStore: blobStore, publicBase: "https://localhost:8443"}
 }
 
 func (r *Repository) CreateUser(ctx context.Context, email, passwordHash string) (model.User, error) {
@@ -115,13 +116,24 @@ func (r *Repository) CreateSession(ctx context.Context, userID string, lifetime 
 	}
 	now := time.Now().UTC()
 	expiresAt := now.Add(lifetime)
-	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO sessions(id, user_id, token_hash, created_at, expires_at)
-		VALUES (?, ?, ?, ?, ?)`, sessionID, user.ID, hex.EncodeToString(tokenHash[:]), formatTime(now), formatTime(expiresAt))
+	refresh, refreshHash, err := sessionSecret()
 	if err != nil {
-		return model.Session{}, fmt.Errorf("create session: %w", err)
+		return model.Session{}, err
 	}
-	return model.Session{AccessToken: accessToken, TokenType: "Bearer", ExpiresAt: expiresAt, User: user}, nil
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Session{}, err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `INSERT INTO sessions(id,user_id,token_hash,created_at,expires_at) VALUES(?,?,?,?,?)`, sessionID, user.ID, hex.EncodeToString(tokenHash[:]), formatTime(now), formatTime(expiresAt))
+	if err != nil {
+		return model.Session{}, err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO refresh_sessions VALUES(?,?,?)`, sessionID, refreshHash, formatTime(now.Add(30*24*time.Hour)))
+	if err != nil {
+		return model.Session{}, err
+	}
+	return model.Session{AccessToken: accessToken, RefreshToken: refresh, TokenType: "Bearer", ExpiresAt: expiresAt, User: user}, tx.Commit()
 }
 
 func (r *Repository) UserByAccessToken(ctx context.Context, accessToken string) (model.User, error) {
@@ -325,4 +337,57 @@ func newID(prefix string) (string, error) {
 		return "", fmt.Errorf("generate %s id: %w", prefix, err)
 	}
 	return prefix + "_" + hex.EncodeToString(bytes), nil
+}
+
+func sessionSecret() (string, string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", "", err
+	}
+	secret := base64.RawURLEncoding.EncodeToString(raw)
+	return secret, fmt.Sprintf("%x", sha256.Sum256([]byte(secret))), nil
+}
+func (r *Repository) Refresh(ctx context.Context, secret string) (model.Session, error) {
+	var out model.Session
+	now := time.Now().UTC()
+	access, accessHash, err := sessionSecret()
+	if err != nil {
+		return out, err
+	}
+	refresh, refreshHash, err := sessionSecret()
+	if err != nil {
+		return out, err
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return out, err
+	}
+	defer tx.Rollback()
+	var id, created string
+	err = tx.QueryRowContext(ctx, `SELECT s.id,u.id,u.email,u.created_at FROM refresh_sessions f JOIN sessions s ON s.id=f.session_id JOIN users u ON u.id=s.user_id WHERE f.token_hash=? AND f.expires_at>? AND s.revoked_at IS NULL`, fmt.Sprintf("%x", sha256.Sum256([]byte(secret))), formatTime(now)).Scan(&id, &out.User.ID, &out.User.Email, &created)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, ErrUnauthorized
+	}
+	if err != nil {
+		return out, err
+	}
+	out.User.CreatedAt, err = parseTime(created)
+	if err != nil {
+		return out, err
+	}
+	out.ExpiresAt = now.Add(30 * time.Minute)
+	out.AccessToken = access
+	out.RefreshToken = refresh
+	out.TokenType = "Bearer"
+	if _, err := tx.ExecContext(ctx, `UPDATE refresh_sessions SET token_hash=? WHERE session_id=?`, refreshHash, id); err != nil {
+		return out, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE sessions SET token_hash=?,expires_at=? WHERE id=?`, accessHash, formatTime(out.ExpiresAt), id); err != nil {
+		return out, err
+	}
+	return out, tx.Commit()
+}
+func (r *Repository) Logout(ctx context.Context, token string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE sessions SET revoked_at=? WHERE token_hash=?`, formatTime(time.Now().UTC()), fmt.Sprintf("%x", sha256.Sum256([]byte(token))))
+	return err
 }

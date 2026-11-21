@@ -112,10 +112,11 @@ type LoginRequest struct {
 }
 
 type Session struct {
-	AccessToken string    `json:"access_token"`
-	TokenType   string    `json:"token_type"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	User        User      `json:"user"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	TokenType    string    `json:"token_type"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	User         User      `json:"user"`
 }
 
 type CreateVaultRequest struct {

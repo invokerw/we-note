@@ -433,7 +433,10 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 		}
 	}
 	upload, err := loadUploadSessionTx(ctx, tx, request.VaultID, request.BlobReference)
-	if errors.Is(err, sql.ErrNoRows) || upload.Status != "completed" {
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return SyncSubmitResult{}, fmt.Errorf("load upload session: %w", err)
+	}
+	if errors.Is(err, ErrNotFound) || upload.Status != "completed" {
 		return SyncSubmitResult{}, &SyncError{
 			Status:  409,
 			Code:    "UPLOAD_NOT_READY",
@@ -502,6 +505,15 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 		}
 	}
 
+	if request.Metadata.Format == "md" {
+		data, err := r.readNoteBlob(ctx, request.VaultID, request.ContentHash, request.ContentSize)
+		if err != nil {
+			return SyncSubmitResult{}, err
+		}
+		if err := r.validateAssetReferences(ctx, tx, request.VaultID, data); err != nil {
+			return SyncSubmitResult{}, err
+		}
+	}
 	if currentRevision >= maxSafeRevision {
 		return SyncSubmitResult{}, &SyncError{
 			Status:  503,
@@ -599,8 +611,13 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 }
 
 func (r *Repository) PullSyncChanges(ctx context.Context, vaultID, deviceID string, cursor int64) (SyncPullResult, error) {
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return SyncPullResult{}, err
+	}
+	defer tx.Rollback()
 	var currentRevision, minRevision int64
-	if err := r.db.QueryRowContext(ctx, `SELECT current_revision, min_available_revision FROM vaults WHERE id = ?`, vaultID).
+	if err := tx.QueryRowContext(ctx, `SELECT current_revision, min_available_revision FROM vaults WHERE id = ?`, vaultID).
 		Scan(&currentRevision, &minRevision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SyncPullResult{}, ErrNotFound
@@ -622,7 +639,7 @@ func (r *Repository) PullSyncChanges(ctx context.Context, vaultID, deviceID stri
 			},
 		}
 	}
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 		SELECT id, vault_id, vault_revision, file_id, version_id, operation_id, operation, path,
 			parent_version_id, device_id, client_timestamp, content_hash, content_size, created_at
 		FROM changes
@@ -656,21 +673,26 @@ func (r *Repository) PullSyncChanges(ctx context.Context, vaultID, deviceID stri
 }
 
 func (r *Repository) Manifest(ctx context.Context, vaultID, deviceID string) (SyncManifestResult, error) {
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return SyncManifestResult{}, err
+	}
+	defer tx.Rollback()
 	var currentRevision, minRevision int64
-	if err := r.db.QueryRowContext(ctx, `SELECT current_revision, min_available_revision FROM vaults WHERE id = ?`, vaultID).
+	if err := tx.QueryRowContext(ctx, `SELECT current_revision, min_available_revision FROM vaults WHERE id = ?`, vaultID).
 		Scan(&currentRevision, &minRevision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SyncManifestResult{}, ErrNotFound
 		}
 		return SyncManifestResult{}, fmt.Errorf("load manifest revision: %w", err)
 	}
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 		SELECT f.id, f.vault_id, f.path, f.format, f.current_version_id,
 			COALESCE(NULLIF(f.current_content_hash, ''), v.content_hash, ''),
 			COALESCE(NULLIF(f.current_content_size, 0), v.content_size, 0),
 			COALESCE(NULLIF(f.current_blob_id, ''), v.blob_id, ''), f.is_deleted
 		FROM files f
-		LEFT JOIN file_versions v ON v.id = f.current_version_id
+		LEFT JOIN file_versions v ON v.id = f.current_version_id AND v.vault_id=f.vault_id AND v.file_id=f.id
 		WHERE f.vault_id = ?
 		ORDER BY f.path, f.id`, vaultID)
 	if err != nil {
@@ -706,7 +728,7 @@ func (r *Repository) Manifest(ctx context.Context, vaultID, deviceID string) (Sy
 }
 
 func (r *Repository) verifyBlob(ctx context.Context, vaultID, contentHash string) (int64, string, error) {
-	reader, err := r.blobStore.Open(vaultID, contentHash)
+	reader, err := r.blobStore.OpenContext(ctx, vaultID, contentHash)
 	if err != nil {
 		return 0, "", err
 	}

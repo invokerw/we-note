@@ -35,11 +35,6 @@ var supportedSyncOperations = []string{
 
 func (a *API) syncChanges(w http.ResponseWriter, r *http.Request) {
 	endpoint := r.URL.Path
-	requestID, requestIDErr := a.repository.NextSyncRequestID(r.Context(), r.PathValue("vault_id"))
-	if requestIDErr != nil {
-		a.writeSyncError(w, r, endpoint, "POST", requestID, requestIDErr)
-		return
-	}
 	if r.Method != http.MethodPost {
 		a.writeSyncError(w, r, endpoint, "POST", "", &store.SyncError{
 			Status:  405,
@@ -119,6 +114,11 @@ func (a *API) syncChanges(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	requestID, requestIDErr := a.repository.NextSyncRequestID(r.Context(), r.PathValue("vault_id"))
+	if requestIDErr != nil {
+		a.writeSyncError(w, r, endpoint, "POST", requestID, requestIDErr)
+		return
+	}
 	if mode == "pull" {
 		cursor, validationErr := parseNonNegativeInt(body, "last_server_revision")
 		if validationErr != nil {
@@ -192,11 +192,6 @@ func (a *API) syncChanges(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) syncManifest(w http.ResponseWriter, r *http.Request) {
 	endpoint := r.URL.Path
-	requestID, requestIDErr := a.repository.NextSyncRequestID(r.Context(), r.PathValue("vault_id"))
-	if requestIDErr != nil {
-		a.writeSyncError(w, r, endpoint, "GET", requestID, requestIDErr)
-		return
-	}
 	if r.Method != http.MethodGet {
 		a.writeSyncError(w, r, endpoint, "GET", "", &store.SyncError{
 			Status:  405,
@@ -250,6 +245,11 @@ func (a *API) syncManifest(w http.ResponseWriter, r *http.Request) {
 				"expected_vault_id": vaultID,
 			},
 		})
+		return
+	}
+	requestID, requestIDErr := a.repository.NextSyncRequestID(r.Context(), r.PathValue("vault_id"))
+	if requestIDErr != nil {
+		a.writeSyncError(w, r, endpoint, "GET", requestID, requestIDErr)
 		return
 	}
 	result, err := a.repository.Manifest(r.Context(), vaultID, deviceID)
