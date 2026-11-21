@@ -155,6 +155,30 @@ impl Sync<'_> {
         self.report.conflicts.push(copy);
         Ok(())
     }
+    fn receive_at_path(
+        &mut self,
+        id: &str,
+        remote: &Entry,
+        local_hash: Option<&str>,
+        prior_hashes: &BTreeMap<String, String>,
+    ) -> Result<()> {
+        if local_hash == Some(&remote.hash) {
+            return Ok(());
+        }
+        let bytes = self.content(id, remote)?;
+        if let Some(hash) = local_hash {
+            if prior_hashes.get(&remote.path).map(String::as_str) != Some(hash) {
+                let edited = fs::read(disk::local_path(self.root, &remote.path)?)?;
+                if digest(&edited) != hash {
+                    bail!("文件在扫描后已修改 {}", remote.path)
+                }
+                self.keep_conflict(&remote.path, &edited)?;
+            }
+        }
+        disk::replace(self.root, &remote.path, local_hash, &bytes)?;
+        self.report.downloaded += 1;
+        Ok(())
+    }
     fn recycle(&self, path: &str, expected: &str) -> Result<()> {
         let local = disk::local_path(self.root, path)?;
         let Some(data) = disk::current(&local)? else {
@@ -180,6 +204,7 @@ impl Sync<'_> {
         r: &Remote,
         local: &mut BTreeMap<String, String>,
         remote_paths: &BTreeSet<String>,
+        prior_hashes: &BTreeMap<String, String>,
     ) -> Result<()> {
         identifier(&r.file_id)?;
         disk::relative(&r.path)?;
@@ -212,15 +237,7 @@ impl Sync<'_> {
         };
         let Some(mut base) = previous else {
             let present = local.remove(&r.path);
-            if present.as_deref() != Some(&remote.hash) {
-                let bytes = self.content(&r.file_id, &remote)?;
-                if present.is_some() {
-                    let data = fs::read(disk::local_path(self.root, &r.path)?)?;
-                    self.keep_conflict(&r.path, &data)?
-                };
-                disk::replace(self.root, &r.path, present.as_deref(), &bytes)?;
-                self.report.downloaded += 1
-            };
+            self.receive_at_path(&r.file_id, &remote, present.as_deref(), prior_hashes)?;
             return self.remember(r.file_id.clone(), remote);
         };
         // A casing-only move may resolve both spellings to one file on Windows and macOS.
@@ -237,27 +254,21 @@ impl Sync<'_> {
             }
         }
         if base.path != r.path {
-            let previous_hash = local.remove(&base.path);
-            let new_hash = local.remove(&r.path);
-            let remote_bytes = self.content(&r.file_id, &remote)?;
-            if let Some(current) = new_hash.as_ref() {
-                if current != &remote.hash {
-                    self.keep_conflict(&r.path, &fs::read(disk::local_path(self.root, &r.path)?)?)?
+            let target_hash = local.remove(&r.path);
+            self.receive_at_path(&r.file_id, &remote, target_hash.as_deref(), prior_hashes)?;
+            // A different ID owns the old path after a swap or path reuse. Its own manifest
+            // entry consumes that scan result and preserves any offline edit at that path.
+            if !remote_paths.contains(&base.path) {
+                if let Some(hash) = local.remove(&base.path) {
+                    if hash != base.hash {
+                        self.keep_conflict(
+                            &base.path,
+                            &fs::read(disk::local_path(self.root, &base.path)?)?,
+                        )?;
+                    }
+                    self.recycle(&base.path, &hash)?;
                 }
-            };
-            disk::replace(self.root, &r.path, new_hash.as_deref(), &remote_bytes)?;
-            if let Some(hash) = previous_hash {
-                if hash != base.hash {
-                    self.keep_conflict(
-                        &base.path,
-                        &fs::read(disk::local_path(self.root, &base.path)?)?,
-                    )?
-                };
-                if !remote_paths.contains(&base.path) {
-                    self.recycle(&base.path, &hash)?
-                }
-            };
-            self.report.downloaded += 1;
+            }
             return self.remember(r.file_id.clone(), remote);
         }
         let Some(hash) = local.remove(&base.path) else {
@@ -399,8 +410,14 @@ pub fn synchronize(
         .filter(|r| !r.is_deleted)
         .map(|r| r.path.clone())
         .collect();
+    let prior_hashes = sync
+        .state
+        .files
+        .values()
+        .map(|entry| (entry.path.clone(), entry.hash.clone()))
+        .collect();
     for remote in &manifest.files {
-        sync.reconcile(remote, &mut local, &paths)?
+        sync.reconcile(remote, &mut local, &paths, &prior_hashes)?
     }
     for (path, hash) in local {
         let bytes = fs::read(disk::local_path(&root, &path)?)?;

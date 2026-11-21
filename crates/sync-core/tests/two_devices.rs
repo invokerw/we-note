@@ -109,5 +109,38 @@ fn two_devices_and_web_converge() -> Result<()> {
     sync_b()?;
     assert_eq!(fs::read(a.join("daily/moved.md"))?, b"Web\n");
     assert_eq!(sync_a()?.uploaded, 0);
+    // Both names stay occupied in the final manifest, but the IDs trade paths while B is offline.
+    fs::write(a.join("first.md"), "first original")?;
+    fs::write(a.join("second.md"), "second original")?;
+    sync_a()?;
+    sync_b()?;
+    fs::write(b.join("first.md"), "offline edit to first")?;
+    for (old, new) in [
+        ("first.md", "temporary.md"),
+        ("second.md", "first.md"),
+        ("temporary.md", "second.md"),
+    ] {
+        fs::rename(a.join(old), a.join(new))?;
+        sync_a()?;
+    }
+    let result = sync_b()?;
+    assert_eq!(
+        result.conflicts.len(),
+        1,
+        "only the offline edit needs preservation"
+    );
+    assert_eq!(
+        fs::read_to_string(b.join(&result.conflicts[0]))?,
+        "offline edit to first"
+    );
+    assert_eq!(fs::read_to_string(b.join("first.md"))?, "second original");
+    assert_eq!(fs::read_to_string(b.join("second.md"))?, "first original");
+    sync_b()?;
+    sync_a()?;
+    assert_eq!(
+        fs::read_to_string(a.join(&result.conflicts[0]))?,
+        "offline edit to first"
+    );
+    assert_eq!(sync_b()?.uploaded, 0);
     Ok(())
 }
