@@ -8,6 +8,7 @@ type Asset = {
   content_size: number;
 };
 type Job = {
+  mode?: "online" | "portable";
   job_id: string;
   scope: string;
   status: string;
@@ -22,7 +23,8 @@ export async function download(token: string, path: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 export type ResourceClient = {
-  json: (path: string, scope?: string) => Promise<any>;
+  json: (path: string) => Promise<any>;
+  createExport: (scope: string, portable: boolean) => Promise<void>;
   blob: (id: string) => Promise<Blob>;
   save: (kind: "asset" | "export", id: string, name: string) => Promise<void>;
 };
@@ -41,15 +43,15 @@ export function LibraryResources({
 }) {
   const client = useMemo<ResourceClient>(
     () => ({
-      json: async (route, scope) =>
-        (
-          await request(
-            token,
-            base + route,
-            scope ? "POST" : "GET",
-            scope ? { scope } : undefined,
-          )
-        ).json(),
+      json: async (route) => (await request(token, base + route)).json(),
+      createExport: async (scope, portable) => {
+        await request(
+          token,
+          base + "/exports",
+          "POST",
+          portable ? { scope, mode: "portable" } : { scope },
+        );
+      },
       blob: async (id) => (await request(token, "/assets/" + id)).blob(),
       save: (kind, id, name) =>
         download(
@@ -131,6 +133,7 @@ export function Resources({
     [picked, pick] = useState(""),
     [jobs, setJobs] = useState<Job[]>([]),
     [scope, setScope] = useState("all"),
+    [portable, setPortable] = useState(false),
     [revision, refresh] = useState(0),
     [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -247,13 +250,25 @@ export function Resources({
               ))}
             </select>
           </label>
+          {scope === "all" && (
+            <label>
+              附件链接
+              <select
+                value={portable ? "portable" : "online"}
+                onChange={(e) => setPortable(e.target.value === "portable")}
+              >
+                <option value="online">保留在线链接</option>
+                <option value="portable">离线便携（使用包内附件）</option>
+              </select>
+            </label>
+          )}
           <button
             className="primary"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
               try {
-                await client.json("/exports", scope);
+                await client.createExport(scope, scope === "all" && portable);
                 refresh((n) => n + 1);
               } catch (e) {
                 notify(String(e));
@@ -267,13 +282,19 @@ export function Resources({
           {jobs.map((j) => (
             <div className="row" key={j.job_id}>
               <span>
-                {scopes[j.scope]} · {new Date(j.created_at).toLocaleString()}
+                {scopes[j.scope]}
+                {j.mode === "portable" ? " · 离线便携" : ""} ·{" "}
+                {new Date(j.created_at).toLocaleString()}
               </span>
               {j.status === "completed" ? (
                 <button
                   onClick={() =>
                     client
-                      .save("export", j.job_id, "wenote-" + j.scope + ".zip")
+                      .save(
+                        "export",
+                        j.job_id,
+                        `wenote-${j.scope}${j.mode === "portable" ? "-portable" : ""}.zip`,
+                      )
                       .catch((e) => notify(String(e)))
                   }
                 >

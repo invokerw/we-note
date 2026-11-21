@@ -16,8 +16,14 @@ import (
 	"time"
 )
 
+type ExportOptions struct {
+	Scope string `json:"scope"`
+	Mode  string `json:"mode"`
+}
+
 type Export struct {
 	ID      string `json:"job_id"`
+	Mode    string `json:"mode"`
 	Scope   string `json:"scope"`
 	Created string `json:"created_at"`
 	Status  string `json:"status"`
@@ -25,26 +31,29 @@ type Export struct {
 	Size    int64  `json:"content_size"`
 }
 type exportEntry struct {
-	Path    string `json:"path"`
-	ID      string `json:"id"`
-	Version string `json:"version_id,omitempty"`
-	Hash    string `json:"content_hash"`
-	Size    int64  `json:"content_size"`
-	Name    string `json:"original_name,omitempty"`
-	URL     string `json:"canonical_url,omitempty"`
+	Path       string `json:"path"`
+	ID         string `json:"id"`
+	Version    string `json:"version_id,omitempty"`
+	Hash       string `json:"content_hash"`
+	Size       int64  `json:"content_size"`
+	SourceHash string `json:"source_content_hash,omitempty"`
+	Name       string `json:"original_name,omitempty"`
+	URL        string `json:"canonical_url,omitempty"`
 }
 type exportSnapshot struct {
+	Mode    string        `json:"mode"`
+	Layout  string        `json:"layout"`
 	Created string        `json:"exported_at"`
 	Scope   string        `json:"scope"`
 	Files   []exportEntry `json:"files"`
 	Assets  []exportEntry `json:"assets"`
 }
 
-const exportColumns = `SELECT id,scope,created_at,status,hash,size FROM export_jobs `
+const exportColumns = `SELECT id,scope,created_at,status,hash,size,coalesce(json_extract(snapshot,'$.mode'),'online') FROM export_jobs `
 
 func scanExport(row scanner) (Export, error) {
 	var j Export
-	err := row.Scan(&j.ID, &j.Scope, &j.Created, &j.Status, &j.Hash, &j.Size)
+	err := row.Scan(&j.ID, &j.Scope, &j.Created, &j.Status, &j.Hash, &j.Size, &j.Mode)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -74,10 +83,17 @@ func (r *Repository) CanExport(ctx context.Context, user, vault string) (bool, e
 	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM workspace_members WHERE vault_id=? AND user_id=? AND role IN ('owner','editor','exporter'))`, vault, user).Scan(&ok)
 	return ok, err
 }
-func (r *Repository) CreateExport(ctx context.Context, user, vault, key, scope string) (Export, error) {
+func (r *Repository) CreateExport(ctx context.Context, user, vault, key string, options ExportOptions) (Export, error) {
+	scope, mode := options.Scope, options.Mode
+	if mode == "" {
+		mode = "online"
+	}
 	var j Export
 	if scope != "notes" && scope != "assets" && scope != "all" {
 		return j, fileError(400, "INVALID_SCOPE", "expected notes, assets or all")
+	}
+	if mode != "online" && (mode != "portable" || scope != "all") {
+		return j, fileError(400, "INVALID_EXPORT_MODE", "portable mode requires a full vault export")
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -87,8 +103,8 @@ func (r *Repository) CreateExport(ctx context.Context, user, vault, key, scope s
 	if key != "" {
 		existing, e := scanExport(tx.QueryRowContext(ctx, exportColumns+`WHERE vault_id=? AND user_id=? AND operation_key=?`, vault, user, key))
 		if e == nil {
-			if existing.Scope != scope {
-				return j, fileError(409, "IDEMPOTENCY_KEY_REUSED", "export scope changed")
+			if existing.Scope != scope || existing.Mode != mode {
+				return j, fileError(409, "IDEMPOTENCY_KEY_REUSED", "export options changed")
 			}
 			return existing, nil
 		}
@@ -102,8 +118,9 @@ func (r *Repository) CreateExport(ctx context.Context, user, vault, key, scope s
 	}
 	j.Created = formatTime(time.Now().UTC())
 	j.Scope = scope
+	j.Mode = mode
 	j.Status = "pending"
-	snap := exportSnapshot{j.Created, scope, []exportEntry{}, []exportEntry{}}
+	snap := exportSnapshot{Created: j.Created, Scope: scope, Mode: mode, Files: []exportEntry{}, Assets: []exportEntry{}}
 	if scope != "assets" {
 		rows, e := tx.QueryContext(ctx, activeFileQuery+` ORDER BY f.path`, vault)
 		if e != nil {
@@ -146,6 +163,13 @@ func (r *Repository) CreateExport(ctx context.Context, user, vault, key, scope s
 			return j, e
 		}
 		rows.Close()
+	}
+	if mode == "portable" && len(snap.Assets) > 0 {
+		for _, f := range snap.Files {
+			if strings.EqualFold(path.Ext(f.Path), ".md") && f.Size > maxNoteBytes {
+				return j, fileError(413, "NOTE_TOO_LARGE", "离线链接转换支持最大 16 MiB 的 Markdown 笔记。保留在线链接可导出此库。")
+			}
+		}
 	}
 	raw, err := json.Marshal(snap)
 	if err != nil {
@@ -212,26 +236,8 @@ func (r *Repository) buildArchive(ctx context.Context, vault string, raw []byte)
 	defer tmp.Close()
 	hash := sha256.New()
 	z := zip.NewWriter(io.MultiWriter(tmp, hash))
-	for _, entry := range append(append([]exportEntry{}, snap.Files...), snap.Assets...) {
-		if e := r.writeExportEntry(ctx, z, vault, entry); e != nil {
-			return "", 0, e
-		}
-	}
-	manifest, e := z.Create("manifest.json")
-	if e != nil {
+	if e = r.writeExportSnapshot(ctx, z, vault, &snap); e != nil {
 		return "", 0, e
-	}
-	if e = json.NewEncoder(manifest).Encode(snap); e != nil {
-		return "", 0, e
-	}
-	if snap.Scope != "notes" {
-		w, e := z.Create("asset-manifest.json")
-		if e != nil {
-			return "", 0, e
-		}
-		if e = json.NewEncoder(w).Encode(snap.Assets); e != nil {
-			return "", 0, e
-		}
 	}
 	if e = z.Close(); e != nil {
 		return "", 0, e

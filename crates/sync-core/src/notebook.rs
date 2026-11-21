@@ -169,17 +169,24 @@ impl Notebook {
         {
             bail!("未知的笔记库操作")
         };
+        if let Some(scope) = scope {
+            return self.create_export(token, &scope, None);
+        }
         let api = Api::new(&self.origin, token)?;
         let full = format!("/api/v1/vaults/{}{route}", self.vault);
-        match scope {
-            Some(scope) => api.json(
-                reqwest::Method::POST,
-                &full,
-                Some(json!({"scope":scope})),
-                Some(&uuid::Uuid::new_v4().to_string()),
-            ),
-            None => api.json(reqwest::Method::GET, &full, None, None),
+        api.json(reqwest::Method::GET, &full, None, None)
+    }
+    pub fn create_export(&self, token: &str, scope: &str, mode: Option<&str>) -> Result<Value> {
+        let mut options = json!({"scope":scope});
+        if let Some(mode) = mode {
+            options["mode"] = json!(mode);
         }
+        Api::new(&self.origin, token)?.json(
+            reqwest::Method::POST,
+            &format!("/api/v1/vaults/{}/exports", self.vault),
+            Some(options),
+            Some(&uuid::Uuid::new_v4().to_string()),
+        )
     }
     pub fn asset(&self, id: &str, token: &str) -> Result<Value> {
         identifier(id)?;

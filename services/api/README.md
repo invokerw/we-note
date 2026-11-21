@@ -73,3 +73,9 @@ Create the asset with `POST /api/v1/vaults/{vault_id}/assets/uploads`, retaining
 | `POST /assemble` | Verifies all parts in order and publishes the original blob. Success and replay return 204. Missing parts or a mismatched SHA-256 return 409. |
 
 The staging lease lasts 24 hours from the most recent accepted part. After expiry clients can send all parts again with the same asset ID. Expired rows are reclaimed when new parts arrive. Whole-body `POST /complete` continues to accept existing clients.
+
+### Vault exports
+
+`POST /api/v1/vaults/{vault_id}/exports` takes a `scope` of `notes`, `assets` or `all` and returns a job with HTTP 202. The optional `mode` defaults to `online`. Use `{"scope":"all","mode":"portable"}` to rewrite Markdown attachment links for offline reading. Reuse an `Idempotency-Key` with the same scope and mode to retrieve the same job. A portable export containing attachments supports Markdown files up to 16 MiB each.
+
+Poll `GET /api/v1/vaults/{vault_id}/exports/{job_id}` until `status` is `completed`, then download the ZIP from the same path with `/download` appended. `manifest.json` describes the frozen files and attachments. Its `content_hash` fields describe the archived bytes, and rewritten notes include their original `source_content_hash`. `checksums.sha256` covers the archive contents, including both manifests when present.

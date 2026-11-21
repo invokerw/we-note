@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import { readFile, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { unzipSync } from "fflate";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 const origin = process.env.WENOTE_TEST_ORIGIN;
@@ -162,6 +167,43 @@ try {
   const wait = page.waitForEvent("download");
   await button("下载 ZIP").click();
   assert.equal((await wait).suggestedFilename(), "wenote-all.zip");
+  await page.getByLabel("附件链接").selectOption("portable");
+  await button("创建导出").click();
+  const portableDownload = page.waitForEvent("download");
+  await page
+    .locator(".row")
+    .filter({ hasText: "离线便携" })
+    .getByRole("button", { name: "下载 ZIP" })
+    .click();
+  const saved = await portableDownload;
+  assert.equal(saved.suggestedFilename(), "wenote-all-portable.zip");
+  const zip = unzipSync(await readFile(await saved.path()));
+  const localDir = await mkdtemp(join(tmpdir(), "wenote-portable-"));
+  const offline = await chrome.newContext({ offline: true });
+  try {
+    const note = "notes/工作/路线.md";
+    const manifest = JSON.parse(Buffer.from(zip["manifest.json"]));
+    const img = manifest.assets.find((a) => a.original_name === "剪贴板.png");
+    for (const path of [note, img.path]) {
+      const filename = join(localDir, path);
+      await mkdir(dirname(filename), { recursive: true });
+      await writeFile(filename, zip[path]);
+    }
+    const markdown = await readFile(join(localDir, note), "utf8");
+    const relative = markdown.match(/!\[剪贴板.png\]\(([^)]+)\)/)?.[1];
+    assert.ok(relative?.startsWith("../../assets/"), markdown);
+    const image = new URL(relative, pathToFileURL(join(localDir, note)));
+    assert.equal(fileURLToPath(image), join(localDir, img.path));
+    const viewer = await offline.newPage();
+    await viewer.goto(image.href);
+    assert.equal(
+      await viewer.locator("img").evaluate((el) => el.naturalWidth),
+      1,
+    );
+  } finally {
+    await offline.close();
+    await rm(localDir, { recursive: true, force: true });
+  }
   await button("路线.md").click();
   await button("源码").click();
   const file = {
@@ -209,7 +251,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "Phase 2 browser acceptance passed: rich Markdown, byte-preserving live edits, heading map, links, search, clipboard, asset preview and ZIP download.",
+    "Phase 2 browser acceptance passed: rich Markdown, byte-preserving live edits, heading map, links, search, clipboard, asset preview, online ZIP and offline portable ZIP image.",
   );
 } finally {
   await chrome.close();

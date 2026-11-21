@@ -54,7 +54,7 @@ func scanShare(row scanner) (Share, error) {
 	return s, err
 }
 func (r *Repository) readNoteBlob(ctx context.Context, vault, hash string, size int64) ([]byte, error) {
-	if size > 16<<20 {
+	if size > maxNoteBytes {
 		return nil, fileError(413, "NOTE_TOO_LARGE", "note exceeds 16 MiB")
 	}
 	reader, err := r.blobStore.OpenContext(ctx, vault, hash)

@@ -19,6 +19,8 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+const maxNoteBytes = 16 << 20
+
 // Content contains the original bytes, including any BOM and CRLF sequences.
 type FileWrite struct {
 	Path        string `json:"path,omitempty"`
@@ -127,7 +129,7 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 		if input.Content == nil {
 			return result, fileError(400, "INVALID_REQUEST", "content is required")
 		}
-		if len(input.Content) > 16<<20 {
+		if len(input.Content) > maxNoteBytes {
 			return result, fileError(413, "NOTE_TOO_LARGE", "note exceeds 16 MiB")
 		}
 		ref, err = r.putBytes(ctx, vault, input.Content)

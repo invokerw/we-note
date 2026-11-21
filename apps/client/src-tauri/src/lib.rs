@@ -94,6 +94,11 @@ enum LocalAction {
         token: String,
         request: wenote_sync::AssetTransfer,
     },
+    CreateExport {
+        token: String,
+        scope: String,
+        mode: Option<String>,
+    },
     Catalog {
         token: String,
         route: String,
@@ -166,6 +171,9 @@ async fn notebook(
             UploadKey { slot, complete } => book.upload_key(&slot, complete.as_deref()),
             Transfer { token, request } => {
                 Api::new(book.origin(), &token).and_then(|api| api.transfer(&vault, request))
+            }
+            CreateExport { token, scope, mode } => {
+                book.create_export(&token, &scope, mode.as_deref())
             }
             Catalog {
                 token,

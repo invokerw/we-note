@@ -107,12 +107,18 @@ function Workspace({
   const leave = () => !dirty || confirm("放弃尚未保存的编辑？");
   const client = useMemo<ResourceClient>(
     () => ({
-      json: async (route, scope) =>
+      json: async (route) =>
         local(vault, "catalog", {
           token: await binding.access(),
           route,
-          scope,
         }),
+      createExport: async (scope, portable) => {
+        await local(vault, "create_export", {
+          token: await binding.access(),
+          scope,
+          mode: portable ? "portable" : null,
+        });
+      },
       blob: async (id) => {
         const r = await local<{ type: string; data: string }>(vault, "asset", {
           id,

@@ -309,6 +309,12 @@ try {
   );
   await button("保存").click();
   await page.getByText("已保存到本地目录").waitFor();
+  await button("导出").click();
+  await page.getByLabel("附件链接").selectOption("portable");
+  await button("创建导出").click();
+  const portableRow = page.locator(".row").filter({ hasText: "离线便携" });
+  await portableRow.getByRole("button", { name: "下载 ZIP" }).click();
+  await page.getByText(/已保存到 .*\.zip/).waitFor();
   await button("返回同步").click();
   await button("退出账户").click();
   await button("登录").waitFor();
@@ -324,7 +330,7 @@ try {
     .selectOption(conflict.path);
   await page.locator(".reading").getByText("手机离线编辑").waitFor();
   console.log(
-    "Android emulator passed offline restart, system share, scheduled sync, conflict recovery and multipart attachment upload.",
+    "Android emulator passed offline restart, system share, scheduled sync, conflict recovery, multipart attachment upload and portable ZIP download.",
   );
 } finally {
   if (adb("reverse", "--list").includes(port + " "))

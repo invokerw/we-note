@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/weifei/we-note/services/api/internal/store"
 )
 
 func (a *API) exportRoutes(m *http.ServeMux) {
@@ -29,14 +31,12 @@ func (a *API) exports(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	if r.Method == http.MethodPost {
-		var in struct {
-			Scope string `json:"scope"`
-		}
+		var in store.ExportOptions
 		if err := decodeJSON(w, r, &in); err != nil {
 			writeError(w, 400, "INVALID_REQUEST", err.Error())
 			return
 		}
-		j, err := a.repository.CreateExport(ctx, user.ID, vault, r.Header.Get("Idempotency-Key"), in.Scope)
+		j, err := a.repository.CreateExport(ctx, user.ID, vault, r.Header.Get("Idempotency-Key"), in)
 		if err != nil {
 			resourceError(w, err)
 			return
@@ -70,7 +70,11 @@ func (a *API) exports(w http.ResponseWriter, r *http.Request) {
 	}
 	defer body.Close()
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="wenote-`+j.Scope+`.zip"`)
+	name := j.Scope
+	if j.Mode == "portable" {
+		name += "-portable"
+	}
+	w.Header().Set("Content-Disposition", `attachment; filename="wenote-`+name+`.zip"`)
 	w.Header().Set("Content-Length", fmt.Sprint(j.Size))
 	if r.Method != http.MethodHead {
 		if _, e = io.Copy(w, body); e != nil {
