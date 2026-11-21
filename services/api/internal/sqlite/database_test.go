@@ -25,7 +25,7 @@ func TestMigrateCreatesCoreTablesAndEnablesForeignKeys(t *testing.T) {
 		t.Fatalf("foreign keys are disabled: %d", enabled)
 	}
 
-	for _, table := range []string{"users", "vaults", "devices", "blobs", "files", "file_versions", "changes", "upload_sessions"} {
+	for _, table := range []string{"users", "vaults", "devices", "blobs", "files", "file_versions", "changes", "upload_sessions", "sessions"} {
 		var name string
 		err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&name)
 		if err != nil {
@@ -40,8 +40,8 @@ func TestMigrateCreatesCoreTablesAndEnablesForeignKeys(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT version FROM schema_migrations`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 1 {
-		t.Fatalf("migration version = %d, want 1", version)
+	if version != 1 && version != 2 {
+		t.Fatalf("migration version = %d, want 1 or 2", version)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 {
-		t.Fatalf("migration row count = %d, want 1", count)
+	if count != 2 {
+		t.Fatalf("migration row count = %d, want 2", count)
 	}
 }
 

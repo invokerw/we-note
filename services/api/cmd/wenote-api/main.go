@@ -12,6 +12,7 @@ import (
 
 	"github.com/weifei/we-note/services/api/internal/httpapi"
 	"github.com/weifei/we-note/services/api/internal/sqlite"
+	"github.com/weifei/we-note/services/api/internal/store"
 )
 
 func main() {
@@ -31,10 +32,11 @@ func main() {
 	if err := database.Migrate(ctx); err != nil {
 		log.Fatalf("migrate database: %v", err)
 	}
+	repository := store.NewRepository(database)
 
 	server := &http.Server{
 		Addr:              *address,
-		Handler:           httpapi.NewMux(),
+		Handler:           httpapi.NewMux(repository),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	stop := make(chan os.Signal, 1)

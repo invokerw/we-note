@@ -92,3 +92,29 @@ type Manifest struct {
 	MinAvailableRevision int64  `json:"min_available_revision"`
 	Files                []File `json:"files"`
 }
+
+type RegisterRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type Session struct {
+	AccessToken string    `json:"access_token"`
+	TokenType   string    `json:"token_type"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	User        User      `json:"user"`
+}
+
+type CreateVaultRequest struct {
+	Name string `json:"name"`
+}
+
+type CreateDeviceRequest struct {
+	Name      string `json:"name"`
+	PublicKey string `json:"public_key"`
+}

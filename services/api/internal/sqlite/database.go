@@ -135,16 +135,27 @@ CREATE TABLE IF NOT EXISTS upload_sessions (
     completed_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_files_vault_path ON files(vault_id, path);
 CREATE INDEX IF NOT EXISTS idx_file_versions_file_revision ON file_versions(file_id, vault_revision);
 CREATE INDEX IF NOT EXISTS idx_changes_vault_revision ON changes(vault_id, vault_revision);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
 `
 
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("apply schema: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT OR IGNORE INTO schema_migrations(version) VALUES (1)`); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT OR IGNORE INTO schema_migrations(version) VALUES (1), (2)`); err != nil {
 		return fmt.Errorf("record schema migration: %w", err)
 	}
 	return nil
