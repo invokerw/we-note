@@ -88,6 +88,9 @@ CREATE TABLE IF NOT EXISTS files (
     path TEXT NOT NULL,
     format TEXT NOT NULL,
     current_version_id TEXT,
+    current_content_hash TEXT NOT NULL DEFAULT '',
+    current_content_size INTEGER NOT NULL DEFAULT 0 CHECK (current_content_size >= 0),
+    current_blob_id TEXT NOT NULL DEFAULT '',
     is_deleted INTEGER NOT NULL DEFAULT 0 CHECK (is_deleted IN (0, 1)),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -102,6 +105,9 @@ CREATE TABLE IF NOT EXISTS file_versions (
     content_hash TEXT NOT NULL,
     content_size INTEGER NOT NULL CHECK (content_size >= 0),
     parent_version_id TEXT REFERENCES file_versions(id),
+    created_by_device_id TEXT NOT NULL DEFAULT '',
+    metadata_format TEXT NOT NULL DEFAULT '',
+    metadata_line_ending TEXT,
     vault_revision INTEGER NOT NULL CHECK (vault_revision > 0),
     created_at TEXT NOT NULL
 );
@@ -115,6 +121,9 @@ CREATE TABLE IF NOT EXISTS changes (
     operation_id TEXT NOT NULL,
     operation TEXT NOT NULL,
     path TEXT NOT NULL,
+    parent_version_id TEXT,
+    device_id TEXT NOT NULL DEFAULT '',
+    client_timestamp TEXT NOT NULL DEFAULT '',
     content_hash TEXT NOT NULL,
     content_size INTEGER NOT NULL CHECK (content_size >= 0),
     request_id TEXT NOT NULL,
@@ -131,6 +140,7 @@ CREATE TABLE IF NOT EXISTS upload_sessions (
     content_hash TEXT NOT NULL,
     content_size INTEGER NOT NULL CHECK (content_size >= 0),
     status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    storage_key TEXT,
     created_at TEXT NOT NULL,
     completed_at TEXT
 );
@@ -144,19 +154,88 @@ CREATE TABLE IF NOT EXISTS sessions (
     revoked_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS sync_operations (
+    vault_id TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+    operation_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    request_json TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    change_id TEXT NOT NULL,
+    version_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    path TEXT NOT NULL,
+    vault_revision INTEGER NOT NULL CHECK (vault_revision > 0),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (vault_id, operation_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_files_vault_path ON files(vault_id, path);
 CREATE INDEX IF NOT EXISTS idx_file_versions_file_revision ON file_versions(file_id, vault_revision);
 CREATE INDEX IF NOT EXISTS idx_changes_vault_revision ON changes(vault_id, vault_revision);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_sync_operations_change ON sync_operations(vault_id, change_id);
 `
 
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("apply schema: %w", err)
 	}
+	if err := ensureCompatibilityColumns(ctx, db); err != nil {
+		return err
+	}
 	if _, err := db.ExecContext(ctx, `INSERT OR IGNORE INTO schema_migrations(version) VALUES (1), (2)`); err != nil {
 		return fmt.Errorf("record schema migration: %w", err)
+	}
+	return nil
+}
+
+func ensureCompatibilityColumns(ctx context.Context, db *Database) error {
+	columns := []struct {
+		table string
+		name  string
+		ddl   string
+	}{
+		{"files", "current_content_hash", `ALTER TABLE files ADD COLUMN current_content_hash TEXT NOT NULL DEFAULT ''`},
+		{"files", "current_content_size", `ALTER TABLE files ADD COLUMN current_content_size INTEGER NOT NULL DEFAULT 0`},
+		{"files", "current_blob_id", `ALTER TABLE files ADD COLUMN current_blob_id TEXT NOT NULL DEFAULT ''`},
+		{"file_versions", "created_by_device_id", `ALTER TABLE file_versions ADD COLUMN created_by_device_id TEXT NOT NULL DEFAULT ''`},
+		{"file_versions", "metadata_format", `ALTER TABLE file_versions ADD COLUMN metadata_format TEXT NOT NULL DEFAULT ''`},
+		{"file_versions", "metadata_line_ending", `ALTER TABLE file_versions ADD COLUMN metadata_line_ending TEXT`},
+		{"changes", "parent_version_id", `ALTER TABLE changes ADD COLUMN parent_version_id TEXT`},
+		{"changes", "device_id", `ALTER TABLE changes ADD COLUMN device_id TEXT NOT NULL DEFAULT ''`},
+		{"changes", "client_timestamp", `ALTER TABLE changes ADD COLUMN client_timestamp TEXT NOT NULL DEFAULT ''`},
+		{"upload_sessions", "storage_key", `ALTER TABLE upload_sessions ADD COLUMN storage_key TEXT`},
+	}
+	for _, column := range columns {
+		rows, err := db.QueryContext(ctx, `PRAGMA table_info(`+column.table+`)`)
+		if err != nil {
+			return fmt.Errorf("inspect %s columns: %w", column.table, err)
+		}
+		found := false
+		for rows.Next() {
+			var cid int
+			var name, columnType string
+			var notNull, primaryKey int
+			var defaultValue sql.NullString
+			if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan %s columns: %w", column.table, err)
+			}
+			if name == column.name {
+				found = true
+			}
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close %s columns: %w", column.table, err)
+		}
+		if found {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, column.ddl); err != nil {
+			return fmt.Errorf("add %s.%s: %w", column.table, column.name, err)
+		}
 	}
 	return nil
 }

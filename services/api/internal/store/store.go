@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/weifei/we-note/services/api/internal/blob"
 	"github.com/weifei/we-note/services/api/internal/model"
 	"github.com/weifei/we-note/services/api/internal/sqlite"
 )
@@ -23,11 +24,16 @@ var (
 )
 
 type Repository struct {
-	db *sqlite.Database
+	db        *sqlite.Database
+	blobStore *blob.LocalStore
 }
 
-func NewRepository(db *sqlite.Database) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *sqlite.Database, blobStores ...*blob.LocalStore) *Repository {
+	var blobStore *blob.LocalStore
+	if len(blobStores) > 0 {
+		blobStore = blobStores[0]
+	}
+	return &Repository{db: db, blobStore: blobStore}
 }
 
 func (r *Repository) CreateUser(ctx context.Context, email, passwordHash string) (model.User, error) {

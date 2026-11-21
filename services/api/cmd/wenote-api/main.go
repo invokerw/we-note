@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/weifei/we-note/services/api/internal/blob"
 	"github.com/weifei/we-note/services/api/internal/httpapi"
 	"github.com/weifei/we-note/services/api/internal/sqlite"
 	"github.com/weifei/we-note/services/api/internal/store"
@@ -18,6 +19,7 @@ import (
 func main() {
 	address := flag.String("addr", ":8080", "HTTP listen address")
 	databasePath := flag.String("db", "./data/wenote.db", "SQLite database path")
+	blobRoot := flag.String("blobs", "./data/storage", "Local Blob storage root")
 	flag.Parse()
 
 	if err := os.MkdirAll("./data", 0o750); err != nil {
@@ -32,7 +34,11 @@ func main() {
 	if err := database.Migrate(ctx); err != nil {
 		log.Fatalf("migrate database: %v", err)
 	}
-	repository := store.NewRepository(database)
+	blobStore, err := blob.NewLocalStore(*blobRoot)
+	if err != nil {
+		log.Fatalf("open blob store: %v", err)
+	}
+	repository := store.NewRepository(database, blobStore)
 
 	server := &http.Server{
 		Addr:              *address,

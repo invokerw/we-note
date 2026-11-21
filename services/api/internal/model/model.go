@@ -26,41 +26,49 @@ type Device struct {
 }
 
 type File struct {
-	ID               string    `json:"file_id"`
-	VaultID          string    `json:"vault_id"`
-	Path             string    `json:"path"`
-	Format           string    `json:"format"`
-	CurrentVersionID *string   `json:"current_version_id,omitempty"`
-	IsDeleted        bool      `json:"is_deleted"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                 string    `json:"file_id"`
+	VaultID            string    `json:"vault_id"`
+	Path               string    `json:"path"`
+	Format             string    `json:"format"`
+	CurrentVersionID   *string   `json:"current_version_id,omitempty"`
+	CurrentContentHash string    `json:"current_content_hash,omitempty"`
+	CurrentContentSize int64     `json:"current_content_size,omitempty"`
+	CurrentBlobID      string    `json:"current_blob_id,omitempty"`
+	IsDeleted          bool      `json:"is_deleted"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type FileVersion struct {
-	ID              string    `json:"version_id"`
-	FileID          string    `json:"file_id"`
-	VaultID         string    `json:"vault_id"`
-	BlobID          string    `json:"blob_id"`
-	ContentHash     string    `json:"content_hash"`
-	ContentSize     int64     `json:"content_size"`
-	ParentVersionID *string   `json:"parent_version_id,omitempty"`
-	VaultRevision   int64     `json:"vault_revision"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID                string    `json:"version_id"`
+	FileID            string    `json:"file_id"`
+	VaultID           string    `json:"vault_id"`
+	BlobID            string    `json:"blob_id"`
+	ContentHash       string    `json:"content_hash"`
+	ContentSize       int64     `json:"content_size"`
+	ParentVersionID   *string   `json:"parent_version_id,omitempty"`
+	CreatedByDeviceID string    `json:"created_by_device_id,omitempty"`
+	Metadata          Metadata  `json:"metadata,omitempty"`
+	VaultRevision     int64     `json:"vault_revision"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type Change struct {
-	ID            string    `json:"change_id"`
-	VaultID       string    `json:"vault_id"`
-	VaultRevision int64     `json:"vault_revision"`
-	FileID        string    `json:"file_id"`
-	VersionID     string    `json:"version_id"`
-	OperationID   string    `json:"operation_id"`
-	Operation     string    `json:"operation"`
-	Path          string    `json:"path"`
-	ContentHash   string    `json:"content_hash"`
-	ContentSize   int64     `json:"content_size"`
-	RequestID     string    `json:"request_id"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID              string    `json:"change_id"`
+	VaultID         string    `json:"vault_id"`
+	VaultRevision   int64     `json:"vault_revision"`
+	FileID          string    `json:"file_id"`
+	VersionID       string    `json:"version_id"`
+	OperationID     string    `json:"operation_id"`
+	Operation       string    `json:"operation"`
+	Path            string    `json:"path"`
+	ParentVersionID *string   `json:"parent_version_id,omitempty"`
+	DeviceID        string    `json:"device_id"`
+	ClientTimestamp string    `json:"client_timestamp"`
+	ContentHash     string    `json:"content_hash"`
+	ContentSize     int64     `json:"content_size"`
+	RequestID       string    `json:"request_id"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 type Metadata struct {
@@ -117,4 +125,29 @@ type CreateVaultRequest struct {
 type CreateDeviceRequest struct {
 	Name      string `json:"name"`
 	PublicKey string `json:"public_key"`
+}
+
+type ManifestFile struct {
+	ID                 string  `json:"file_id"`
+	VaultID            string  `json:"vault_id,omitempty"`
+	Path               string  `json:"path"`
+	Format             string  `json:"format"`
+	CurrentVersionID   *string `json:"current_version_id,omitempty"`
+	CurrentContentHash string  `json:"current_content_hash,omitempty"`
+	ContentSize        int64   `json:"content_size"`
+	BlobID             string  `json:"blob_id,omitempty"`
+	IsDeleted          bool    `json:"is_deleted"`
+}
+
+type UploadSession struct {
+	ID            string     `json:"upload_id"`
+	BlobReference string     `json:"blob_reference"`
+	VaultID       string     `json:"vault_id"`
+	ContentHash   string     `json:"content_hash"`
+	ContentSize   int64      `json:"content_size"`
+	Status        string     `json:"status"`
+	BlobID        string     `json:"blob_id,omitempty"`
+	StorageKey    string     `json:"-"`
+	CreatedAt     time.Time  `json:"created_at"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 }
