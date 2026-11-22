@@ -5,6 +5,7 @@ import "katex/dist/katex.min.css";
 import { inspect, extensions, noteSyntax, type Branch } from "./document";
 import HeadingEditor from "./HeadingEditor";
 import Source from "./Source";
+import type { EditorView } from "@codemirror/view";
 
 let diagramEngine: Promise<(typeof import("mermaid"))["default"]> | undefined;
 function Diagram({ source }: { source: string }) {
@@ -193,12 +194,17 @@ function Branches({
     </ul>
   );
 }
-export type Mode = "read" | "edit" | "live" | "map";
-export const modes = [
-  ["read", "阅读"],
-  ["edit", "源码"],
-  ["live", "实时预览"],
-  ["map", "思维导图"],
+export type Mode = "read" | "split" | "edit" | "live" | "map";
+const formats = [
+  ["B", "加粗", "**", "**", "粗体"],
+  ["I", "斜体", "*", "*", "斜体"],
+  ["S", "删除线", "~~", "~~", "文字"],
+  ["H", "标题", "## ", "", "标题"],
+  ["❝", "引用", "> ", "", "引用"],
+  ["☷", "无序列表", "- ", "", "列表项"],
+  ["☑", "任务列表", "- [ ] ", "", "待办事项"],
+  ["↗", "链接", "[", "](https://)", "链接文字"],
+  ["‹/›", "行内代码", "`", "`", "代码"],
 ] as const;
 export function Document({
   text,
@@ -208,6 +214,7 @@ export function Document({
   io,
   select,
   markdown = true,
+  attach,
 }: {
   text: string;
   edit: (s: string) => void;
@@ -216,6 +223,7 @@ export function Document({
   io: MarkdownIO;
   select: (a: number, b: number) => void;
   markdown?: boolean;
+  attach?: () => void;
 }) {
   const info = useMemo(() => inspect(markdown ? text : ""), [text, markdown]);
   const [block, setBlock] = useState<{ start: number; tail: number } | null>(
@@ -254,37 +262,68 @@ export function Document({
       edit(text.slice(0, at) + (m[1] === " " ? "x" : " ") + text.slice(at + 1));
     }
   };
+  const editor = useRef<EditorView | null>(null);
+  function format(before: string, after: string, sample: string) {
+    const cm = editor.current;
+    if (!cm) {
+      const start = text.length + (text ? 2 : 0);
+      edit(text + (text ? "\n\n" : "") + before + sample + after);
+      setBlock({ start, tail: 0 });
+      return;
+    }
+    const range = cm.state.selection.main;
+    const value = cm.state.sliceDoc(range.from, range.to) || sample;
+    const prefix =
+      ["## ", "> ", "- ", "- [ ] "].includes(before) &&
+      range.from > cm.state.doc.lineAt(range.from).from
+        ? "\n" + before
+        : before;
+    const anchor = range.from + prefix.length;
+    cm.dispatch({
+      changes: {
+        from: range.from,
+        to: range.to,
+        insert: prefix + value + after,
+      },
+      selection: { anchor, head: anchor + value.length },
+    });
+    cm.focus();
+  }
   const bounds = mode === "live" ? block : null;
   return (
-    <div ref={root}>
-      {markdown && mode !== "map" && (
-        <details className="metadata">
-          <summary>目录与属性</summary>
-          {!!info.outline.length && (
-            <Branches items={info.outline} jump={jump} />
-          )}
-          <dl>
-            {Object.entries(info.properties).map(([k, v]) => (
-              <div key={k}>
-                <dt>{k}</dt>
-                <dd>{typeof v === "string" ? v : JSON.stringify(v)}</dd>
-              </div>
+    <div ref={root} className={"document-mode mode-" + mode}>
+      {(mode === "edit" || mode === "split" || mode === "live") && (
+        <nav className="format-bar" aria-label="编辑工具">
+          {markdown &&
+            formats.map(([symbol, label, before, after, sample]) => (
+              <button
+                key={label}
+                aria-label={label}
+                title={label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => format(before, after, sample)}
+              >
+                {symbol}
+              </button>
             ))}
-          </dl>
-          {info.tags.map((t) => (
-            <span className="tag" key={t}>
-              #{t}{" "}
-            </span>
-          ))}
-        </details>
+          {attach && (
+            <button aria-label="插入附件" title="插入附件" onClick={attach}>
+              ⊕
+            </button>
+          )}
+        </nav>
       )}
-      {mode === "edit" ? (
-        <Source
-          label="笔记源码"
-          text={text}
-          onChange={edit}
-          onSelect={select}
-        />
+      {mode === "edit" || mode === "split" ? (
+        <div className={mode === "split" ? "split-editor" : "source-editor"}>
+          <Source
+            editor={editor}
+            label="笔记源码"
+            text={text}
+            onChange={edit}
+            onSelect={select}
+          />
+          {mode === "split" && <MarkdownView text={text} io={io} />}
+        </div>
       ) : mode === "map" ? (
         <>
           <HeadingEditor text={text} edit={edit} />
@@ -307,6 +346,7 @@ export function Document({
                 toggle={toggle}
               />
               <Source
+                editor={editor}
                 key={bounds.start}
                 label="当前段落源码"
                 focus
@@ -352,6 +392,27 @@ export function Document({
         <MarkdownView text={text} io={io} />
       ) : (
         <pre>{text}</pre>
+      )}
+      {markdown && mode !== "map" && (
+        <details className="metadata">
+          <summary>目录与属性</summary>
+          {!!info.outline.length && (
+            <Branches items={info.outline} jump={jump} />
+          )}
+          <dl>
+            {Object.entries(info.properties).map(([k, v]) => (
+              <div key={k}>
+                <dt>{k}</dt>
+                <dd>{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+              </div>
+            ))}
+          </dl>
+          {info.tags.map((t) => (
+            <span className="tag" key={t}>
+              #{t}{" "}
+            </span>
+          ))}
+        </details>
       )}
     </div>
   );

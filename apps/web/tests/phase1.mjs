@@ -31,6 +31,7 @@ try {
     { page: b, email } = await register("Bob");
   a.once("dialog", (d) => d.accept("daily/验收.md"));
   await button(a, "新建笔记").click();
+  await button(a, "编辑模式").click();
   await button(a, "源码").click();
   await a.getByLabel("笔记源码").fill("# 浏览器快照");
   const png = Buffer.from(
@@ -45,12 +46,14 @@ try {
   );
   await button(a, "保存").click();
   await a.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();
-  await button(a, "阅读").click();
+  await button(a, "编辑模式").click();
+  await button(a, "预览模式").click();
   await a.getByRole("heading", { name: "浏览器快照" }).waitFor();
   await a.waitForFunction(
     () => document.querySelector("article img")?.naturalWidth === 1,
   );
   const downloaded = a.waitForEvent("download");
+  await button(a, "更多操作").click();
   await button(a, "下载原文件").click();
   const file = await downloaded;
   assert.equal(file.suggestedFilename(), "验收.md");
@@ -61,12 +64,13 @@ try {
   await button(a, "分享快照").click();
   await a.getByText("快照已发送").waitFor();
   a.off("dialog", dialogs);
+  await button(a, "编辑模式").click();
   await button(a, "源码").click();
   await a.getByLabel("笔记源码").fill("# 发件人后续修改");
   await button(a, "保存").click();
   await a.getByText("已保存新版本").waitFor();
-  await button(a, "历史").click();
-  await button(a, "历史").waitFor();
+  await button(a, "更多操作").click();
+  await button(a, "历史版本").click();
   await a.getByRole("button", { name: /版本 2/ }).click();
   await a.locator("article pre").filter({ hasText: "浏览器快照" }).waitFor();
   await button(b, "收件箱").click();
@@ -78,17 +82,20 @@ try {
   await b.waitForFunction(
     () => document.querySelector("article img")?.naturalWidth === 1,
   );
+  await button(b, "编辑模式").click();
   await button(b, "源码").click();
   await b.getByLabel("笔记源码").fill("Bob 独立编辑");
   await button(b, "保存").click();
   await b.getByText("已保存新版本").waitFor();
   b.once("dialog", (d) => d.accept());
+  await button(b, "更多操作").click();
   await button(b, "移入回收站").click();
   await button(b, "回收站").click();
   b.once("dialog", (d) => d.accept("恢复.md"));
   await button(b, "恢复").click();
   await button(b, "恢复.md").click();
-  await button(b, "阅读").click();
+  await button(b, "编辑模式").click();
+  await button(b, "预览模式").click();
   assert.equal(await b.locator(".reading").innerText(), "Bob 独立编辑");
   console.log(
     "Browser acceptance passed: registration, source editing, private asset preview, version history, frozen directory share, recipient copy, trash and restore.",

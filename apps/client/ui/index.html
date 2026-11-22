@@ -9,54 +9,61 @@
     <script type="module" src="../../web/src/desktop.tsx"></script>
   </head>
   <body>
-    <main>
-      <header>WeNote</header>
-      <h1 id="heading">桌面同步</h1>
-      <p id="network" role="status" hidden>当前离线，可以继续编辑本地笔记。</p>
-      <form id="login">
-        <label
-          >服务地址<input
-            id="origin"
-            type="url"
-            value="http://localhost:8080"
-            required /></label
-        ><label
-          >邮箱<input
-            id="email"
-            type="email"
-            autocomplete="username"
-            required /></label
-        ><label
-          >密码<input
-            id="password"
-            type="password"
-            autocomplete="current-password"
-            required /></label
-        ><button>登录</button>
-      </form>
-      <form id="settings" hidden>
-        <label>笔记库<select id="vault"></select></label
-        ><label id="folder-label"
-          >本地笔记目录<input
-            id="root"
-            required
-            placeholder="输入已有目录的完整路径" /></label
-        ><label class="checkbox"
-          ><input type="checkbox" id="auto" /> 应用打开时每 15 秒同步</label
-        ><label id="background-label" hidden
-          ><input type="checkbox" id="background" /> Android 后台同步</label
-        ><button>立即同步</button
-        ><button type="button" id="logout">退出账户</button>
-      </form>
-      <button type="button" hidden id="open-encrypted">打开加密笔记库</button>
-      <details hidden id="device-panel">
-        <summary>设备与同步诊断</summary>
-        <button type="button" id="devices">查看已注册设备</button>
-        <ul id="device-list"></ul>
-        <output id="diagnostic"></output>
-      </details>
-      <button type="button" hidden id="open-editor">打开本地编辑器</button>
-      <output id="status" aria-live="polite"></output>
+    <main class="auth sync-entry">
+      <div class="cover-panel" aria-hidden="true">
+        <span class="brand"><i></i>WeNote</span>
+        <div class="folio"><i></i></div>
+      </div>
+      <div class="entry-form">
+        <h1 id="heading">桌面同步</h1>
+        <p id="network" role="status" hidden>
+          当前离线，可以继续编辑本地笔记。
+        </p>
+        <form id="login">
+          <label
+            >服务地址<input
+              id="origin"
+              type="url"
+              value="http://localhost:8080"
+              required /></label
+          ><label
+            >邮箱<input
+              id="email"
+              type="email"
+              autocomplete="username"
+              required /></label
+          ><label
+            >密码<input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              required /></label
+          ><button class="primary">登录</button>
+        </form>
+        <form id="settings" hidden>
+          <label>笔记库<select id="vault"></select></label
+          ><label id="folder-label"
+            >本地笔记目录<input
+              id="root"
+              required
+              placeholder="输入已有目录的完整路径" /></label
+          ><label class="checkbox"
+            ><input type="checkbox" id="auto" /> 应用打开时每 15 秒同步</label
+          ><label id="background-label" hidden
+            ><input type="checkbox" id="background" /> Android 后台同步</label
+          ><button>立即同步</button
+          ><button type="button" id="logout">退出账户</button>
+        </form>
+        <button type="button" hidden id="open-encrypted">打开加密笔记库</button>
+        <details hidden id="device-panel">
+          <summary>设备与同步诊断</summary>
+          <button type="button" id="devices">查看已注册设备</button>
+          <ul id="device-list"></ul>
+          <output id="diagnostic"></output>
+        </details>
+        <button type="button" hidden id="open-editor">打开本地编辑器</button>
+        <output id="status" aria-live="polite"></output>
+      </div>
     </main>
     <div id="desktop-editor"></div>
   </body>

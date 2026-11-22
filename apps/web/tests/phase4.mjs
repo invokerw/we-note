@@ -67,6 +67,7 @@ try {
     click = (name) => button(name).click();
   async function exportBytes(name) {
     const event = page.waitForEvent("download");
+    if (name === "导出 XMind") await click("更多操作");
     await click(name);
     return readFile(await (await event).path());
   }
@@ -152,6 +153,7 @@ try {
     rebuilt[0].rootTopic.children.attached[0].notes.plain.content,
     "周五验收",
   );
+  await click("编辑模式");
   await click("思维导图");
   await page.getByText("编辑标题树", { exact: true }).click();
   await page.getByLabel("目标标题").selectOption("2");

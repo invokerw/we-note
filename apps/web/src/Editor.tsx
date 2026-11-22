@@ -1,14 +1,19 @@
+import { NoteHeading } from "./LibraryUI";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { browserExport } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
-import { useEffect, useRef, useState } from "react";
-import { Document, modes, type Mode } from "./markdown/Markdown";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Document, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { download, type Hit } from "./Resources";
 import { base64, Note, request, uploadAsset, Version } from "./api";
 
 type Props = {
+  actions: ReactNode;
+  share: () => void;
+  focused: boolean;
+  toggleFocus: () => void;
   note: Note;
   files: Note[];
   open: (id: string) => void;
@@ -58,6 +63,10 @@ function AssetImage({
   );
 }
 export default function Editor({
+  actions,
+  share,
+  focused,
+  toggleFocus,
   note,
   files,
   open,
@@ -170,9 +179,9 @@ export default function Editor({
     const inserted = "\n" + parts.join("\n") + "\n";
     edit(text.slice(0, start) + inserted + text.slice(end));
     selection.current = [start + inserted.length, start + inserted.length];
-    setMode("edit");
+    if (mode !== "split") setMode("edit");
   }
-  const editing = mode === "edit" || mode === "live";
+  const editing = mode === "edit" || mode === "live" || mode === "split";
   function navigate(href: string, label: string) {
     if (href.startsWith(origin + "/assets/")) {
       run(() => download(token, new URL(href).pathname, label || "附件"));
@@ -196,6 +205,7 @@ export default function Editor({
   const title = note.path.split("/").at(-1)!;
   return (
     <article
+      className="document"
       onPasteCapture={(e) => {
         const dropped = Array.from(e.clipboardData.files);
         if (!special && editing && dropped.length) {
@@ -226,79 +236,79 @@ export default function Editor({
         }
       }}
     >
-      <div className="crumb">{note.path}</div>
-      <h1>{title}</h1>
-      <div className="toolbar">
-        <nav>
-          {[
-            ...(special
-              ? [["read", "文档"]]
-              : modes.filter(
-                  ([m]) => note.format === "md" || m === "read" || m === "edit",
-                )),
-            ["history", "历史"],
-          ].map(([key, label]) => (
+      <NoteHeading
+        path={note.path}
+        mode={mode}
+        change={special ? undefined : setMode}
+        markdown={note.format === "md"}
+        busy={busy}
+        share={{ label: "分享快照", run: share }}
+        save={
+          !special && (
+            <button
+              className="save-button"
+              disabled={busy || !base || text === saved.current}
+              onClick={() => run(save)}
+            >
+              {busy
+                ? "处理中…"
+                : !base
+                  ? "加载中"
+                  : text === saved.current
+                    ? "已保存"
+                    : "保存"}
+            </button>
+          )
+        }
+        more={
+          <>
+            <button onClick={toggleFocus}>
+              {focused ? "退出专注" : "专注模式"}
+            </button>
+            {mode === "history" && (
+              <button onClick={() => setMode("read")}>返回文档</button>
+            )}
             <button
               disabled={busy}
-              key={key}
-              className={mode === key ? "on" : ""}
               onClick={() =>
                 run(async () => {
-                  if (key === "history") {
-                    const data = await (
-                      await request(token, path + "/versions")
-                    ).json();
-                    setVersions(data.versions);
-                    setHistory("");
-                  }
-                  setMode(key);
+                  const data = await (
+                    await request(token, path + "/versions")
+                  ).json();
+                  setVersions(data.versions);
+                  setHistory("");
+                  setMode("history");
                 })
               }
             >
-              {label}
+              历史版本
             </button>
-          ))}
-        </nav>
-        {!special && note.format === "md" && base && (
-          <MarkdownExport
-            path={note.path}
-            source={() => source.current.serialize()}
-            output={browserExport}
-            notify={notify}
-          />
-        )}
-        {!special && mode === "read" && (
-          <button
-            disabled={busy || !base}
-            onClick={() =>
-              run(() =>
-                download(token, path + "/versions/" + base + "/content", title),
-              )
-            }
-          >
-            下载原文件
-          </button>
-        )}
-        {(editing || mode === "map") && (
-          <>
-            {editing && (
-              <button
-                disabled={busy || !base}
-                onClick={() => assetPicker.current?.click()}
-              >
-                插入附件
-              </button>
+            {!special && note.format === "md" && base && (
+              <MarkdownExport
+                path={note.path}
+                source={() => source.current.serialize()}
+                output={browserExport}
+                notify={notify}
+              />
             )}
             <button
-              className="primary"
               disabled={busy || !base}
-              onClick={() => run(save)}
+              onClick={() =>
+                run(() =>
+                  download(
+                    token,
+                    path + "/versions/" + base + "/content",
+                    title,
+                  ),
+                )
+              }
             >
-              保存
+              下载原文件
             </button>
+            {actions}
           </>
-        )}
-      </div>
+        }
+      />
       <input
         type="file"
         hidden
@@ -360,8 +370,9 @@ export default function Editor({
           <pre>{history}</pre>
         </section>
       ) : special ? null : (
-        <div inert={!base || busy}>
+        <div className="document-body" inert={!base || busy}>
           <Document
+            attach={() => assetPicker.current?.click()}
             markdown={note.format === "md"}
             text={text}
             edit={edit}

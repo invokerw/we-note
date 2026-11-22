@@ -87,16 +87,44 @@ try {
   await page.getByLabel("密码").fill(password);
   const button = (name) => page.getByRole("button", { name, exact: true });
   await button("登录").click();
+  const wide = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.getByLabel("筛选笔记路径").fill("路线");
+  await button("路线.md").waitFor();
+  assert.equal(await button("目标.md").count(), 0);
+  await button("目录").click();
+  await button("工作").click();
   await button("路线.md").click();
+  assert.equal(await button("正文").getAttribute("aria-pressed"), "true");
+  await page.setViewportSize(wide);
   await page.locator(".reading table td").first().waitFor();
   await page.locator(".reading .katex").waitFor();
   await page.locator(".reading .callout").waitFor();
   await page.waitForFunction(
     () => document.querySelector('img[alt="Mermaid 图表"]')?.naturalWidth > 0,
   );
-  await button("实时预览").click();
+  await button("编辑模式").click();
+  await button("分屏编辑").click();
+  const split = page.locator(".split-editor");
+  await split.getByLabel("笔记源码").fill("分屏草稿");
+  await split.getByLabel("笔记源码").press("ControlOrMeta+a");
+  await button("加粗").click();
+  assert.equal(await split.locator(".reading strong").innerText(), "分屏草稿");
+  await button("我的文件夹").click();
+  assert.equal(await split.getByLabel("笔记源码").innerText(), "**分屏草稿**");
+  await button("工作").first().click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await button("目标.md").click();
+  await button("路线.md").click();
+  await button("编辑模式").click();
+  await button("所见所得").click();
   await page.getByText("保持原样。", { exact: true }).click();
   await page.getByLabel("当前段落源码").fill("新的正文。");
+  await button("更多操作").click();
+  await button("专注模式").click();
+  assert.equal(await page.locator(".sidebar").isVisible(), false);
+  await button("退出专注").click();
+  assert.equal(await page.getByLabel("当前段落源码").innerText(), "新的正文。");
   await button("完成段落").click();
   await page.getByRole("checkbox", { name: "任务完成" }).click();
   await button("保存").click();
@@ -113,6 +141,7 @@ try {
         text.replace("保持原样。", "新的正文。").replace("- [ ]", "- [x]"),
     ),
   );
+  await button("编辑模式").click();
   await button("思维导图").click();
   const map = page.getByRole("navigation", { name: "标题树思维导图" });
   await map.getByRole("button", { name: "交付" }).click();
@@ -123,6 +152,7 @@ try {
   await page.getByRole("heading", { name: "目标文件" }).waitFor();
   await page.getByText("反向链接", { exact: true }).click();
   await button("工作/路线.md").click();
+  await button("编辑模式").click();
   await button("源码").click();
   const source = page.getByLabel("笔记源码");
   await source.click();
@@ -205,6 +235,7 @@ try {
     await rm(localDir, { recursive: true, force: true });
   }
   await button("路线.md").click();
+  await button("编辑模式").click();
   await button("源码").click();
   const file = {
     name: "resume.bin",
@@ -231,6 +262,7 @@ try {
   seen.length = 0;
   await page.reload();
   await button("路线.md").click();
+  await button("编辑模式").click();
   await button("源码").click();
   await picker.setInputFiles(file);
   await page.waitForFunction(() =>

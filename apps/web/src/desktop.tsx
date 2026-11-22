@@ -7,11 +7,12 @@ import Manager from "./plugins/Manager";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
-import { Document, modes, type Mode } from "./markdown/Markdown";
+import { Document, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { Resources, type ResourceClient, type Hit } from "./Resources";
 import { multipart, multipartThreshold } from "./multipart";
 import { base64 } from "./api";
+import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
 import "./style.css";
 
 type Binding = {
@@ -93,6 +94,7 @@ function Workspace({
     [mode, setMode] = useState<Mode>("read"),
     [message, notify] = useState(""),
     [busy, setBusy] = useState(false);
+  const panes = usePanes();
   const [view, setView] = useState("笔记"),
     [newPath, setNewPath] = useState<string | null>(null),
     [links, setLinks] = useState<Hit[]>([]);
@@ -103,7 +105,7 @@ function Workspace({
     picker = useRef<HTMLInputElement>(null);
   const vault = binding.vault,
     dirty = pluginDirty || text !== saved,
-    editing = mode === "live" || mode === "edit";
+    editing = mode === "live" || mode === "edit" || mode === "split";
   const leave = () => !dirty || confirm("放弃尚未保存的编辑？");
   const client = useMemo<ResourceClient>(
     () => ({
@@ -175,6 +177,10 @@ function Workspace({
     }
   }
   async function open(p: string, discardConfirmed = false) {
+    if (!discardConfirmed && p === path && view === "笔记") {
+      panes.setPane("doc");
+      return;
+    }
     if (!discardConfirmed && !leave()) return;
     const special = usesPluginEditor(p);
     const result = await local<{ text?: string; data?: string; hash: string }>(
@@ -189,6 +195,7 @@ function Workspace({
     setSaved(source.current.text);
     setBase(result.hash);
     choose(p);
+    panes.setPane("doc");
     setView("笔记");
     setLinks([]);
     selection.current = [0, 0];
@@ -293,11 +300,13 @@ function Workspace({
     const value = "\n" + links.join("\n") + "\n";
     edit(text.slice(0, start) + value + text.slice(end));
     selection.current = [start + value.length, start + value.length];
-    setMode("edit");
+    if (mode !== "split") setMode("edit");
   }
   return (
     <div
-      className="workspace local-workspace"
+      className="layout local-layout"
+      data-pane={panes.pane}
+      data-columns={panes.columns}
       onPasteCapture={(e) => {
         if (
           !pluginBytes &&
@@ -323,101 +332,70 @@ function Workspace({
         }
       }}
     >
-      <header>
-        <strong>本地笔记库</strong>
-        <nav>
-          {["笔记", "搜索", "附件", "导出", "插件"].map((v) => (
-            <button
-              key={v}
-              disabled={busy}
-              onClick={() => {
-                if (v !== view && (pluginBytes || v === "插件")) {
-                  if (!leave()) return;
-                  choose("");
-                  setPluginBytes(null);
-                  setPluginDirty(false);
-                  setSaved(text);
-                }
-                setView(v);
-              }}
-            >
-              {v}
-            </button>
-          ))}
-        </nav>
-        <button
-          disabled={busy}
-          onClick={() => {
-            if (leave()) close();
-          }}
-        >
-          返回同步
-        </button>
-      </header>
-      {message && <p role="status">{message}</p>}
-      {view === "插件" ? (
-        <Manager />
-      ) : view !== "笔记" ? (
-        <Resources
-          key={view}
-          client={client}
-          view={view}
-          open={(h) => run(() => open(h.path))}
-          notify={notify}
-        />
-      ) : (
-        <article>
-          <div className="toolbar">
-            <select
-              aria-label="本地笔记"
-              value={path}
-              disabled={busy}
-              onChange={(e) => run(() => open(e.target.value))}
-            >
-              <option value="" disabled>
-                选择笔记
-              </option>
-              {files.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </select>
-            <button disabled={busy} onClick={() => setNewPath("未命名.md")}>
-              新建笔记
-            </button>
-            {newPath !== null && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  run(async () => {
+      <LibraryPanes
+        paths={files}
+        panes={panes}
+        active={view === "笔记" ? path : ""}
+        busy={busy}
+        open={(p) => run(() => open(p))}
+        libraryTitle="本地笔记库"
+        vault={<strong className="local-vault">本地笔记库</strong>}
+        create={
+          <button
+            className="primary create-button"
+            aria-label="新建笔记"
+            disabled={busy}
+            onClick={() => {
+              setNewPath((panes.folder || "") + "未命名.md");
+              panes.setPane("doc");
+            }}
+          >
+            ＋　新建笔记
+          </button>
+        }
+        tools={
+          <>
+            {" "}
+            {["笔记", "搜索", "附件", "导出", "插件"].map((v) => (
+              <button
+                key={v}
+                className={v === view ? "on" : ""}
+                aria-current={v === view ? "page" : undefined}
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    (v === "笔记" && v === view && path) ||
+                    (v !== view && (pluginBytes || v === "插件"))
+                  ) {
                     if (!leave()) return;
-                    await local(vault, "save_bytes", {
-                      path: newPath,
-                      base: null,
-                      data: base64(initialBytes(newPath)),
-                    });
-                    await open(newPath, true);
-                    setMode("edit");
-                    setNewPath(null);
-                    await load();
-                  });
+                    choose("");
+                    setPluginBytes(null);
+                    setPluginDirty(false);
+                    setSaved(text);
+                  }
+                  setView(v);
+                  panes.setPane(v === "笔记" ? "list" : "doc");
                 }}
               >
-                <label>
-                  新笔记路径
-                  <input
-                    autoFocus
-                    required
-                    value={newPath}
-                    onChange={(e) => setNewPath(e.target.value)}
-                  />
-                </label>
-                <button disabled={busy}>创建</button>
-                <button type="button" onClick={() => setNewPath(null)}>
-                  取消
-                </button>
-              </form>
-            )}
-            <label>
+                {v}
+              </button>
+            ))}
+          </>
+        }
+        account={
+          <button
+            disabled={busy}
+            onClick={() => {
+              if (leave()) close();
+            }}
+          >
+            返回同步
+          </button>
+        }
+        listActions={
+          <>
+            {" "}
+            <label className="file-action">
               导入笔记
               <input
                 type="file"
@@ -442,162 +420,225 @@ function Workspace({
                 }}
               />
             </label>
-            {binding.android && !pluginBytes && path && (
-              <button
-                disabled={busy}
-                onClick={() =>
-                  run(async () => {
-                    if (new Blob([text]).size > 256 * 1024)
-                      throw Error("系统文本分享限 256 KiB");
-                    await window.__TAURI__.core.invoke("mobile_control", {
-                      action: "share",
-                      payload: {
-                        title: path,
-                        text: source.current.serialize(),
-                      },
-                    });
-                  })
-                }
-              >
-                系统分享
-              </button>
-            )}
             <button disabled={busy} onClick={() => run(load)}>
               刷新列表
             </button>
-          </div>
-          {path && (
-            <>
-              <h1>{path}</h1>
-              {pluginBytes ? (
-                <PluginEditor
-                  key={path}
+          </>
+        }
+      />
+      <main className="workspace">
+        {newPath !== null && (
+          <form
+            className="new-path"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                if (!leave()) return;
+                await local(vault, "save_bytes", {
+                  path: newPath,
+                  base: null,
+                  data: base64(initialBytes(newPath)),
+                });
+                await open(newPath, true);
+                setMode("edit");
+                setNewPath(null);
+                await load();
+              });
+            }}
+          >
+            <label>
+              新笔记路径
+              <input
+                autoFocus
+                required
+                value={newPath}
+                onChange={(e) => setNewPath(e.target.value)}
+              />
+            </label>
+            <button disabled={busy}>创建</button>
+            <button type="button" onClick={() => setNewPath(null)}>
+              取消
+            </button>
+          </form>
+        )}
+        {message && (
+          <p className="message" role="status">
+            {message}
+          </p>
+        )}
+        {view === "插件" ? (
+          <Manager />
+        ) : view !== "笔记" ? (
+          <Resources
+            key={view}
+            client={client}
+            view={view}
+            open={(h) => run(() => open(h.path))}
+            notify={notify}
+          />
+        ) : (
+          <article className={path ? "document" : "blank-document"}>
+            {!path && (
+              <>
+                <h1>本地笔记库</h1>
+                <p>
+                  {files.length
+                    ? "从笔记列表打开一篇笔记。"
+                    : "新建笔记，或导入本地文件。"}
+                </p>
+              </>
+            )}
+            {path && (
+              <>
+                <NoteHeading
                   path={path}
-                  bytes={pluginBytes}
-                  save={savePlugin}
-                  output={output}
-                  dirty={setPluginDirty}
-                  notify={notify}
-                />
-              ) : (
-                <>
-                  <nav className="toolbar">
-                    {/\.md$/i.test(path) && (
-                      <MarkdownExport
-                        path={path}
-                        source={() => source.current.serialize()}
-                        output={output}
-                        notify={notify}
-                      />
-                    )}
-                    {modes
-                      .filter(
-                        ([v]) =>
-                          /\.md$/i.test(path) || v === "edit" || v === "read",
-                      )
-                      .map(([v, label]) => (
-                        <button
-                          key={v}
-                          disabled={busy}
-                          className={mode === v ? "on" : ""}
-                          onClick={() => setMode(v)}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    {(editing || mode === "map") && (
-                      <>
-                        {editing && (
-                          <button
-                            disabled={busy}
-                            onClick={() => picker.current?.click()}
-                          >
-                            插入附件
-                          </button>
-                        )}
-                        <button
-                          disabled={busy}
-                          className="primary"
-                          onClick={() => run(save)}
-                        >
-                          保存
-                        </button>
-                      </>
-                    )}
-                  </nav>
-                  <input
-                    type="file"
-                    hidden
-                    ref={picker}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) run(() => attach([f]));
-                      e.target.value = "";
-                    }}
-                  />
-                  <div inert={busy}>
-                    <Document
-                      key={path}
-                      markdown={/\.md$/i.test(path)}
-                      text={text}
-                      edit={edit}
-                      mode={mode}
-                      setMode={setMode}
-                      select={(a, b) => {
-                        selection.current = [a, b];
-                      }}
-                      io={{
-                        image: (src, alt) => (
-                          <LocalImage binding={binding} src={src} alt={alt} />
-                        ),
-                        link: (href) => {
-                          if (
-                            /^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(href)
-                          ) {
+                  mode={mode}
+                  change={pluginBytes ? undefined : setMode}
+                  markdown={/\.md$/i.test(path)}
+                  busy={busy}
+                  share={
+                    binding.android && !pluginBytes
+                      ? {
+                          label: "系统分享",
+                          run: () =>
                             run(async () => {
-                              await client.save(
-                                "asset",
-                                new URL(href).pathname.split("/").at(-1)!,
-                                "附件",
+                              if (new Blob([text]).size > 256 * 1024)
+                                throw Error("系统文本分享限 256 KiB");
+                              await window.__TAURI__.core.invoke(
+                                "mobile_control",
+                                {
+                                  action: "share",
+                                  payload: {
+                                    title: path,
+                                    text: source.current.serialize(),
+                                  },
+                                },
                               );
-                            });
-                            return true;
-                          }
-                          if (/^[\w+.-]+:/.test(href)) return false;
-                          const raw = linkTarget(href);
-                          const found = resolvePath(path, raw, files);
-                          if (found) run(() => open(found));
-                          else notify("找不到目标笔记 · " + raw);
-                          return true;
-                        },
+                            }),
+                        }
+                      : undefined
+                  }
+                  save={
+                    !pluginBytes && (
+                      <button
+                        className="save-button"
+                        disabled={busy || text === saved}
+                        onClick={() => run(save)}
+                      >
+                        {text === saved ? "已保存" : "保存"}
+                      </button>
+                    )
+                  }
+                  more={
+                    <>
+                      <button
+                        onClick={() =>
+                          panes.setColumns(panes.columns === 1 ? 3 : 1)
+                        }
+                      >
+                        {panes.columns === 1 ? "退出专注" : "专注模式"}
+                      </button>
+                      {!pluginBytes && /\.md$/i.test(path) && (
+                        <MarkdownExport
+                          path={path}
+                          source={() => source.current.serialize()}
+                          output={output}
+                          notify={notify}
+                        />
+                      )}
+                    </>
+                  }
+                />
+                {pluginBytes ? (
+                  <PluginEditor
+                    key={path}
+                    path={path}
+                    bytes={pluginBytes}
+                    save={savePlugin}
+                    output={output}
+                    dirty={setPluginDirty}
+                    notify={notify}
+                  />
+                ) : (
+                  <>
+                    <input
+                      type="file"
+                      hidden
+                      ref={picker}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) run(() => attach([f]));
+                        e.target.value = "";
                       }}
                     />
-                  </div>
-                </>
-              )}
-              <details
-                onToggle={(e) => {
-                  if (e.currentTarget.open) run(backlinks);
-                }}
-              >
-                <summary>反向链接</summary>
-                {links.length ? (
-                  links.map((h) => (
-                    <button
-                      key={h.file_id}
-                      onClick={() => run(() => open(h.path))}
-                    >
-                      {h.path}
-                    </button>
-                  ))
-                ) : (
-                  <p>没有笔记链接到此处。</p>
+                    <div className="document-body" inert={busy}>
+                      <Document
+                        key={path}
+                        attach={() => picker.current?.click()}
+                        markdown={/\.md$/i.test(path)}
+                        text={text}
+                        edit={edit}
+                        mode={mode}
+                        setMode={setMode}
+                        select={(a, b) => {
+                          selection.current = [a, b];
+                        }}
+                        io={{
+                          image: (src, alt) => (
+                            <LocalImage binding={binding} src={src} alt={alt} />
+                          ),
+                          link: (href) => {
+                            if (
+                              /^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(
+                                href,
+                              )
+                            ) {
+                              run(async () => {
+                                await client.save(
+                                  "asset",
+                                  new URL(href).pathname.split("/").at(-1)!,
+                                  "附件",
+                                );
+                              });
+                              return true;
+                            }
+                            if (/^[\w+.-]+:/.test(href)) return false;
+                            const raw = linkTarget(href);
+                            const found = resolvePath(path, raw, files);
+                            if (found) run(() => open(found));
+                            else notify("找不到目标笔记 · " + raw);
+                            return true;
+                          },
+                        }}
+                      />
+                    </div>
+                  </>
                 )}
-              </details>
-            </>
-          )}
-        </article>
-      )}
+                <details
+                  className="backlinks"
+                  onToggle={(e) => {
+                    if (e.currentTarget.open) run(backlinks);
+                  }}
+                >
+                  <summary>反向链接</summary>
+                  {links.length ? (
+                    links.map((h) => (
+                      <button
+                        key={h.file_id}
+                        onClick={() => run(() => open(h.path))}
+                      >
+                        {h.path}
+                      </button>
+                    ))
+                  ) : (
+                    <p>没有笔记链接到此处。</p>
+                  )}
+                </details>
+              </>
+            )}
+          </article>
+        )}
+      </main>
     </div>
   );
 }

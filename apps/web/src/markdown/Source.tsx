@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { EditorView } from "@codemirror/view";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
@@ -10,6 +10,7 @@ export default function Source({
   label,
   focus = false,
   language = "markdown",
+  editor,
 }: {
   text: string;
   onChange: (v: string) => void;
@@ -17,6 +18,7 @@ export default function Source({
   label: string;
   focus?: boolean;
   language?: "markdown" | "json";
+  editor?: RefObject<EditorView | null>;
 }) {
   const host = useRef<HTMLDivElement>(null),
     view = useRef<EditorView | null>(null),
@@ -45,9 +47,11 @@ export default function Source({
       ],
     });
     view.current = cm;
+    if (editor) editor.current = cm;
     props.current.onSelect(0, 0);
     if (focus) cm.focus();
     return () => {
+      if (editor?.current === cm) editor.current = null;
       cm.destroy();
       view.current = null;
     };

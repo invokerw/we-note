@@ -14,116 +14,70 @@ import { initialBytes } from "./plugins/xmind";
 import Editor from "./Editor";
 import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Share, Vault } from "./api";
+import { Cover, LibraryPanes, usePanes } from "./LibraryUI";
 import "./style.css";
 function Auth({ login }: { login: (s: string) => void }) {
   const [register, setRegister] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
-    <main className="auth">
-      <div className="brand">WeNote</div>
-      <h1>{register ? "创建账户" : "打开你的笔记库"}</h1>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const data = new FormData(e.currentTarget),
-            body = { email: data.get("email"), password: data.get("password") };
-          setBusy(true);
-          try {
-            if (register)
-              await request("", "/api/v1/auth/register", "POST", body);
-            const s = await (
-              await request("", "/api/v1/auth/login", "POST", body)
-            ).json();
-            rememberSession(s);
-            login(s.access_token);
-          } catch (err) {
-            setError(String(err));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <label>
-          邮箱
-          <input type="email" name="email" autoComplete="username" required />
-        </label>
-        <label>
-          密码
-          <input
-            type="password"
-            name="password"
-            autoComplete={register ? "new-password" : "current-password"}
-            minLength={8}
-            required
-          />
-        </label>
-        <button disabled={busy} className="primary">
-          {register ? "注册并登录" : "登录"}
-        </button>
-      </form>
-      <button
-        onClick={() => {
-          setRegister(!register);
-          setError("");
-        }}
-      >
-        {register ? "已有账户，登录" : "创建账户"}
-      </button>
-      <p role="alert">{error}</p>
-    </main>
-  );
-}
-function Tree({
-  files,
-  prefix = "",
-  select,
-  active,
-}: {
-  files: Note[];
-  prefix?: string;
-  select: (n: Note) => void;
-  active: string;
-}) {
-  const folders = new Map<string, Note[]>(),
-    leaves: Note[] = [];
-  for (const f of files) {
-    const suffix = f.path.slice(prefix.length),
-      i = suffix.indexOf("/");
-    if (i < 0) {
-      leaves.push(f);
-      continue;
-    }
-    const dir = suffix.slice(0, i + 1);
-    if (!folders.has(dir)) folders.set(dir, []);
-    folders.get(dir)!.push(f);
-  }
-  return (
-    <ul className="tree">
-      {Array.from(folders, ([dir, items]) => (
-        <li key={dir}>
-          <details open>
-            <summary>{dir.slice(0, -1)}</summary>
-            <Tree
-              files={items}
-              prefix={prefix + dir}
-              select={select}
-              active={active}
+    <div className="auth">
+      <Cover />
+      <div className="entry-form">
+        <h1>{register ? "创建账户" : "打开你的笔记库"}</h1>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget),
+              body = {
+                email: data.get("email"),
+                password: data.get("password"),
+              };
+            setBusy(true);
+            try {
+              if (register)
+                await request("", "/api/v1/auth/register", "POST", body);
+              const s = await (
+                await request("", "/api/v1/auth/login", "POST", body)
+              ).json();
+              rememberSession(s);
+              login(s.access_token);
+            } catch (err) {
+              setError(String(err));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <label>
+            邮箱
+            <input type="email" name="email" autoComplete="username" required />
+          </label>
+          <label>
+            密码
+            <input
+              type="password"
+              name="password"
+              autoComplete={register ? "new-password" : "current-password"}
+              minLength={8}
+              required
             />
-          </details>
-        </li>
-      ))}
-      {leaves.map((f) => (
-        <li key={f.file_id}>
-          <button
-            className={active === f.file_id ? "selected" : ""}
-            onClick={() => select(f)}
-          >
-            {f.path.slice(prefix.length)}
+          </label>
+          <button disabled={busy} className="primary">
+            {register ? "注册并登录" : "登录"}
           </button>
-        </li>
-      ))}
-    </ul>
+        </form>
+        <button
+          onClick={() => {
+            setRegister(!register);
+            setError("");
+          }}
+        >
+          {register ? "已有账户，登录" : "创建账户"}
+        </button>
+        {error && <p role="alert">{error}</p>}
+      </div>
+    </div>
   );
 }
 function Library({ token, logout }: { token: string; logout: () => void }) {
@@ -136,6 +90,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [shares, setShares] = useState<Share[]>([]),
     [message, msg] = useState(""),
     [origin, setOrigin] = useState(location.origin);
+  const panes = usePanes();
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
   const encryptedIO = useCallback<EncryptedIO>(
@@ -170,6 +125,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     const v = (await (await request(token, "/api/v1/vaults")).json())
       .vaults as Vault[];
     setVaults(v);
+    if (!v.length) panes.setPane("nav");
     setVault((x) => x || v[0]?.id || "");
   }
   async function list() {
@@ -190,13 +146,17 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   }, [token]);
   useEffect(() => {
     let live = true;
+    panes.browse(null);
     setFiles([]);
     setNote(null);
     setView("files");
     if (vault)
       run(async () => {
         const result = await (await request(token, base + "/files")).json();
-        if (live) setFiles(result.files);
+        if (live) {
+          setFiles(result.files);
+          setNote(result.files[0] || null);
+        }
       });
     return () => {
       live = false;
@@ -220,6 +180,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       );
     if (s === "files") await list();
     setView(s);
+    panes.setPane("doc");
   }
   async function create(path: string, bytes: Uint8Array) {
     const r = await (
@@ -232,12 +193,17 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     const f = await (await request(token, base + "/files/" + r.file_id)).json();
     setView("files");
     setNote(f);
+    panes.setPane("doc");
   }
   function select(n: Note) {
-    if (view === "files" && note?.file_id === n.file_id) return;
+    if (view === "files" && note?.file_id === n.file_id) {
+      panes.setPane("doc");
+      return;
+    }
     if (leave()) {
       setView("files");
       setNote(n);
+      panes.setPane("doc");
       msg("");
     }
   }
@@ -258,88 +224,103 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       msg("快照已发送");
     }
   }
+  const newVault = () =>
+    run(async () => {
+      const name = prompt("笔记库名称");
+      if (name && leave()) {
+        const v = await (
+          await request(token, "/api/v1/vaults", "POST", { name })
+        ).json();
+        await listVaults();
+        setVault(v.id);
+        panes.setPane("doc");
+      }
+    });
+  const newNote = () =>
+    run(async () => {
+      const path = prompt("新笔记路径", (panes.folder || "") + "未命名.md");
+      if (path && leave()) await create(path, initialBytes(path));
+    });
+  const byPath = new Map(files.map((f) => [f.path, f]));
+  const openPath = (path: string) => {
+    const file = byPath.get(path);
+    if (file) select(file);
+  };
+  const paths = files.map((f) => f.path);
+  const goToSection = (id: string, label: string) => (
+    <button
+      key={id}
+      disabled={!vault && !["encrypted", "audit", "inbox", "sent"].includes(id)}
+      aria-current={view === id ? "page" : undefined}
+      className={view === id ? "on" : ""}
+      onClick={() => run(() => section(id))}
+    >
+      {label}
+    </button>
+  );
   return (
-    <div className="layout">
-      <aside>
-        <div className="brand">WeNote</div>
-        <div className="vault">
-          <select
-            aria-label="笔记库"
-            value={vault}
-            onChange={(e) => {
-              if (leave()) setVault(e.target.value);
-            }}
-          >
-            {vaults.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-          <button
-            aria-label="新建笔记库"
-            onClick={() =>
-              run(async () => {
-                const name = prompt("笔记库名称");
-                if (name && leave()) {
-                  const v = await (
-                    await request(token, "/api/v1/vaults", "POST", { name })
-                  ).json();
-                  await listVaults();
-                  setVault(v.id);
+    <div className="layout" data-pane={panes.pane} data-columns={panes.columns}>
+      <LibraryPanes
+        key={vault}
+        panes={panes}
+        paths={paths}
+        dates={new Map(files.map((f) => [f.path, f.updated_at || ""]))}
+        active={note?.path || ""}
+        open={openPath}
+        libraryTitle="笔记库"
+        vault={
+          <div className="vault">
+            <select
+              aria-label="笔记库"
+              value={vault}
+              onChange={(e) => {
+                if (leave()) {
+                  setVault(e.target.value);
+                  panes.setPane("doc");
                 }
-              })
-            }
-          >
-            ＋
-          </button>
-        </div>
-        <nav className="sections">
-          {[
-            ["files", "文件"],
-            ["搜索", "搜索"],
-            ["附件", "附件"],
-            ["导出", "导出"],
-            ["inbox", "收件箱"],
-            ["sent", "已发送"],
-            ["sharing", "分享管理"],
-            ["audit", "审计日志"],
-            ["encrypted", "加密笔记库"],
-            ["trash", "回收站"],
-            ["插件", "插件"],
-          ].map(([v, label]) => (
-            <button
-              key={v}
-              disabled={
-                !vault && !["encrypted", "audit", "inbox", "sent"].includes(v)
-              }
-              className={view === v ? "on" : ""}
-              onClick={() => run(() => section(v))}
+              }}
             >
-              {label}
+              {vaults.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+            <button aria-label="新建笔记库" onClick={newVault}>
+              ＋
             </button>
-          ))}
-        </nav>
-        {vault && (
+          </div>
+        }
+        create={
+          <button
+            className="primary create-button"
+            aria-label="新建笔记"
+            disabled={!vault}
+            onClick={newNote}
+          >
+            ＋　新建笔记
+          </button>
+        }
+        tools={
           <>
-            <div className="treehead">
-              <strong>文件树</strong>
-              <button
-                onClick={() =>
-                  run(async () => {
-                    if (!leave()) return;
-                    const p = prompt("新笔记路径", "未命名.md");
-                    if (p) await create(p, initialBytes(p));
-                  })
-                }
-              >
-                新建笔记
-              </button>
-            </div>
-            <Tree files={files} select={select} active={note?.file_id || ""} />
+            {goToSection("搜索", "搜索")}
+            {goToSection("附件", "附件")}
+            {!note && vault && (
+              <button onClick={() => run(share)}>分享快照</button>
+            )}{" "}
+            {Object.entries({
+              inbox: "收件箱",
+              sent: "已发送",
+              sharing: "分享管理",
+              encrypted: "加密笔记库",
+              导出: "导出",
+              插件: "插件",
+              audit: "审计日志",
+              trash: "回收站",
+            }).map(([id, label]) => goToSection(id, label))}
           </>
-        )}
-        <div className="account">
+        }
+        account={
           <button
             onClick={() => {
               if (leave()) logout();
@@ -347,24 +328,14 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           >
             退出登录
           </button>
-        </div>
-      </aside>
+        }
+        listActions={
+          <button disabled={!vault} onClick={() => picker.current?.click()}>
+            上传笔记
+          </button>
+        }
+      />
       <main className="workspace">
-        <header>
-          <span>{vaults.find((v) => v.id === vault)?.name || "笔记库"}</span>
-          {vault && (
-            <div>
-              <button
-                onClick={() => {
-                  picker.current?.click();
-                }}
-              >
-                上传笔记
-              </button>
-              <button onClick={() => run(share)}>分享快照</button>
-            </div>
-          )}
-        </header>
         <input
           ref={picker}
           hidden
@@ -396,6 +367,59 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               key={note.file_id + note.path}
               {...{
                 note,
+                toggleFocus: () =>
+                  panes.setColumns(panes.columns === 1 ? 3 : 1),
+                focused: panes.columns === 1,
+                share: () => run(share),
+                actions: (
+                  <>
+                    <button
+                      onClick={() =>
+                        run(async () => {
+                          if (!leave()) return;
+                          const p = prompt("新路径", note.path);
+                          if (!p) return;
+                          await request(
+                            token,
+                            base + "/files/" + note.file_id,
+                            "PATCH",
+                            {
+                              path: p,
+                              base_version_id: note.current_version_id,
+                              base_path: note.path,
+                            },
+                          );
+                          await list();
+                          panes.browse(p.slice(0, p.lastIndexOf("/") + 1));
+                          panes.setPane("doc");
+                        })
+                      }
+                    >
+                      移动或重命名
+                    </button>
+                    <button
+                      onClick={() =>
+                        run(async () => {
+                          if (!confirm("将这篇笔记移入回收站？") || !leave())
+                            return;
+                          await request(
+                            token,
+                            base + "/files/" + note.file_id,
+                            "DELETE",
+                            {
+                              base_version_id: note.current_version_id,
+                              base_path: note.path,
+                            },
+                          );
+                          setNote(null);
+                          await list();
+                        })
+                      }
+                    >
+                      移入回收站
+                    </button>
+                  </>
+                ),
                 files,
                 open,
                 token,
@@ -408,52 +432,21 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 notify: msg,
               }}
             />
-            <footer>
-              <button
-                onClick={() =>
-                  run(async () => {
-                    if (!leave()) return;
-                    const p = prompt("新路径", note.path);
-                    if (!p) return;
-                    await request(
-                      token,
-                      base + "/files/" + note.file_id,
-                      "PATCH",
-                      {
-                        path: p,
-                        base_version_id: note.current_version_id,
-                        base_path: note.path,
-                      },
-                    );
-                    await list();
-                    setNote({ ...note, path: p });
-                  })
-                }
-              >
-                移动或重命名
-              </button>
-              <button
-                onClick={() =>
-                  run(async () => {
-                    if (!confirm("将这篇笔记移入回收站？") || !leave()) return;
-                    await request(
-                      token,
-                      base + "/files/" + note.file_id,
-                      "DELETE",
-                      {
-                        base_version_id: note.current_version_id,
-                        base_path: note.path,
-                      },
-                    );
-                    setNote(null);
-                    await list();
-                  })
-                }
-              >
-                移入回收站
-              </button>
-            </footer>
           </>
+        ) : view === "files" ? (
+          <article className="blank-document">
+            <h1>{vault ? "笔记库" : "创建你的第一个笔记库"}</h1>
+            <p>
+              {files.length
+                ? "从笔记列表打开一篇笔记。"
+                : vault
+                  ? "新建笔记，或上传已有文件。"
+                  : "创建笔记库，开始整理笔记。"}
+            </p>
+            <button className="primary" onClick={vault ? newNote : newVault}>
+              {vault ? "写一篇笔记" : "创建笔记库"}
+            </button>
+          </article>
         ) : view === "sharing" ? (
           <Sharing key={vault} token={token} vault={vault} />
         ) : view === "audit" ? (
@@ -478,21 +471,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 ? "回收站"
                 : view === "inbox"
                   ? "收件箱"
-                  : view === "sent"
-                    ? "已发送"
-                    : vault
-                      ? "笔记库"
-                      : "创建你的第一个笔记库"}
+                  : "已发送"}
             </h1>
-            {view === "files" && (
-              <p>
-                {vault
-                  ? files.length
-                    ? "从左侧文件树选择一篇笔记。"
-                    : "点击「新建笔记」，或上传已有的 Markdown、TXT、JSON 或 XMind 文件。"
-                  : "点击左侧的 ＋ 创建笔记库。"}
-              </p>
-            )}
             {view === "trash" &&
               (trash.length ? (
                 trash.map((f) => (

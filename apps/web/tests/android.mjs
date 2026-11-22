@@ -139,14 +139,17 @@ try {
   adb("shell", "am", "force-stop", pkg);
   page = await launch();
   await button("打开本地编辑器").click();
-  await page.getByLabel("本地笔记", { exact: true }).selectOption("原稿.md");
+  await button("原稿.md").click();
+  await button("编辑模式").click();
   await button("源码").click();
   await page.getByLabel("笔记源码").fill("手机离线编辑");
   await button("保存").click();
   await page.getByText("已保存到本地目录").waitFor();
   console.log("Offline restart and save passed");
-  const pickLocal = (p) =>
-    page.getByLabel("本地笔记", { exact: true }).selectOption(p);
+  const pickLocal = async (p) => {
+    await button("列表").click();
+    await button(p).click();
+  };
   await pickLocal(mapName);
   await page.getByLabel("主题标题").fill("手机离线导图");
   await button("保存").click();
@@ -197,6 +200,7 @@ try {
     await delay(200);
   }
   assert.match(exported, /# 手机离线导图/);
+  await button("目录").click();
   await button("插件").click();
   const sample = await pack(
     fileURLToPath(new URL("../plugin-sdk/example", import.meta.url)),
@@ -214,6 +218,7 @@ try {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, Buffer.from(sample).toString("base64"));
   await button("授权并安装").click();
+  await button("目录").click();
   await button("笔记").click();
   await pickLocal("插件.txt");
   assert.equal(await page.getByLabel("插件文档").inputValue(), "离线插件");
@@ -235,6 +240,7 @@ try {
     await delay(150);
   }
   adb("shell", "input", "keyevent", "KEYCODE_BACK");
+  await button("目录").click();
   await button("返回同步").click();
   await api(base + "/files/" + note.file_id + "/content", "PUT", {
     base_version_id: note.version_id,
@@ -277,7 +283,8 @@ try {
     "网页同时编辑",
   );
   await button("打开本地编辑器").click();
-  await page.getByLabel("本地笔记", { exact: true }).selectOption("原稿.md");
+  await button("原稿.md").click();
+  await button("编辑模式").click();
   await button("源码").click();
   await page.getByLabel("笔记源码").evaluate((el) => {
     const data = new DataTransfer();
@@ -309,12 +316,14 @@ try {
   );
   await button("保存").click();
   await page.getByText("已保存到本地目录").waitFor();
+  await button("目录").click();
   await button("导出").click();
   await page.getByLabel("附件链接").selectOption("portable");
   await button("创建导出").click();
   const portableRow = page.locator(".row").filter({ hasText: "离线便携" });
   await portableRow.getByRole("button", { name: "下载 ZIP" }).click();
   await page.getByText(/已保存到 .*\.zip/).waitFor();
+  await button("目录").click();
   await button("返回同步").click();
   await button("退出账户").click();
   await button("登录").waitFor();
@@ -325,9 +334,7 @@ try {
   adb("shell", "am", "force-stop", pkg);
   page = await launch();
   await button("打开本地编辑器").click();
-  await page
-    .getByLabel("本地笔记", { exact: true })
-    .selectOption(conflict.path);
+  await button(conflict.path).click();
   await page.locator(".reading").getByText("手机离线编辑").waitFor();
   console.log(
     "Android emulator passed offline restart, system share, scheduled sync, conflict recovery, multipart attachment upload and portable ZIP download.",

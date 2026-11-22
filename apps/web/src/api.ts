@@ -4,6 +4,7 @@ export type Note = {
   file_id: string;
   path: string;
   format: string;
+  updated_at?: string;
   current_version_id: string;
 };
 export type Version = {
