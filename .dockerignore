@@ -1,0 +1,10 @@
+**
+!apps/web/package*.json
+!apps/web/index.html
+!apps/web/tsconfig.json
+!apps/web/vite.config.ts
+!apps/web/src/**
+!services/api/go.mod
+!services/api/go.sum
+!services/api/cmd/**
+!services/api/internal/**

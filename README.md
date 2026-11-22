@@ -2,6 +2,27 @@
 
 WeNote 用Markdown、TXT、JSON 和 XMind 文件保存笔记。桌面端同步本地目录，Android 端同步应用私有目录，两端与网页端共用 Markdown 编辑器。网页端还提供文件树、版本历史和回收站。收件人可以把分享快照及其附件导入自己的笔记库，再独立编辑。
 
+## 发布与安装
+
+推送 `v主版本.次版本.修订号` 格式的 Git 标签会触发发布。例如，发布 `v0.1.0` 时，在要发布的提交上执行：
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+构建成功后，可在 GitHub Releases 下载 Windows x64 安装程序、macOS 通用 DMG（Intel 和 Apple Silicon）、Linux x64 DEB 和 Android ARM64 APK。桌面安装包使用标签中的版本号，Windows 和 macOS 安装包未配置发行者签名或公证。
+
+Android 使用 release 模式构建。要生成可直接安装并支持覆盖升级的 APK，请在仓库 Actions secrets 中设置 `ANDROID_KEYSTORE_BASE64`（发行密钥库的 Base64 内容）、`ANDROID_KEY_ALIAS`、`ANDROID_KEYSTORE_PASSWORD` 和 `ANDROID_KEY_PASSWORD`，后续版本使用同一密钥。未配置密钥库时，Release 提供以 `-unsigned.apk` 结尾的包，需自行签名后安装。
+
+服务端镜像包含网页端，支持 `linux/amd64` 和 `linux/arm64`。下例使用命名卷持久化 SQLite 和附件，并将端口绑定到本机供反向代理访问。请将 `-public-url` 替换为实际的 HTTPS 源站。私有镜像需先用有 `read:packages` 权限的账号登录 `ghcr.io`。
+
+```sh
+docker run -d --name wenote -p 127.0.0.1:8080:8080 \
+  -v wenote-data:/app/data ghcr.io/invokerw/we-note:v0.1.0 \
+  -public-url https://notes.example.com
+```
+
 ## 启动网页和服务端
 
 在仓库根目录执行以下命令。Go 服务使用 SQLite，需要可用的 C 编译器。
