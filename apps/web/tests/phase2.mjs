@@ -106,12 +106,137 @@ try {
   await button("编辑模式").click();
   await button("分屏编辑").click();
   const split = page.locator(".split-editor");
+  const panelToggle = button("笔记信息");
+  const metadata = page.getByRole("complementary", { name: "笔记信息" });
+  assert.equal(await panelToggle.getAttribute("aria-expanded"), "false");
+  await panelToggle.click();
+  await metadata.getByRole("button", { name: "交付" }).waitFor();
+  await metadata.getByText("编辑组", { exact: true }).waitFor();
+  await metadata.getByText("没有笔记链接到此处。", { exact: true }).waitFor();
+  const panelBox = await metadata.boundingBox(),
+    splitBox = await split.boundingBox();
+  assert.ok(Math.abs(panelBox.x - splitBox.x - splitBox.width) <= 1);
+  await panelToggle.click();
+  assert.equal(await metadata.isVisible(), false);
+  const divider = split.getByRole("separator");
+  const grip = await divider.boundingBox();
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 65, grip.y + grip.height / 2);
+  await page.mouse.up();
+  assert.ok(Number(await divider.getAttribute("aria-valuenow")) > 50);
+  await divider.dblclick();
+  await divider.press("ArrowRight");
+  assert.equal(await divider.getAttribute("aria-valuenow"), "55");
+  await divider.dblclick();
+  assert.equal(await divider.getAttribute("aria-valuenow"), "50");
+  await page.setViewportSize({ width: 390, height: 800 });
+  await split.locator('[aria-orientation="horizontal"]').waitFor();
+  const narrow = await split.boundingBox();
+  await panelToggle.click();
+  const drawer = await metadata.boundingBox();
+  assert.equal((await split.boundingBox()).width, narrow.width);
+  assert.ok(Math.abs(drawer.x + drawer.width - narrow.x - narrow.width) <= 1);
+  await panelToggle.click();
+  await divider.press("ArrowDown");
+  assert.equal(await divider.getAttribute("aria-valuenow"), "55");
+  await page.setViewportSize(wide);
+  await split.locator('[aria-orientation="vertical"]').waitFor();
+  const sections = Array.from(
+    { length: 50 },
+    (_, i) => `## 章节 ${i}\n\n${"带有 **加粗** 的段落。".repeat((i % 6) + 1)}`,
+  );
+  await split.getByLabel("笔记源码").fill(sections.join("\n\n"));
+  const sourceScroll = split.locator(".cm-scroller"),
+    previewScroll = split.locator(".split-preview");
+  const top = (el) => el.scrollTop;
+  await divider.focus();
+  await sourceScroll.evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  await page.waitForFunction(
+    () => document.querySelector(".split-preview").scrollTop === 0,
+  );
+  await sourceScroll.evaluate((el) => {
+    el.scrollTop = 900;
+  });
+  await page.waitForFunction(
+    () => document.querySelector(".split-preview").scrollTop > 100,
+  );
+  await previewScroll.evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  await page.waitForFunction(
+    () => document.querySelector(".split-editor .cm-scroller").scrollTop === 0,
+  );
+  await button("同步滚动").click();
+  await previewScroll.evaluate((el) => {
+    el.scrollTop = 500;
+  });
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  assert.equal(await sourceScroll.evaluate(top), 0);
+  await button("同步滚动").click();
+  assert.equal(await previewScroll.evaluate(top), 0);
   await split.getByLabel("笔记源码").fill("分屏草稿");
   await split.getByLabel("笔记源码").press("ControlOrMeta+a");
   await button("加粗").click();
   assert.equal(await split.locator(".reading strong").innerText(), "分屏草稿");
   await button("我的文件夹").click();
   assert.equal(await split.getByLabel("笔记源码").innerText(), "**分屏草稿**");
+  await button("编辑模式").click();
+  await button("所见所得").click();
+  const draft = page.locator(".live strong [data-text-start]");
+  const caret = await draft.evaluate((el) => {
+    const range = document.createRange();
+    range.setStart(el.firstChild, 2);
+    range.collapse(true);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.x, y: rect.y + rect.height / 2 };
+  });
+  await page.mouse.click(caret.x, caret.y);
+  const currentBlock = page.getByLabel("当前段落源码");
+  const ime = await page.context().newCDPSession(page);
+  await ime.send("Input.imeSetComposition", {
+    text: "zhong",
+    selectionStart: 5,
+    selectionEnd: 5,
+  });
+  await ime.send("Input.insertText", { text: "中" });
+  await ime.detach();
+  await currentBlock.press("Escape");
+  assert.equal(await page.locator(".live strong").innerText(), "分屏中草稿");
+  await page.locator(".live strong").click();
+  await currentBlock.fill("行内撰写");
+  await currentBlock.press("ControlOrMeta+a");
+  await currentBlock.press("ControlOrMeta+b");
+  await currentBlock.locator(".live-strong").waitFor();
+  await currentBlock.press("ControlOrMeta+b");
+  assert.equal(await currentBlock.textContent(), "行内撰写");
+  await currentBlock.press("ControlOrMeta+b");
+  await currentBlock.locator(".live-strong").waitFor();
+  await currentBlock.press("ArrowRight");
+  await currentBlock.press("End");
+  await currentBlock.press("Enter");
+  await page.keyboard.insertText("接着写。");
+  await currentBlock.press("Escape");
+  await page
+    .locator(".live .reading strong")
+    .filter({ hasText: "行内撰写" })
+    .waitFor();
+  await page
+    .locator(".live .reading > p")
+    .filter({ hasText: "接着写。" })
+    .focus();
+  await page.keyboard.press("Enter");
+  await currentBlock.press("Home");
+  await currentBlock.press("ArrowUp");
+  await currentBlock.filter({ hasText: "行内撰写" }).waitFor();
+  await currentBlock.press("Escape");
   await button("工作").first().click();
   page.once("dialog", (dialog) => dialog.accept());
   await button("目标.md").click();
@@ -146,12 +271,15 @@ try {
   const map = page.getByRole("navigation", { name: "标题树思维导图" });
   await map.getByRole("button", { name: "交付" }).click();
   await page.locator(".reading h2").waitFor();
-  await page.getByText("目录与属性", { exact: true }).click();
+  await panelToggle.click();
   await page.getByText("编辑组", { exact: true }).waitFor();
   await page.getByRole("link", { name: "相关笔记" }).click();
   await page.getByRole("heading", { name: "目标文件" }).waitFor();
-  await page.getByText("反向链接", { exact: true }).click();
-  await button("工作/路线.md").click();
+  await panelToggle.click();
+  await metadata
+    .getByRole("region", { name: "反向链接" })
+    .getByRole("button", { name: "工作/路线.md" })
+    .click();
   await button("编辑模式").click();
   await button("源码").click();
   const source = page.getByLabel("笔记源码");

@@ -1,8 +1,11 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { EditorView } from "@codemirror/view";
+import { EditorView, placeholder } from "@codemirror/view";
 import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { basicSetup } from "codemirror";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { basicSetup, minimalSetup } from "codemirror";
+import { Prec } from "@codemirror/state";
+import { liveStyle } from "./liveStyle";
+
 export default function Source({
   text,
   onChange,
@@ -11,6 +14,7 @@ export default function Source({
   focus = false,
   language = "markdown",
   editor,
+  inline,
 }: {
   text: string;
   onChange: (v: string) => void;
@@ -19,18 +23,37 @@ export default function Source({
   focus?: boolean;
   language?: "markdown" | "json";
   editor?: RefObject<EditorView | null>;
+  inline?: {
+    caret: number;
+    keyDown: (event: KeyboardEvent, view: EditorView) => boolean;
+  };
 }) {
   const host = useRef<HTMLDivElement>(null),
     view = useRef<EditorView | null>(null),
-    props = useRef({ onChange, onSelect });
-  props.current = { onChange, onSelect };
+    props = useRef({ onChange, onSelect, inline });
+  props.current = { onChange, onSelect, inline };
   useEffect(() => {
     const cm = new EditorView({
       parent: host.current!,
       doc: text,
+      selection: { anchor: Math.min(inline?.caret ?? 0, text.length) },
       extensions: [
-        basicSetup,
-        language === "json" ? json() : markdown(),
+        inline
+          ? [
+              minimalSetup,
+              liveStyle,
+              placeholder("开始写作…"),
+              Prec.highest(
+                EditorView.domEventHandlers({
+                  keydown: (e, view) =>
+                    !e.isComposing &&
+                    !view.composing &&
+                    (props.current.inline?.keyDown(e, view) ?? false),
+                }),
+              ),
+            ]
+          : basicSetup,
+        language === "json" ? json() : markdown({ base: markdownLanguage }),
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({
           "aria-label": label,
@@ -48,7 +71,10 @@ export default function Source({
     });
     view.current = cm;
     if (editor) editor.current = cm;
-    props.current.onSelect(0, 0);
+    props.current.onSelect(
+      cm.state.selection.main.from,
+      cm.state.selection.main.to,
+    );
     if (focus) cm.focus();
     return () => {
       if (editor?.current === cm) editor.current = null;

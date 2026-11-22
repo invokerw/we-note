@@ -119,7 +119,9 @@ export function NoteHeading({
   more,
   busy,
   handset,
+  endAction,
 }: {
+  endAction?: ReactNode;
   handset?: {
     back: () => void;
     edit: () => void;
@@ -208,7 +210,13 @@ export function NoteHeading({
         {change && (
           <Popup
             label="编辑模式"
-            icon={<i className="mode-icon" aria-hidden="true" />}
+            icon={
+              <span className="mode-label">
+                <i className="mode-icon" aria-hidden="true" />
+                {modeLabels[mode as keyof typeof modeLabels] ?? "编辑模式"}
+                <span aria-hidden="true">⌄</span>
+              </span>
+            }
           >
             {modes.map(([id, label]) => (
               <button
@@ -246,6 +254,7 @@ export function NoteHeading({
         <Popup label="更多操作" icon="•••">
           {more}
         </Popup>
+        {endAction}
       </div>
     </header>
   );

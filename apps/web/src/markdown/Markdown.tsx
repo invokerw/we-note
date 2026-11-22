@@ -1,169 +1,15 @@
+import { createPortal } from "react-dom";
 import { boardText, boardStrokes, Whiteboard } from "./Whiteboard";
-import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
-import Markdown from "react-markdown";
-import katex from "rehype-katex";
-import "katex/dist/katex.min.css";
-import { inspect, extensions, noteSyntax, type Branch } from "./document";
+import { useEffect, useMemo, useState, useRef } from "react";
+import SplitEditor from "./SplitEditor";
+import { inspect, type Branch } from "./document";
 import HeadingEditor from "./HeadingEditor";
 import Source from "./Source";
+import { syntaxTree } from "@codemirror/language";
 import type { EditorView } from "@codemirror/view";
+import { MarkdownView, type MarkdownIO, sourceOffset } from "./MarkdownView";
+export { MarkdownView, type MarkdownIO } from "./MarkdownView";
 
-let diagramEngine: Promise<(typeof import("mermaid"))["default"]> | undefined;
-function Diagram({ source }: { source: string }) {
-  const [result, set] = useState({ url: "", error: "" });
-  useEffect(() => {
-    let active = true,
-      url = "";
-    set({ url: "", error: "" });
-    async function render() {
-      diagramEngine ??= import("mermaid").then(({ default: m }) => {
-        m.initialize({
-          startOnLoad: false,
-          securityLevel: "strict",
-          htmlLabels: false,
-          suppressErrorRendering: true,
-          secure: [
-            "securityLevel",
-            "startOnLoad",
-            "htmlLabels",
-            "maxTextSize",
-            "maxEdges",
-            "dompurifyConfig",
-            "suppressErrorRendering",
-          ],
-        });
-        return m;
-      });
-      const m = await diagramEngine;
-      const { svg } = await m.render("diagram-" + crypto.randomUUID(), source);
-      if (active) {
-        url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-        set({ url, error: "" });
-      }
-    }
-    render().catch((e) => {
-      if (active) set({ url: "", error: String(e) });
-    });
-    return () => {
-      active = false;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [source]);
-  return result.url ? (
-    <img className="diagram" alt="Mermaid 图表" src={result.url} />
-  ) : (
-    <span role="status">{result.error || "正在绘图…"}</span>
-  );
-}
-export type MarkdownIO = {
-  image?: (src: string, alt: string) => ReactNode;
-  link?: (href: string, label: string) => boolean;
-};
-export function MarkdownView({
-  text,
-  io,
-  offset = 0,
-  activate,
-  toggle,
-}: {
-  text: string;
-  io: MarkdownIO;
-  offset?: number;
-  activate?: (start: number, end: number) => void;
-  toggle?: (pos: number) => void;
-}) {
-  const strokes = boardStrokes(text);
-  if (strokes) return <Whiteboard strokes={strokes} />;
-  return (
-    <div
-      className="reading"
-      onClick={(e) => {
-        const target = e.target as Element;
-        if (!activate || target.closest("a,input,button")) return;
-        const block = target.closest<HTMLElement>("[data-block-start]");
-        if (block)
-          activate(
-            offset + Number(block.dataset.blockStart),
-            offset + Number(block.dataset.blockEnd),
-          );
-      }}
-    >
-      <Markdown
-        remarkPlugins={[...extensions, noteSyntax]}
-        rehypePlugins={[
-          [katex, { trust: false }],
-          () => (tree) => {
-            for (const n of tree.children) {
-              if (n.type === "element" && n.position) {
-                n.properties["data-block-start"] = n.position.start.offset;
-                n.properties["data-block-end"] = n.position.end.offset;
-              }
-            }
-          },
-        ]}
-        components={{
-          img: ({ src, alt }) =>
-            typeof src === "string" ? (
-              io.image ? (
-                io.image(src, alt || "")
-              ) : (
-                <img src={src} alt={alt} />
-              )
-            ) : null,
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target={href?.startsWith("#") ? undefined : "_blank"}
-              rel="noreferrer"
-              onClick={(e) => {
-                if (href && io.link?.(href, String(children)))
-                  e.preventDefault();
-              }}
-            >
-              {children}
-            </a>
-          ),
-          code: ({ className, children }) =>
-            className === "language-mermaid" ? (
-              <Diagram source={String(children).trimEnd()} />
-            ) : (
-              <code className={className}>{children}</code>
-            ),
-          li: ({ node, children, ...p }) => (
-            <li
-              {...p}
-              onClick={(e) => {
-                if (
-                  toggle &&
-                  (e.target as Element).matches("input[type=checkbox]")
-                ) {
-                  e.stopPropagation();
-                  toggle(offset + (node?.position?.start.offset ?? 0));
-                }
-              }}
-            >
-              {children}
-            </li>
-          ),
-          input: ({ checked }) => (
-            <input
-              type="checkbox"
-              checked={checked}
-              readOnly
-              disabled={!toggle}
-              aria-label="任务完成"
-            />
-          ),
-          blockquote: ({ node, children, ...p }) => (
-            <blockquote {...p}>{children}</blockquote>
-          ),
-        }}
-      >
-        {text}
-      </Markdown>
-    </div>
-  );
-}
 function Branches({
   items,
   jump,
@@ -218,6 +64,7 @@ export function Document({
   select,
   markdown = true,
   focusSource = false,
+  metadataHost,
   attach,
 }: {
   text: string;
@@ -228,12 +75,16 @@ export function Document({
   select: (a: number, b: number) => void;
   markdown?: boolean;
   focusSource?: boolean;
+  metadataHost?: HTMLElement | null;
   attach?: () => void;
 }) {
   const info = useMemo(() => inspect(markdown ? text : ""), [text, markdown]);
-  const [block, setBlock] = useState<{ start: number; tail: number } | null>(
-    null,
-  );
+  const [block, setBlock] = useState<{
+    start: number;
+    tail: number;
+    caret: number;
+    original: string;
+  } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const jumpOffset = useRef<number | null>(null);
   useEffect(() => {
@@ -255,9 +106,15 @@ export function Document({
       setMode("read");
     }
   }
-  function activate(start: number, end: number) {
-    select(start, start);
-    setBlock({ start, tail: text.length - end });
+  function activate(start: number, end: number, caret = 0) {
+    const pos = Math.min(Math.max(caret, 0), end - start);
+    select(start + pos, start + pos);
+    setBlock({
+      start,
+      tail: text.length - end,
+      caret: pos,
+      original: text.slice(start, end),
+    });
   }
   const toggle = (offset: number) => {
     const body = text.slice(offset);
@@ -273,10 +130,44 @@ export function Document({
     if (!cm) {
       const start = text.length + (text ? 2 : 0);
       edit(text + (text ? "\n\n" : "") + before + sample + after);
-      setBlock({ start, tail: 0 });
+      setBlock({
+        start,
+        tail: 0,
+        original: "",
+        caret: before.length + sample.length,
+      });
       return;
     }
     const range = cm.state.selection.main;
+    const inlineNode = {
+      "**": "StrongEmphasis",
+      "*": "Emphasis",
+      "~~": "Strikethrough",
+      "`": "InlineCode",
+    }[before];
+    if (inlineNode) {
+      let node = syntaxTree(cm.state).resolveInner(range.from, 1);
+      while (node.parent && node.name !== inlineNode) node = node.parent;
+      const first = node.firstChild,
+        last = node.lastChild;
+      if (
+        node.name === inlineNode &&
+        first &&
+        last &&
+        first !== last &&
+        (range.empty || (range.from === first.to && range.to === last.from))
+      ) {
+        cm.dispatch({
+          changes: [
+            { from: first.from, to: first.to },
+            { from: last.from, to: last.to },
+          ],
+          userEvent: "input.format",
+        });
+        cm.focus();
+        return;
+      }
+    }
     const value = cm.state.sliceDoc(range.from, range.to) || sample;
     const prefix =
       ["## ", "> ", "- ", "- [ ] "].includes(before) &&
@@ -294,7 +185,77 @@ export function Document({
     });
     cm.focus();
   }
-  const bounds = mode === "live" ? block : null;
+  const bounds =
+    mode === "live"
+      ? (block ?? (text ? null : { start: 0, tail: 0, caret: 0, original: "" }))
+      : null;
+  const sourcePane = (
+    <Source
+      editor={editor}
+      focus={focusSource}
+      label="笔记源码"
+      text={text}
+      onChange={edit}
+      onSelect={select}
+    />
+  );
+  function finishBlock() {
+    setBlock(null);
+    requestAnimationFrame(() =>
+      root.current
+        ?.querySelector<HTMLElement>(`[data-block-start="${bounds?.start}"]`)
+        ?.focus({ preventScroll: true }),
+    );
+  }
+  function liveKey(event: KeyboardEvent, cm: EditorView) {
+    if (!bounds) return false;
+    if (
+      event.key === "Escape" ||
+      (event.key === "Enter" && (event.ctrlKey || event.metaKey))
+    ) {
+      finishBlock();
+      return true;
+    }
+    const range = cm.state.selection.main,
+      length = cm.state.doc.length;
+    if (
+      !range.empty ||
+      event.shiftKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.ctrlKey
+    )
+      return false;
+    const end = text.length - bounds.tail;
+    const type = syntaxTree(cm.state).topNode.lastChild?.name ?? "";
+    if (
+      event.key === "Enter" &&
+      range.head === length &&
+      /^(Paragraph|ATXHeading[1-6]|SetextHeading[12])$/.test(type)
+    ) {
+      cm.dispatch(cm.state.replaceSelection("\n\n"), {
+        scrollIntoView: true,
+        userEvent: "input",
+      });
+      return true;
+    }
+    const up = event.key === "ArrowUp" && range.head === 0;
+    const down = event.key === "ArrowDown" && range.head === length;
+    if (up || down) {
+      const active = cm.dom.closest(".live-block");
+      const next = (
+        up ? active?.previousElementSibling : active?.nextElementSibling
+      ) as HTMLElement | null;
+      if (next?.hasAttribute("data-block-start")) {
+        const slot = { start: bounds.start, end, original: bounds.original };
+        const a = sourceOffset(Number(next.dataset.blockStart), slot),
+          b = sourceOffset(Number(next.dataset.blockEnd), slot);
+        activate(a, b, up ? b - a : 0);
+        return true;
+      }
+    }
+    return false;
+  }
   const strokes = markdown ? boardStrokes(text) : null;
   if (strokes && (mode === "live" || mode === "read"))
     return (
@@ -304,8 +265,50 @@ export function Document({
         activate={() => setMode("live")}
       />
     );
-  return (
-    <div ref={root} className={"document-mode mode-" + mode}>
+  const metadata = markdown && mode !== "map" && (
+    <>
+      {!!info.outline.length && <Branches items={info.outline} jump={jump} />}
+      <dl>
+        {Object.entries(info.properties).map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+          </div>
+        ))}
+      </dl>
+      {info.tags.map((t) => (
+        <span className="tag" key={t}>
+          #{t}{" "}
+        </span>
+      ))}
+    </>
+  );
+  const documentView = (
+    <div
+      ref={root}
+      className={"document-mode mode-" + mode}
+      onKeyDownCapture={(e) => {
+        if (
+          !markdown ||
+          !editor.current?.hasFocus ||
+          !(e.ctrlKey || e.metaKey) ||
+          e.shiftKey ||
+          e.altKey
+        )
+          return;
+        const style =
+          e.key.toLowerCase() === "b"
+            ? formats[0]
+            : e.key.toLowerCase() === "i"
+              ? formats[1]
+              : null;
+        if (style) {
+          e.preventDefault();
+          e.stopPropagation();
+          format(style[2], style[3], style[4]);
+        }
+      }}
+    >
       {(mode === "edit" || mode === "split" || mode === "live") && (
         <nav className="format-bar" aria-label="编辑工具">
           {markdown &&
@@ -327,18 +330,12 @@ export function Document({
           )}
         </nav>
       )}
-      {mode === "edit" || mode === "split" ? (
-        <div className={mode === "split" ? "split-editor" : "source-editor"}>
-          <Source
-            editor={editor}
-            focus={focusSource}
-            label="笔记源码"
-            text={text}
-            onChange={edit}
-            onSelect={select}
-          />
-          {mode === "split" && <MarkdownView text={text} io={io} />}
-        </div>
+      {mode === "split" || mode === "edit" ? (
+        <SplitEditor editor={editor} source={sourcePane}>
+          {mode === "split" && (
+            <MarkdownView text={text} io={io} toggle={toggle} />
+          )}
+        </SplitEditor>
       ) : mode === "map" ? (
         <>
           <HeadingEditor text={text} edit={edit} />
@@ -352,52 +349,72 @@ export function Document({
         </>
       ) : mode === "live" ? (
         <div className="live">
-          {bounds ? (
-            <>
-              <MarkdownView
-                text={text.slice(0, bounds.start)}
-                io={io}
-                activate={activate}
-                toggle={toggle}
-              />
-              <Source
-                editor={editor}
-                key={bounds.start}
-                label="当前段落源码"
-                focus
-                text={text.slice(bounds.start, text.length - bounds.tail)}
-                onSelect={(a, b) => select(a + bounds.start, b + bounds.start)}
-                onChange={(s) =>
-                  edit(
-                    text.slice(0, bounds.start) +
-                      s +
-                      text.slice(text.length - bounds.tail),
-                  )
-                }
-              />
-              <button onClick={() => setBlock(null)}>完成段落</button>
-              <MarkdownView
-                text={text.slice(text.length - bounds.tail)}
-                offset={text.length - bounds.tail}
-                io={io}
-                activate={activate}
-                toggle={toggle}
-              />
-            </>
-          ) : (
-            <MarkdownView
-              text={text}
-              io={io}
-              activate={activate}
-              toggle={toggle}
-            />
-          )}
+          <MarkdownView
+            text={text}
+            io={io}
+            activate={activate}
+            toggle={toggle}
+            slot={
+              bounds
+                ? {
+                    start: bounds.start,
+                    end: text.length - bounds.tail,
+                    original: bounds.original,
+                    content: (
+                      <div className="live-block">
+                        <Source
+                          key={bounds.start}
+                          editor={editor}
+                          label="当前段落源码"
+                          focus
+                          inline={{ caret: bounds.caret, keyDown: liveKey }}
+                          text={text.slice(
+                            bounds.start,
+                            text.length - bounds.tail,
+                          )}
+                          onSelect={(a, b) =>
+                            select(bounds.start + a, bounds.start + b)
+                          }
+                          onChange={(s) => {
+                            if (!block) setBlock(bounds);
+                            edit(
+                              text.slice(0, bounds.start) +
+                                s +
+                                text.slice(text.length - bounds.tail),
+                            );
+                          }}
+                        />
+                        <button
+                          className="finish-block"
+                          title="完成段落 (Esc)"
+                          aria-label="完成段落"
+                          onClick={finishBlock}
+                        >
+                          ✓
+                        </button>
+                      </div>
+                    ),
+                  }
+                : undefined
+            }
+          />
           <button
+            className="add-paragraph"
             onClick={() => {
-              const prefix = text.length ? "\n\n" : "";
+              const prefix =
+                !text || text.endsWith("\n\n")
+                  ? ""
+                  : text.endsWith("\n")
+                    ? "\n"
+                    : "\n\n";
               edit(text + prefix);
               select(text.length + prefix.length, text.length + prefix.length);
-              setBlock({ start: text.length + prefix.length, tail: 0 });
+              setBlock({
+                start: text.length + prefix.length,
+                tail: 0,
+                original: "",
+                caret: 0,
+              });
             }}
           >
             添加段落
@@ -408,27 +425,28 @@ export function Document({
       ) : (
         <pre>{text}</pre>
       )}
-      {markdown && mode !== "map" && (
+      {metadataHost === undefined && metadata && (
         <details className="metadata">
           <summary>目录与属性</summary>
-          {!!info.outline.length && (
-            <Branches items={info.outline} jump={jump} />
-          )}
-          <dl>
-            {Object.entries(info.properties).map(([k, v]) => (
-              <div key={k}>
-                <dt>{k}</dt>
-                <dd>{typeof v === "string" ? v : JSON.stringify(v)}</dd>
-              </div>
-            ))}
-          </dl>
-          {info.tags.map((t) => (
-            <span className="tag" key={t}>
-              #{t}{" "}
-            </span>
-          ))}
+          {metadata}
         </details>
       )}
     </div>
+  );
+  if (!metadataHost || !metadata) return documentView;
+  return (
+    <>
+      {documentView}
+      {createPortal(
+        <section aria-label="目录与属性">
+          <h2>目录与属性</h2>
+          {metadata}
+          {!info.outline.length &&
+            !Object.keys(info.properties).length &&
+            !info.tags.length && <p>当前笔记没有标题、属性或标签。</p>}
+        </section>,
+        metadataHost,
+      )}
+    </>
   );
 }

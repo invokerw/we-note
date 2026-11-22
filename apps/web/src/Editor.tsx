@@ -3,7 +3,7 @@ import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { browserExport } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Document, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { download, type Hit } from "./Resources";
@@ -62,6 +62,57 @@ export function AssetImage({
     <span>{alt}</span>
   );
 }
+function Backlinks({
+  token,
+  vault,
+  fileId,
+  open,
+}: {
+  token: string;
+  vault: string;
+  fileId: string;
+  open: (id: string) => void;
+}) {
+  const [links, setLinks] = useState<Hit[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    request(
+      token,
+      `/api/v1/vaults/${vault}/links/backlinks?file_id=${encodeURIComponent(fileId)}`,
+    )
+      .then((response) => response.json())
+      .then((results) => {
+        if (active) setLinks(results);
+      })
+      .catch((e) => {
+        if (active) setError(String(e));
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, vault, fileId]);
+  return (
+    <section className="panel-backlinks" aria-label="反向链接">
+      <h2>反向链接</h2>
+      {error ? (
+        <p role="alert">{error}</p>
+      ) : links === null ? (
+        <p role="status">正在加载…</p>
+      ) : links.length ? (
+        <ul>
+          {links.map((f) => (
+            <li key={f.file_id}>
+              <button onClick={() => open(f.file_id)}>{f.path}</button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>没有笔记链接到此处。</p>
+      )}
+    </section>
+  );
+}
 export default function Editor({
   actions,
   share,
@@ -85,6 +136,9 @@ export default function Editor({
     [history, setHistory] = useState(""),
     [busy, setBusy] = useState(false);
   const special = usesPluginEditor(note.path);
+  const panelId = useId();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const source = useRef(new TextFile("")),
     saved = useRef("");
@@ -153,7 +207,6 @@ export default function Editor({
     notify("已保存新版本");
   }
   const selection = useRef<[number, number]>([0, 0]);
-  const [links, setLinks] = useState<Hit[]>([]);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -242,6 +295,33 @@ export default function Editor({
         change={special ? undefined : setMode}
         markdown={note.format === "md"}
         busy={busy}
+        endAction={
+          <button
+            className="metadata-toggle"
+            title={
+              panelOpen
+                ? "收起笔记信息"
+                : "展开笔记信息（目录、属性与反向链接）"
+            }
+            aria-label="笔记信息"
+            aria-expanded={panelOpen}
+            aria-controls={panelId}
+            onClick={() => setPanelOpen((open) => !open)}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <rect x="2" y="3" width="16" height="14" rx="2" />
+              <path d="M11.5 3v14M14 7h2M14 10h2" />
+            </svg>
+          </button>
+        }
         share={{ label: "分享快照", run: share }}
         save={
           !special && (
@@ -319,104 +399,101 @@ export default function Editor({
           e.target.value = "";
         }}
       />
-      {special && bytes && (
-        <div hidden={mode === "history"}>
-          <PluginEditor
-            path={note.path}
-            bytes={bytes}
-            save={saveBytes}
-            output={browserExport}
-            dirty={dirty}
-            notify={notify}
-          />
-        </div>
-      )}
-      {mode === "history" ? (
-        <section>
-          <ul>
-            {versions.map((v) => (
-              <li key={v.version_id}>
-                <button
-                  onClick={() =>
-                    run(async () => {
-                      if (
-                        note.format === "xmind" ||
-                        (special && note.format !== "json")
-                      ) {
-                        await download(
-                          token,
-                          path + "/versions/" + v.version_id + "/content",
-                          title,
-                        );
-                        return;
-                      }
-                      setHistory(
-                        await (
-                          await request(
+      <div className="document-body note-workspace">
+        {special && bytes && (
+          <div className="note-aux-view" hidden={mode === "history"}>
+            <PluginEditor
+              path={note.path}
+              bytes={bytes}
+              save={saveBytes}
+              output={browserExport}
+              dirty={dirty}
+              notify={notify}
+            />
+          </div>
+        )}
+        {mode === "history" ? (
+          <section className="note-aux-view">
+            <ul>
+              {versions.map((v) => (
+                <li key={v.version_id}>
+                  <button
+                    onClick={() =>
+                      run(async () => {
+                        if (
+                          note.format === "xmind" ||
+                          (special && note.format !== "json")
+                        ) {
+                          await download(
                             token,
                             path + "/versions/" + v.version_id + "/content",
-                          )
-                        ).text(),
-                      );
-                    })
-                  }
-                >
-                  版本 {v.vault_revision} ·{" "}
-                  {new Date(v.created_at).toLocaleString()}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <pre>{history}</pre>
-        </section>
-      ) : special ? null : (
-        <div className="document-body" inert={!base || busy}>
-          <Document
-            attach={() => assetPicker.current?.click()}
-            markdown={note.format === "md"}
-            text={text}
-            edit={edit}
-            mode={mode as Mode}
-            setMode={setMode}
-            select={(a, b) => {
-              selection.current = [a, b];
-            }}
-            io={{
-              image: (src, alt) => (
-                <AssetImage src={src} alt={alt} token={token} origin={origin} />
-              ),
-              link: navigate,
-            }}
-          />
-        </div>
-      )}
-      <details
-        className="backlinks"
-        onToggle={(e) => {
-          if (e.currentTarget.open)
-            run(async () =>
-              setLinks(
-                await (
-                  await request(
-                    token,
-                    `/api/v1/vaults/${vault}/links/backlinks?file_id=${note.file_id}`,
-                  )
-                ).json(),
-              ),
-            );
-        }}
-      >
-        <summary>反向链接</summary>
-        {links.length ? (
-          links.map((f) => (
-            <button key={f.file_id} onClick={() => open(f.file_id)}>
-              {f.path}
-            </button>
-          ))
-        ) : (
-          <p>没有笔记链接到此处。</p>
+                            title,
+                          );
+                          return;
+                        }
+                        setHistory(
+                          await (
+                            await request(
+                              token,
+                              path + "/versions/" + v.version_id + "/content",
+                            )
+                          ).text(),
+                        );
+                      })
+                    }
+                  >
+                    版本 {v.vault_revision} ·{" "}
+                    {new Date(v.created_at).toLocaleString()}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <pre>{history}</pre>
+          </section>
+        ) : special ? null : (
+          <div className="note-content" inert={!base || busy}>
+            <Document
+              metadataHost={metadataHost}
+              attach={() => assetPicker.current?.click()}
+              markdown={note.format === "md"}
+              text={text}
+              edit={edit}
+              mode={mode as Mode}
+              setMode={setMode}
+              select={(a, b) => {
+                selection.current = [a, b];
+              }}
+              io={{
+                image: (src, alt) => (
+                  <AssetImage
+                    src={src}
+                    alt={alt}
+                    token={token}
+                    origin={origin}
+                  />
+                ),
+                link: navigate,
+              }}
+            />
+          </div>
         )}
-      </details>
+        <aside
+          className="metadata-panel"
+          id={panelId}
+          hidden={!panelOpen}
+          aria-label="笔记信息"
+        >
+          <div ref={setMetadataHost} />
+          {panelOpen && (
+            <Backlinks
+              token={token}
+              vault={vault}
+              fileId={note.file_id}
+              open={open}
+            />
+          )}
+        </aside>
+      </div>
     </article>
   );
 }
