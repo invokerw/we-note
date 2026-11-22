@@ -138,7 +138,7 @@ export function PluginEditor({
   const name = path.split("/").at(-1)!;
   return (
     <section
-      className="plugin-document"
+      className={id === "com.wenote.xmind" ? "plugin-document xmind-plugin-document" : "plugin-document"}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
           e.preventDefault();
@@ -149,43 +149,45 @@ export function PluginEditor({
       }}
     >
       <div inert={busy}>
-        <div className="toolbar">
-          {ready && caps.includes("serialize") && (
-            <button
-              className="primary"
-              disabled={!modified}
-              onClick={() => run(persist)}
-            >
-              保存
-            </button>
-          )}
-          {ready && caps.includes("export") && (
-            <button
-              onClick={() => run(async () => output(name, await encoded()))}
-            >
-              导出当前文件
-            </button>
-          )}
-          {book && (
-            <button
-              onClick={() =>
-                run(async () =>
-                  output(
-                    name.replace(/\.xmind$/i, ".md"),
-                    utf8.encode(asMarkdown(book.sheets[index])),
-                  ),
-                )
-              }
-            >
-              导出 Markdown
-            </button>
-          )}
-          {(!ready || !caps.includes("export")) && (
-            <button onClick={() => run(() => output(name, original.current))}>
-              下载原文件
-            </button>
-          )}
-        </div>
+        {id !== "com.wenote.xmind" && (
+          <div className="toolbar">
+            {ready && caps.includes("serialize") && (
+              <button
+                className="primary"
+                disabled={!modified}
+                onClick={() => run(persist)}
+              >
+                保存
+              </button>
+            )}
+            {ready && caps.includes("export") && (
+              <button
+                onClick={() => run(async () => output(name, await encoded()))}
+              >
+                导出当前文件
+              </button>
+            )}
+            {book && (
+              <button
+                onClick={() =>
+                  run(async () =>
+                    output(
+                      name.replace(/\.xmind$/i, ".md"),
+                      utf8.encode(asMarkdown(book.sheets[index])),
+                    ),
+                  )
+                }
+              >
+                导出 Markdown
+              </button>
+            )}
+            {(!ready || !caps.includes("export")) && (
+              <button onClick={() => run(() => output(name, original.current))}>
+                下载原文件
+              </button>
+            )}
+          </div>
+        )}
         {!plugin ? (
           <p>此格式的插件已禁用，可在「插件」中启用。</p>
         ) : error ? (

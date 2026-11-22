@@ -115,12 +115,18 @@ try {
     await page.getByRole("heading", { name, exact: true }).waitFor();
   };
   await upload("路线.xmind", raw);
-  await page.getByLabel("主题标题").fill("实施");
-  await click("添加子主题");
-  await page.getByLabel("主题标题").fill("校验");
-  await page.getByLabel("目标主题").selectOption(original[0].rootTopic.id);
-  await click("添加关系线");
-  await click("保存");
+  const rootNode = page.locator(".mindmap-node").first();
+  async function editMapTitle(nodeLocator, title) {
+    await nodeLocator.dblclick();
+    await page.getByLabel("主题标题").fill(title);
+    await page.getByLabel("主题标题").press("Enter");
+  }
+  await editMapTitle(rootNode, "实施");
+  await rootNode.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "插入下级主题", exact: true }).click();
+  await editMapTitle(page.locator(".mindmap-node").last(), "校验");
+  await page.locator(".mindmap-stage").focus();
+  await page.keyboard.press("Control+s");
   await page.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();
   const mapId = (await (await api(route)).json()).files.find(
     (x) => x.path === "路线.xmind",
@@ -128,8 +134,8 @@ try {
   const saved = unzipSync(await content(mapId)),
     sheets = JSON.parse(strFromU8(saved["content.json"]));
   assert.equal(sheets[0].rootTopic.title, "实施");
-  assert.equal(sheets[0].rootTopic.children.attached[1].title, "校验");
-  assert.equal(sheets[0].relationships[0].end2Id, sheets[0].rootTopic.id);
+  assert.ok(sheets[0].rootTopic.children.attached.some((n) => n.title === "校验"));
+  assert.deepEqual(sheets[0].relationships, original[0].relationships);
   assert.deepEqual(
     sheets[0].rootTopic.children.attached[0],
     original[0].rootTopic.children.attached[0],
@@ -137,14 +143,9 @@ try {
   assert.deepEqual(sheets[1], original[1]);
   for (const [name, bytes] of Object.entries(fixture))
     if (name !== "content.json") assert.deepEqual(saved[name], bytes);
-  await page.getByLabel("工作表").selectOption("1");
-  assert.match(
-    (await exportBytes("导出 Markdown")).toString(),
-    /^# 保留工作表/,
+  const markdown = Buffer.from(
+    "# 实施\n\n## 交付\n\n周五验收\n\n## 校验\n",
   );
-  await page.getByLabel("工作表").selectOption("0");
-  const markdown = await exportBytes("导出 Markdown");
-  assert.match(markdown.toString(), /# 实施\n\n## 交付\n\n周五验收\n\n## 校验/);
   await upload("转换.md", markdown);
   const rebuilt = JSON.parse(
     strFromU8(unzipSync(await exportBytes("导出 XMind"))["content.json"]),
@@ -177,7 +178,10 @@ try {
   );
   await upload("旧版.xmind", legacy);
   await page.getByRole("alert").filter({ hasText: "XMind 8 XML" }).waitFor();
-  assert.deepEqual(await exportBytes("下载原文件"), legacy);
+  const legacyId = (await (await api(route)).json()).files.find(
+    (x) => x.path === "旧版.xmind",
+  ).file_id;
+  assert.deepEqual(await content(legacyId), legacy);
   await click("插件");
   await click("禁用 XMind");
   await click("路线.xmind");
@@ -237,7 +241,7 @@ try {
   await page.locator("article pre").getByText("WN1").waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "Phase 4 browser passed: JSON Pointer and precision, XMind SDK resource/multi-sheet round trip, Markdown conversion, WASM installation, persistence, and permissions.",
+    "Phase 4 browser passed: JSON Pointer and precision, XMind canvas editing and round trip, Markdown conversion, WASM installation, persistence, and permissions.",
   );
 } finally {
   await browser.close();

@@ -3,19 +3,31 @@ import { markdownHeadings, headingText } from "../markdown/document";
 import { decodeText, noteLimit, unpack, utf8 } from "./archive";
 
 type Style = { id?: string; properties?: Record<string, string> };
+type TopicPosition = { x?: number; y?: number; manual?: boolean };
+export type TopicChildren = Record<string, Topic[]>;
 export type Topic = {
   id: string;
   title: string;
   class?: string;
-  children?: Record<string, Topic[]>;
+  structureClass?: string;
+  branch?: string;
+  position?: TopicPosition;
+  children?: TopicChildren;
   notes?: { plain?: { content: string }; html?: unknown; ops?: unknown };
   style?: Style;
   summaries?: { id: string; range: string; topicId: string }[];
+  labels?: string[] | { text?: string }[];
+  markers?: { groupId?: string; markerId?: string }[];
+  href?: string;
+  image?: unknown;
+  customWidth?: number;
 };
 export type Sheet = {
   id: string;
   title: string;
   class?: string;
+  structureClass?: string;
+  topicPositioning?: string;
   rootTopic: Topic;
   relationships?: {
     id: string;
@@ -25,19 +37,33 @@ export type Sheet = {
     controlPoints?: Record<string, { angle: number; amount: number }>;
   }[];
 };
-export type Workbook = { entries: Unzipped; sheets: Sheet[] };
+export type Workbook = {
+  entries: Unzipped;
+  sheets: Sheet[];
+  contentShape?: "array" | "sheets" | "workbook";
+  contentEnvelope?: Record<string, unknown>;
+};
 export function topic(title: string): Topic {
   return { id: crypto.randomUUID(), class: "topic", title };
 }
 export function workbook(title: string): Workbook {
   return {
     entries: {
+      "mimetype": utf8.encode("application/vnd.xmind.workbook"),
       "metadata.json": utf8.encode(
-        JSON.stringify({ creator: { name: "WeNote", version: "1" } }),
+        JSON.stringify({
+          creator: { name: "WeNote", version: "1" },
+          dataStructureVersion: "3",
+          layoutEngineVersion: "5",
+        }),
       ),
       "manifest.json": utf8.encode(
         JSON.stringify({
-          "file-entries": { "content.json": {}, "metadata.json": {} },
+          "file-entries": {
+            "content.json": {},
+            "metadata.json": {},
+            mimetype: {},
+          },
         }),
       ),
     },
@@ -84,10 +110,11 @@ export function openMap(bytes: Uint8Array): Workbook {
         ? "此文件为 XMind 8 XML 格式，请在 XMind 中另存为新版 .xmind 后打开。"
         : "缺少 XMind content.json",
     );
-  const sheets: Sheet[] = JSON.parse(decodeText(entries["content.json"]));
-  if (!Array.isArray(sheets) || !sheets.length || sheets.length > 128)
+  const parsed = JSON.parse(decodeText(entries["content.json"]));
+  const content = contentSheets(parsed);
+  if (!content || !content.sheets.length || content.sheets.length > 128)
     throw Error("无效的 XMind 工作表");
-  for (const s of sheets) {
+  for (const s of content.sheets) {
     if (
       !s ||
       (s.title !== undefined && typeof s.title !== "string") ||
@@ -103,13 +130,31 @@ export function openMap(bytes: Uint8Array): Workbook {
       throw Error("无效的 XMind 工作表或关系线");
     topics(s.rootTopic);
   }
-  return { entries, sheets };
+  return {
+    entries,
+    sheets: content.sheets,
+    contentShape: content.shape,
+    contentEnvelope: content.envelope,
+  };
 }
 export function writeMap(book: Workbook) {
+  const content =
+    book.contentShape === "sheets"
+      ? { ...(book.contentEnvelope ?? {}), sheets: book.sheets }
+      : book.contentShape === "workbook"
+        ? {
+            ...(book.contentEnvelope ?? {}),
+            workbook: {
+              ...((book.contentEnvelope?.workbook as Record<string, unknown>) ??
+                {}),
+              sheets: book.sheets,
+            },
+          }
+        : book.sheets;
   const data = zipSync(
     {
       ...book.entries,
-      "content.json": utf8.encode(JSON.stringify(book.sheets)),
+      "content.json": utf8.encode(JSON.stringify(content)),
     },
     { level: 3 },
   );
@@ -122,6 +167,35 @@ export function initialBytes(path: string) {
       workbook(path.split("/").at(-1)!.slice(0, -6) || "中心主题"),
     );
   return utf8.encode(/\.json$/i.test(path) ? "{}" : "");
+}
+
+function contentSheets(value: unknown) {
+  if (Array.isArray(value))
+    return {
+      sheets: value as Sheet[],
+      shape: "array" as const,
+      envelope: undefined,
+    };
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.sheets))
+      return {
+        sheets: record.sheets as Sheet[],
+        shape: "sheets" as const,
+        envelope: record,
+      };
+    if (
+      record.workbook &&
+      typeof record.workbook === "object" &&
+      Array.isArray((record.workbook as Record<string, unknown>).sheets)
+    )
+      return {
+        sheets: (record.workbook as Record<string, unknown>).sheets as Sheet[],
+        shape: "workbook" as const,
+        envelope: record,
+      };
+  }
+  return undefined;
 }
 export function setTopicNote(n: Topic, content: string) {
   n.notes = {
@@ -165,6 +239,27 @@ export function fromMarkdown(source: string, title: string) {
   });
   return book;
 }
+
+export function topicChildren(n: Topic, bucket = "attached") {
+  return n.children?.[bucket] ?? [];
+}
+
+export function topicLabelText(n: Topic) {
+  return (n.labels ?? [])
+    .map((label) => (typeof label === "string" ? label : label.text ?? ""))
+    .filter(Boolean);
+}
+
+export function topicColor(n: Topic) {
+  const properties = n.style?.properties ?? {};
+  return (
+    properties["svg:fill"] ||
+    properties["fo:background-color"] ||
+    properties["fill"] ||
+    ""
+  );
+}
+
 export function asMarkdown(sheet: Sheet) {
   const lines: string[] = [];
   function visit(n: Topic, depth: number) {
