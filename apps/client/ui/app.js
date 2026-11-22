@@ -46,7 +46,10 @@ async function initialize() {
     if (!localStorage.getItem("origin")) byId("origin").value = recent.origin;
   }
   if (!android) return;
+  document.documentElement.classList.add("android-client");
   byId("heading").textContent = "笔记同步";
+  byId("open-editor").textContent = "打开笔记";
+  byId("heading").after(byId("open-editor"));
   byId("folder-label").hidden = true;
   byId("root").required = false;
   byId("background-label").hidden = false;

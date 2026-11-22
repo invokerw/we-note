@@ -27,3 +27,18 @@
 #network {
   color: #8a4a22;
 }
+
+.android-client
+  .sync-entry
+  :is(button, select, summary, input:not([type="checkbox"])),
+.android-client .sync-entry :is(.checkbox, #background-label),
+.android-client .local-workspace button {
+  min-height: 48px;
+}
+.android-client #open-editor {
+  width: 100%;
+  background: #426bd0;
+  color: white;
+  border: 0;
+  margin: 0 0 12px;
+}

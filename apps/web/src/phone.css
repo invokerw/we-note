@@ -1,0 +1,266 @@
+.layout.android-phone {
+  display: flex;
+  flex-direction: column;
+  font-size: 16px;
+}
+.android-phone[data-pane] :is(.sidebar, .note-list-pane),
+.android-phone[data-pane] > .workspace {
+  display: none;
+}
+.android-phone[data-pane="nav"] .sidebar,
+.android-phone[data-pane="list"] .note-list-pane,
+.android-phone[data-pane="doc"] > .workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  border: 0;
+}
+.android-phone button,
+.android-phone .file-action,
+.phone-sheet button,
+body:has(.android-phone) .entry-dialog :is(button, input, select) {
+  min-height: 48px;
+}
+.phone-head {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: none;
+  min-height: 56px;
+  padding: 0 6px;
+  background: white;
+  color: #253451;
+}
+.phone-head h1 {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font:
+    600 18px/1.4 system-ui,
+    sans-serif;
+  letter-spacing: 0;
+}
+.phone-head button,
+.android-phone .list-search button,
+.phone-sheet header button {
+  display: grid;
+  place-items: center;
+  min-width: 48px;
+  padding: 0 8px;
+}
+.phone-library-head h1:first-child {
+  padding-left: 12px;
+}
+.phone-library-head h1 {
+  font-size: 22px;
+}
+.android-phone .list-search {
+  padding: 0 10px 8px 16px;
+  gap: 6px;
+}
+.android-phone .list-search input[type="search"] {
+  height: 48px;
+  font-size: 16px;
+  padding: 0 16px;
+  border-radius: 14px;
+}
+.android-phone .list-scroll {
+  padding: 0 12px;
+  overscroll-behavior: contain;
+}
+.android-phone .entry-row .entry {
+  min-height: 72px;
+  padding: 10px 56px 10px 8px;
+}
+.android-phone .entry > span {
+  font-size: 16px;
+  gap: 10px;
+}
+.android-phone .entry small {
+  margin-left: 28px;
+  font-size: 13px;
+}
+.android-phone .entry .file-icon {
+  width: 18px;
+  height: 21px;
+}
+.android-phone .entry-more {
+  opacity: 1;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 48px;
+  right: 0;
+}
+.android-phone .note-list-pane footer {
+  border: 0;
+  padding: 4px 20px;
+}
+.phone-tabs {
+  order: 2;
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 2px 8px;
+  border-top: 1px solid var(--line);
+  background: white;
+}
+.android-phone .phone-tabs button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.phone-tabs button[aria-current="page"] {
+  color: #345ec4;
+  font-weight: 650;
+}
+.phone-new i {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 28px;
+  border-radius: 10px;
+  background: #4978e5;
+  color: white;
+}
+.android-phone .sidebar {
+  padding: 0;
+  gap: 0;
+  background: #f6f7fa;
+}
+.android-phone .sections,
+.phone-library-actions,
+.android-phone .account {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 12px 16px 0;
+  padding: 0 8px;
+  background: white;
+  border: 0;
+  border-radius: 12px;
+}
+.android-phone
+  .sidebar
+  :is(.sections, .account, .phone-library-actions)
+  :is(button, label) {
+  text-align: start;
+  padding: 12px;
+  font-size: 16px;
+}
+.phone-document-head {
+  border-bottom: 1px solid var(--line);
+}
+.phone-document-head .phone-edit {
+  color: #345ec4;
+  font-weight: 650;
+}
+.android-phone .document {
+  min-height: 0;
+  flex: 1;
+}
+.android-phone .format-bar button {
+  flex: 0 0 48px;
+}
+.android-phone .reading {
+  font-size: 16px;
+  line-height: 1.8;
+}
+.android-phone .document-mode > .reading {
+  padding: 16px 20px;
+}
+.android-phone :is(.metadata, .backlinks) summary {
+  min-height: 48px;
+  align-content: center;
+}
+.android-phone .document-mode > .metadata,
+.android-phone .document > .backlinks {
+  padding-block: 0;
+}
+.phone-sheet {
+  position: fixed;
+  inset: auto 0 0;
+  margin: 0 auto;
+  width: min(100%, 560px);
+  max-width: 100%;
+  max-height: calc(100dvh - 16px);
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: white;
+  color: #283652;
+  padding: 8px 16px;
+  box-shadow: 0 -4px 24px #2638571c;
+}
+.phone-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+.phone-sheet::backdrop {
+  background: #15223766;
+}
+.phone-sheet header {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  flex: none;
+}
+.phone-sheet h2 {
+  margin: 0;
+  padding: 0 8px;
+  font:
+    600 18px/1.5 system-ui,
+    sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.phone-sheet h2:focus {
+  outline: none;
+}
+.phone-choices {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.phone-choices button {
+  display: block;
+  width: 100%;
+  text-align: start;
+  font-size: 16px;
+}
+.phone-choices button[aria-haspopup="menu"]::after {
+  content: "›";
+  float: right;
+  color: #738097;
+}
+.phone-choices button[aria-label="删除"] {
+  color: #ae3440;
+}
+.phone-choices.creation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 8px;
+}
+.phone-sheet .sheet-cancel {
+  flex: none;
+  margin-top: 4px;
+  border-top: 1px solid #e8ebf0;
+  color: #465473;
+}
+.android-phone
+  .document:has(.mode-edit, .mode-split, .mode-live)
+  :is(.metadata, .backlinks) {
+  display: none;
+}
+.android-phone .entry .folder-icon {
+  width: 18px;
+  height: 14px;
+}

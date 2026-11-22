@@ -217,6 +217,7 @@ export function Document({
   io,
   select,
   markdown = true,
+  focusSource = false,
   attach,
 }: {
   text: string;
@@ -226,6 +227,7 @@ export function Document({
   io: MarkdownIO;
   select: (a: number, b: number) => void;
   markdown?: boolean;
+  focusSource?: boolean;
   attach?: () => void;
 }) {
   const info = useMemo(() => inspect(markdown ? text : ""), [text, markdown]);
@@ -329,6 +331,7 @@ export function Document({
         <div className={mode === "split" ? "split-editor" : "source-editor"}>
           <Source
             editor={editor}
+            focus={focusSource}
             label="笔记源码"
             text={text}
             onChange={edit}

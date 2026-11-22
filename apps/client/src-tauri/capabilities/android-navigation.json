@@ -1,0 +1,10 @@
+{
+  "identifier": "android-navigation",
+  "description": "Handle the Android back button in the local notebook window.",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "permissions": [
+    "core:app:allow-register-listener",
+    "core:app:allow-remove-listener"
+  ]
+}

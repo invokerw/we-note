@@ -1,3 +1,4 @@
+import { PhoneSheet } from "./PhoneUI";
 import {
   useEffect,
   useLayoutEffect,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  entryName,
   formats,
   isFolder,
   containsEntry,
@@ -62,11 +64,13 @@ function MenuPanel({
 }
 export function EntryMenus({
   io,
+  phone = false,
   paths,
   children,
   onChange,
 }: {
   io?: EntryIO;
+  phone?: boolean;
   paths: string[];
   children: ReactNode;
   onChange: (src: string, dst: string) => void;
@@ -100,7 +104,11 @@ export function EntryMenus({
         ? row
         : row.querySelector<HTMLElement>(".folder-name,.entry")!;
     returnTo.current = trigger;
-    setSub(null);
+    setSub(
+      row.hasAttribute("data-phone-create")
+        ? { label: "新建", x: 0, y: 0, left: 0 }
+        : null,
+    );
     setMenu({ path: row.dataset.libraryPath!, trigger, x, y, background });
   }
   function rowOf(target: EventTarget | null) {
@@ -118,6 +126,11 @@ export function EntryMenus({
     menu.trigger
       .closest("[data-library-path]")
       ?.setAttribute("data-context", "true");
+    if (phone)
+      return () =>
+        menu.trigger
+          .closest("[data-library-path]")
+          ?.removeAttribute("data-context");
     document
       .querySelector<HTMLButtonElement>(".entry-menu button")
       ?.focus({ preventScroll: true });
@@ -145,7 +158,7 @@ export function EntryMenus({
       document.removeEventListener("scroll", outside, true);
       document.removeEventListener("keydown", escape);
     };
-  }, [menu]);
+  }, [menu, phone]);
   function action(label: string) {
     if (!menu || !io) return;
     setCommand({
@@ -199,7 +212,7 @@ export function EntryMenus({
         aria-haspopup={nested ? "menu" : undefined}
         aria-expanded={nested ? sub?.label === label : undefined}
         onPointerEnter={(e) => {
-          if (e.pointerType === "mouse") {
+          if (!phone && e.pointerType === "mouse") {
             if (nested) branch(label, e.currentTarget);
             else if (e.currentTarget.closest('[aria-label="项目操作"]'))
               setSub(null);
@@ -213,6 +226,15 @@ export function EntryMenus({
       </button>
     );
   }
+  const subItems =
+    sub?.label === "新建"
+      ? [
+          ...(Object.keys(formats) as Format[]),
+          "Word转笔记",
+          "上传文件",
+          "上传文件夹",
+        ]
+      : ["项目信息", ...(menu?.path ? ["复制路径"] : [])];
   return (
     <div
       className="entry-events"
@@ -259,7 +281,8 @@ export function EntryMenus({
       onPointerUp={cancelHold}
       onPointerCancel={cancelHold}
       onClickCapture={(e) => {
-        if (suppress.current && rowOf(e.target)) {
+        // Android may retarget the release click to a newly opened sheet.
+        if (suppress.current && (phone || rowOf(e.target)) && e.detail !== 0) {
           suppress.current = false;
           e.stopPropagation();
           e.preventDefault();
@@ -267,14 +290,59 @@ export function EntryMenus({
         }
         const el = e.target as Element;
         const row = rowOf(el);
-        if (row && el.closest(".entry-more")) {
+        if (row && el.closest(".entry-more,[data-phone-create]")) {
           e.stopPropagation();
           fromButton(row, el.closest("button")!);
         }
       }}
     >
       {children}
+      {menu && phone && (
+        <PhoneSheet
+          title={sub?.label || entryName(menu.path)}
+          close={() => close(true)}
+          back={
+            sub && !menu.trigger.hasAttribute("data-phone-create")
+              ? () => setSub(null)
+              : undefined
+          }
+        >
+          <div
+            className={
+              sub?.label === "新建"
+                ? "phone-choices creation-grid"
+                : "phone-choices"
+            }
+            role="menu"
+            aria-label={sub?.label || "项目操作"}
+          >
+            {sub ? (
+              subItems.map((label) => item(label))
+            ) : (
+              <>
+                {item("新建", true)}
+                {menu.path && !menu.background && (
+                  <>
+                    {item("重命名")}
+                    {item("移动到")}
+                    {item("复制")}
+                    {!isFolder(menu.path) && (
+                      <>
+                        {item("下载")}
+                        {item("导出为PDF")}
+                      </>
+                    )}
+                  </>
+                )}
+                {item("更多", true)}
+                {menu.path && !menu.background && item("删除")}
+              </>
+            )}
+          </div>
+        </PhoneSheet>
+      )}
       {menu &&
+        !phone &&
         createPortal(
           <>
             <MenuPanel label="项目操作" anchor={menu} onKeyDown={key}>
@@ -300,15 +368,7 @@ export function EntryMenus({
             </MenuPanel>
             {sub && (
               <MenuPanel label={sub.label} anchor={sub} child onKeyDown={key}>
-                {(sub.label === "新建"
-                  ? [
-                      ...(Object.keys(formats) as Format[]),
-                      "Word转笔记",
-                      "上传文件",
-                      "上传文件夹",
-                    ]
-                  : ["项目信息", ...(menu.path ? ["复制路径"] : [])]
-                ).map((label) => item(label))}
+                {subItems.map((label) => item(label))}
               </MenuPanel>
             )}
           </>,

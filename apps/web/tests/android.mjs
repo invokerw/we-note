@@ -100,6 +100,12 @@ try {
     path: "插件.txt",
     content: Buffer.from("WN1\n离线插件").toString("base64"),
   });
+  for (let i = 1; i <= 6; i++) {
+    await api(base + "/files", "POST", {
+      path: `资料/会议记录-${i}.md`,
+      content: Buffer.from("讨论记录").toString("base64"),
+    });
+  }
   adb("reverse", port, port);
   let page = await launch();
   console.log("Android login page loaded");
@@ -122,7 +128,7 @@ try {
   await page.getByLabel("恢复密钥", { exact: true }).fill(recovery);
   await button("解锁笔记库").click();
   assert.equal(await page.getByLabel("库名称").inputValue(), "Android 私有库");
-  await button("返回同步设置").click();
+  adb("shell", "input", "keyevent", "KEYCODE_BACK");
   await button("立即同步").click();
   await page
     .locator("#status")
@@ -138,23 +144,91 @@ try {
   adb("reverse", "--remove", port);
   adb("shell", "am", "force-stop", pkg);
   page = await launch();
-  await button("打开本地编辑器").click();
+  await button("打开笔记").click();
   const cdp = await page.context().newCDPSession(page);
+  async function tap(locator) {
+    await locator.click({ trial: true });
+    const rect = await locator.boundingBox();
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [
+        { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+      ],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  }
+  const systemBack = () => adb("shell", "input", "keyevent", "KEYCODE_BACK");
+  const dialog = page.getByRole("dialog");
+  const item = (name) => page.getByRole("menuitem", { name, exact: true });
+  await button("笔记库工具").waitFor();
+  const target = await button("原稿.md 的操作").boundingBox();
+  assert(target.width >= 48 && target.height >= 48);
+  const scroll = page.locator(".list-scroll");
+  const list = await scroll.boundingBox();
+  const start = { x: list.x + 40, y: list.y + list.height - 24 };
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [start],
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: start.x, y: start.y - 100 }],
+  });
+  await delay(600);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  assert(
+    await scroll.evaluate((el) => el.scrollTop > 0),
+    "Dragging scrolls the list",
+  );
+  assert.equal(await dialog.isVisible(), false);
+  await button("文件夹").click();
+  await page
+    .getByRole("heading", { name: "我的文件夹", exact: true })
+    .waitFor();
+  await tap(button("新建"));
+  await tap(item("文件夹"));
+  await dialog.getByLabel("名称").fill("手机目录");
+  await dialog.getByRole("button", { name: "创建", exact: true }).click();
+  await page.getByRole("heading", { name: "手机目录" }).waitFor();
+  systemBack();
+  await tap(button("手机目录 0 篇笔记"));
+  await tap(button("上一级目录"));
+  await tap(button("笔记"));
+  await tap(button("原稿.md 的操作"));
+  await tap(item("新建"));
+  systemBack();
+  await item("复制").waitFor();
+  systemBack();
+  await dialog.waitFor({ state: "hidden" });
   const row = button("原稿.md");
   await row.waitFor();
+  await row.scrollIntoViewIfNeeded();
   const box = await row.boundingBox();
   await cdp.send("Input.dispatchTouchEvent", {
     type: "touchStart",
     touchPoints: [{ x: box.x + 20, y: box.y + 12 }],
   });
-  const item = (name) => page.getByRole("menuitem", { name, exact: true });
+
   await item("复制").waitFor();
+  const bounds = await dialog.boundingBox();
+  assert(
+    Math.abs(
+      bounds.y + bounds.height - (await page.evaluate(() => innerHeight)),
+    ) < 2,
+    "Actions sit at the bottom edge",
+  );
   await cdp.send("Input.dispatchTouchEvent", {
     type: "touchEnd",
     touchPoints: [],
   });
   await item("复制").click();
-  const dialog = page.getByRole("dialog");
+
   await dialog.getByRole("button", { name: "确定", exact: true }).click();
   await button("原稿 副本.md").waitFor();
   await button("原稿 副本.md 的操作").click();
@@ -184,20 +258,43 @@ try {
   await item("删除").click();
   await dialog.getByRole("button", { name: "确认删除" }).click();
   await button("临时.md").waitFor({ state: "detached" });
-  await cdp.detach();
+
   console.log(
     "Android long press, offline copy/rename/delete and native print passed",
   );
   await button("原稿.md").click();
-  await button("编辑模式").click();
-  await button("源码").click();
+  await tap(button("更多操作"));
+  await tap(button("编辑模式"));
+  await dialog.getByRole("button", { name: "所见所得" }).waitFor();
+  systemBack();
+  await dialog.getByRole("button", { name: "编辑模式" }).waitFor();
+  systemBack();
+  const readingHeight = await page.evaluate(() => innerHeight);
+  await tap(button("编辑"));
+  await page.waitForFunction((h) => innerHeight < h - 80, readingHeight);
   await page.getByLabel("笔记源码").fill("手机离线编辑");
-  await button("保存").click();
+  systemBack();
+  await page.waitForFunction((h) => innerHeight >= h - 4, readingHeight);
+  await button("完成").waitFor();
+  await tap(button("返回笔记列表"));
+  await tap(button("原稿.md"));
+  assert.match(await page.getByLabel("笔记源码").innerText(), /手机离线编辑/);
+  await tap(button("完成"));
   await page.getByText("已保存到本地目录").waitFor();
   console.log("Offline restart and save passed");
   const pickLocal = async (p) => {
-    await button("列表").click();
+    if (await button("返回笔记列表").isVisible())
+      await tap(button("返回笔记列表"));
     await button(p).click();
+  };
+  const openTools = async () => {
+    if (await button("返回笔记库工具").isVisible())
+      await tap(button("返回笔记库工具"));
+    else {
+      if (await button("返回笔记列表").isVisible())
+        await tap(button("返回笔记列表"));
+      await tap(button("笔记库工具"));
+    }
   };
   await pickLocal(mapName);
   await page.getByLabel("主题标题").fill("手机离线导图");
@@ -249,7 +346,7 @@ try {
     await delay(200);
   }
   assert.match(exported, /# 手机离线导图/);
-  await button("目录").click();
+  await openTools();
   await button("插件").click();
   const sample = await pack(
     fileURLToPath(new URL("../plugin-sdk/example", import.meta.url)),
@@ -267,8 +364,8 @@ try {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, Buffer.from(sample).toString("base64"));
   await button("授权并安装").click();
-  await button("目录").click();
-  await button("笔记").click();
+  await openTools();
+  await tap(button("返回笔记列表"));
   await pickLocal("插件.txt");
   assert.equal(await page.getByLabel("插件文档").inputValue(), "离线插件");
   await page.getByLabel("插件文档").fill("离线保存成功");
@@ -289,7 +386,7 @@ try {
     await delay(150);
   }
   adb("shell", "input", "keyevent", "KEYCODE_BACK");
-  await button("目录").click();
+  await openTools();
   await button("返回同步").click();
   await api(base + "/files/" + note.file_id + "/content", "PUT", {
     base_version_id: note.version_id,
@@ -331,10 +428,9 @@ try {
     await (await api(base + "/files/" + note.file_id + "/content")).text(),
     "网页同时编辑",
   );
-  await button("打开本地编辑器").click();
+  await button("打开笔记").click();
   await button("原稿.md").click();
-  await button("编辑模式").click();
-  await button("源码").click();
+  await tap(button("编辑"));
   await page.getByLabel("笔记源码").evaluate((el) => {
     const data = new DataTransfer();
     data.items.add(
@@ -363,16 +459,16 @@ try {
     assets.find((a) => a.name === "手机附件.bin")?.content_size,
     (4 << 20) + 7,
   );
-  await button("保存").click();
+  await tap(button("完成"));
   await page.getByText("已保存到本地目录").waitFor();
-  await button("目录").click();
+  await openTools();
   await button("导出").click();
   await page.getByLabel("附件链接").selectOption("portable");
   await button("创建导出").click();
   const portableRow = page.locator(".row").filter({ hasText: "离线便携" });
   await portableRow.getByRole("button", { name: "下载 ZIP" }).click();
   await page.getByText(/已保存到 .*\.zip/).waitFor();
-  await button("目录").click();
+  await openTools();
   await button("返回同步").click();
   await button("退出账户").click();
   await button("登录").waitFor();
@@ -382,7 +478,7 @@ try {
   adb("reverse", "--remove", port);
   adb("shell", "am", "force-stop", pkg);
   page = await launch();
-  await button("打开本地编辑器").click();
+  await button("打开笔记").click();
   await button(conflict.path).click();
   await page.locator(".reading").getByText("手机离线编辑").waitFor();
   console.log(

@@ -1,5 +1,11 @@
+import { PhoneIcon, PhoneSheet } from "./PhoneUI";
 import { EntryMenus } from "./EntryMenu";
-import { isFolder, parentFolder, type EntryIO } from "./libraryEntries";
+import {
+  entryName,
+  isFolder,
+  parentFolder,
+  type EntryIO,
+} from "./libraryEntries";
 import {
   useEffect,
   useId,
@@ -112,7 +118,14 @@ export function NoteHeading({
   share,
   more,
   busy,
+  handset,
 }: {
+  handset?: {
+    back: () => void;
+    edit: () => void;
+    finish: () => void;
+    dirty: boolean;
+  };
   path: string;
   mode: string;
   change?: (mode: keyof typeof modeLabels) => void;
@@ -122,6 +135,71 @@ export function NoteHeading({
   more: ReactNode;
   busy: boolean;
 }) {
+  const [sheet, setSheet] = useState<"modes" | "more" | null>(null);
+  const modes = (
+    Object.entries(modeLabels) as [keyof typeof modeLabels, string][]
+  ).filter(([id]) => markdown || ["read", "edit"].includes(id));
+  if (handset)
+    return (
+      <header className="phone-head phone-document-head">
+        <button aria-label="返回笔记列表" onClick={handset.back}>
+          <PhoneIcon name="back" />
+        </button>
+        <h1 title={path}>{entryName(path)}</h1>
+        {change && (
+          <button
+            className="phone-edit"
+            disabled={busy}
+            onClick={() =>
+              mode === "read" && !handset.dirty
+                ? handset.edit()
+                : handset.finish()
+            }
+          >
+            {mode === "read" ? (handset.dirty ? "保存" : "编辑") : "完成"}
+          </button>
+        )}
+        {share && (
+          <button aria-label={share.label} onClick={share.run} disabled={busy}>
+            <PhoneIcon name="share" />
+          </button>
+        )}
+        {change && (
+          <button aria-label="更多操作" onClick={() => setSheet("more")}>
+            <PhoneIcon name="more" />
+          </button>
+        )}
+        {sheet && (
+          <PhoneSheet
+            title={sheet === "modes" ? "编辑模式" : "更多操作"}
+            close={() => setSheet(null)}
+            back={sheet === "modes" ? () => setSheet("more") : undefined}
+          >
+            <div className="phone-choices">
+              {sheet === "modes" ? (
+                modes.map(([id, label]) => (
+                  <button
+                    key={id}
+                    aria-pressed={mode === id}
+                    onClick={() => {
+                      change?.(id);
+                      setSheet(null);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))
+              ) : (
+                <>
+                  <button onClick={() => setSheet("modes")}>编辑模式</button>
+                  <div onClick={() => setSheet(null)}>{more}</div>
+                </>
+              )}
+            </div>
+          </PhoneSheet>
+        )}
+      </header>
+    );
   return (
     <header className="document-head">
       <h1 title={path}>{path.split("/").at(-1)}</h1>
@@ -132,18 +210,16 @@ export function NoteHeading({
             label="编辑模式"
             icon={<i className="mode-icon" aria-hidden="true" />}
           >
-            {(Object.entries(modeLabels) as [keyof typeof modeLabels, string][])
-              .filter(([id]) => markdown || ["read", "edit"].includes(id))
-              .map(([id, label]) => (
-                <button
-                  key={id}
-                  aria-pressed={mode === id}
-                  disabled={busy}
-                  onClick={() => change(id)}
-                >
-                  {label}
-                </button>
-              ))}
+            {modes.map(([id, label]) => (
+              <button
+                key={id}
+                aria-pressed={mode === id}
+                disabled={busy}
+                onClick={() => change(id)}
+              >
+                {label}
+              </button>
+            ))}
           </Popup>
         )}
         {share && (
@@ -176,14 +252,16 @@ export function NoteHeading({
 }
 
 export function usePanes() {
+  const [query, search] = useState("");
   const [folder, setFolder] = useState<string | null>(null),
     [pane, setPane] = useState<"nav" | "list" | "doc">("list"),
     [columns, setColumns] = useState(3);
   function browse(dir: string | null) {
+    search("");
     setFolder(dir);
     setPane("list");
   }
-  return { folder, browse, pane, setPane, columns, setColumns };
+  return { query, search, folder, browse, pane, setPane, columns, setColumns };
 }
 type Panes = ReturnType<typeof usePanes>;
 type Folder = { prefix: string; children: Map<string, Folder> };
@@ -253,7 +331,9 @@ export function LibraryPanes({
   entries,
   busy = false,
   libraryTitle,
+  phone = false,
 }: {
+  phone?: boolean;
   paths: string[];
   dates?: Map<string, string>;
   active: string;
@@ -269,8 +349,8 @@ export function LibraryPanes({
   libraryTitle: string;
 }) {
   const { folder, pane, columns, setPane, setColumns } = panes;
-  const [query, search] = useState(""),
-    [reverse, sort] = useState(false);
+  const { query, search } = panes;
+  const [reverse, sort] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const tree = useMemo(() => {
     const root: Folder = { prefix: "", children: new Map() };
@@ -287,10 +367,7 @@ export function LibraryPanes({
     }
     return root;
   }, [paths]);
-  const pickFolder = (p: string | null) => {
-    search("");
-    panes.browse(p);
-  };
+  const pickFolder = panes.browse;
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (
@@ -339,6 +416,7 @@ export function LibraryPanes({
   return (
     <EntryMenus
       paths={paths}
+      phone={phone}
       io={busy ? undefined : entries}
       onChange={(src, dst) => {
         if (!src) pickFolder(dst);
@@ -346,65 +424,133 @@ export function LibraryPanes({
           pickFolder(dst ? dst + folder.slice(src.length) : parentFolder(src));
       }}
     >
-      {columns < 3 && (
+      {!phone && columns < 3 && (
         <button className="restore-layout" onClick={() => setColumns(3)}>
           {columns === 1 ? "退出专注" : "展开目录"}
         </button>
       )}
-      <nav className="mobile-bar" aria-label="工作区面板">
-        {(
-          [
-            ["nav", "目录"],
-            ["list", "列表"],
-            ["doc", "正文"],
-          ] as const
-        ).map(([key, label]) => (
+      {!phone && (
+        <nav className="mobile-bar" aria-label="工作区面板">
+          {(
+            [
+              ["nav", "目录"],
+              ["list", "列表"],
+              ["doc", "正文"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              aria-pressed={pane === key}
+              onClick={() => setPane(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+      {phone && pane === "list" && (
+        <nav className="phone-tabs" aria-label="笔记库导航">
           <button
-            key={key}
-            aria-pressed={pane === key}
-            onClick={() => setPane(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-      <aside className="sidebar">
-        <Brand />
-        {vault}
-        {create}
-        <div className="side-files">
-          <button
-            className={"all-notes" + (folder === null ? " current" : "")}
+            aria-current={folder === null ? "page" : undefined}
             onClick={() => pickFolder(null)}
           >
-            ▦　全部笔记
+            <PhoneIcon name="notes" />
+            笔记
           </button>
-          <ul className="folders">
-            <FolderRows node={tree} active={folder} select={pickFolder} />
-          </ul>
-        </div>
+          <button
+            className="phone-new"
+            aria-label="新建"
+            data-phone-create
+            data-library-path={folder || ""}
+            disabled={busy}
+          >
+            <i>
+              <PhoneIcon name="new" />
+            </i>
+            新建
+          </button>
+          <button
+            aria-current={folder !== null ? "page" : undefined}
+            onClick={() => pickFolder("")}
+          >
+            <PhoneIcon name="folder" />
+            文件夹
+          </button>
+        </nav>
+      )}
+      <aside className="sidebar">
+        {phone ? (
+          <header className="phone-head">
+            <button aria-label="返回笔记列表" onClick={() => setPane("list")}>
+              <PhoneIcon name="back" />
+            </button>
+            <h1>笔记库工具</h1>
+          </header>
+        ) : (
+          <>
+            <Brand />
+            {vault}
+            {create}
+            <div className="side-files">
+              <button
+                className={"all-notes" + (folder === null ? " current" : "")}
+                onClick={() => pickFolder(null)}
+              >
+                ▦　全部笔记
+              </button>
+              <ul className="folders">
+                <FolderRows node={tree} active={folder} select={pickFolder} />
+              </ul>
+            </div>
+          </>
+        )}
         <nav className="sections" aria-label="笔记库工具">
           {tools}
         </nav>
+        {phone && <div className="phone-library-actions">{listActions}</div>}
         <div className="account">{account}</div>
-        <div className="layout-options" aria-label="面板布局">
-          {[3, 2, 1].map((n) => (
-            <button
-              key={n}
-              aria-label={["", "单栏布局", "双栏布局", "三栏布局"][n]}
-              title={["", "单栏布局", "双栏布局", "三栏布局"][n]}
-              aria-pressed={columns === n}
-              onClick={() => {
-                setColumns(n);
-                setPane("doc");
-              }}
-            >
-              <i data-cols={n} />
-            </button>
-          ))}
-        </div>
+        {!phone && (
+          <div className="layout-options" aria-label="面板布局">
+            {[3, 2, 1].map((n) => (
+              <button
+                key={n}
+                aria-label={["", "单栏布局", "双栏布局", "三栏布局"][n]}
+                title={["", "单栏布局", "双栏布局", "三栏布局"][n]}
+                aria-pressed={columns === n}
+                onClick={() => {
+                  setColumns(n);
+                  setPane("doc");
+                }}
+              >
+                <i data-cols={n} />
+              </button>
+            ))}
+          </div>
+        )}
       </aside>
       <section className="note-list-pane" aria-label="笔记列表">
+        {phone && (
+          <header className="phone-head phone-library-head">
+            {folder && (
+              <button
+                aria-label="上一级目录"
+                onClick={() => pickFolder(parentFolder(folder))}
+              >
+                <PhoneIcon name="back" />
+              </button>
+            )}
+            <h1>
+              {q
+                ? "搜索结果"
+                : folder === null
+                  ? "全部笔记"
+                  : entryName(folder)}
+            </h1>
+            <button aria-label="笔记库工具" onClick={() => setPane("nav")}>
+              <PhoneIcon name="tools" />
+            </button>
+          </header>
+        )}
         <div className="list-search">
           <input
             ref={input}
@@ -421,28 +567,30 @@ export function LibraryPanes({
             aria-pressed={reverse}
             onClick={() => sort(!reverse)}
           >
-            ⇅
+            {phone ? <PhoneIcon name="sort" /> : "⇅"}
           </button>
         </div>
-        <div className="list-title">
-          {folder !== null && !q && (
-            <button
-              aria-label="上一级目录"
-              onClick={() =>
-                pickFolder(folder ? folder.replace(/[^/]+\/$/, "") : null)
-              }
-            >
-              ‹
-            </button>
-          )}
-          <strong>
-            {q
-              ? "搜索结果"
-              : folder === null
-                ? "全部笔记"
-                : folder.split("/").at(-2) || "我的文件夹"}
-          </strong>
-        </div>
+        {!phone && (
+          <div className="list-title">
+            {folder !== null && !q && (
+              <button
+                aria-label="上一级目录"
+                onClick={() =>
+                  pickFolder(folder ? folder.replace(/[^/]+\/$/, "") : null)
+                }
+              >
+                ‹
+              </button>
+            )}
+            <strong>
+              {q
+                ? "搜索结果"
+                : folder === null
+                  ? "全部笔记"
+                  : folder.split("/").at(-2) || "我的文件夹"}
+            </strong>
+          </div>
+        )}
         <div
           className="list-scroll"
           data-library-path={folder || ""}
@@ -477,13 +625,20 @@ export function LibraryPanes({
                   </i>
                   {path.split("/").at(-1)}
                 </span>
-                <small>
-                  {dates?.get(path)?.slice(0, 10).replaceAll("-", ".") ||
-                    libraryTitle}
-                  {(q || folder === null) && path.includes("/")
-                    ? " · " + path.slice(0, path.lastIndexOf("/"))
-                    : ""}
-                </small>
+                {phone ? (
+                  (q || folder === null) &&
+                  parentFolder(path) && (
+                    <small>{parentFolder(path).slice(0, -1)}</small>
+                  )
+                ) : (
+                  <small>
+                    {dates?.get(path)?.slice(0, 10).replaceAll("-", ".") ||
+                      libraryTitle}
+                    {(q || folder === null) && path.includes("/")
+                      ? " · " + path.slice(0, path.lastIndexOf("/"))
+                      : ""}
+                  </small>
+                )}
               </button>
               {entries && <EntryMore name={path} />}
             </div>
@@ -495,7 +650,7 @@ export function LibraryPanes({
           )}
         </div>
         <footer>
-          总共 {directories.length + notes.length} 项{listActions}
+          总共 {directories.length + notes.length} 项{!phone && listActions}
         </footer>
       </section>
     </EntryMenus>

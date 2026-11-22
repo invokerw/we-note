@@ -7,14 +7,22 @@ import Manager from "./plugins/Manager";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
+import { boardStrokes } from "./markdown/Whiteboard";
 import { Document, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { Resources, type ResourceClient, type Hit } from "./Resources";
 import { multipart, multipartThreshold } from "./multipart";
 import { base64 } from "./api";
-import { containsEntry, entryPath, type EntryIO } from "./libraryEntries";
+import {
+  containsEntry,
+  entryPath,
+  parentFolder,
+  type EntryIO,
+} from "./libraryEntries";
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
+import { PhoneIcon, useAndroidPhone, useAndroidBack } from "./PhoneUI";
 import "./style.css";
+import "./phone.css";
 
 type Binding = {
   android?: boolean;
@@ -24,6 +32,11 @@ type Binding = {
 declare global {
   interface Window {
     __TAURI__: {
+      app: {
+        onBackButtonPress: (
+          listener: () => void,
+        ) => Promise<{ unregister: () => Promise<void> }>;
+      };
       core: { invoke: <T>(name: string, args: unknown) => Promise<T> };
     };
   }
@@ -80,6 +93,9 @@ function LocalImage({
     <span>{alt}</span>
   );
 }
+function writingMode(path: string, text: string): Mode {
+  return /\.md$/i.test(path) && boardStrokes(text) ? "live" : "edit";
+}
 function Workspace({
   binding,
   close,
@@ -100,6 +116,7 @@ function Workspace({
     [revisions],
   );
   const panes = usePanes();
+  const phone = useAndroidPhone(!!binding.android);
   const [view, setView] = useState("笔记"),
     [newPath, setNewPath] = useState<string | null>(null),
     [links, setLinks] = useState<Hit[]>([]);
@@ -112,6 +129,32 @@ function Workspace({
     dirty = pluginDirty || text !== saved,
     editing = mode === "live" || mode === "edit" || mode === "split";
   const leave = () => !dirty || confirm("放弃尚未保存的编辑？");
+  function back() {
+    if (busy) return;
+    if (newPath !== null) {
+      setNewPath(null);
+      panes.setPane("list");
+      return;
+    }
+    if (panes.pane === "doc") {
+      panes.setPane(view === "笔记" ? "list" : "nav");
+      return;
+    }
+    if (panes.pane === "nav") {
+      panes.setPane("list");
+      return;
+    }
+    if (panes.query) {
+      panes.search("");
+      return;
+    }
+    if (panes.folder !== null) {
+      panes.browse(panes.folder ? parentFolder(panes.folder) : null);
+      return;
+    }
+    if (leave()) close();
+  }
+  useAndroidBack(phone, back);
   const client = useMemo<ResourceClient>(
     () => ({
       json: async (route) =>
@@ -181,8 +224,9 @@ function Workspace({
       setBusy(false);
     }
   }
-  async function open(p: string, discardConfirmed = false) {
-    if (!discardConfirmed && p === path && view === "笔记") {
+  async function open(p: string, discardConfirmed = false, writing = false) {
+    if (!discardConfirmed && p === path && (phone || view === "笔记")) {
+      setView("笔记");
       panes.setPane("doc");
       return;
     }
@@ -204,7 +248,7 @@ function Workspace({
     setView("笔记");
     setLinks([]);
     selection.current = [0, 0];
-    setMode("read");
+    setMode(writing && !special ? writingMode(p, source.current.text) : "read");
     notify("");
   }
   const output: ExportFile = async (name, bytes) => {
@@ -251,14 +295,17 @@ function Workspace({
           setText("");
           setSaved("");
           setLinks([]);
-        } else await open(destination + path.slice(source.length), true);
+        } else {
+          await open(destination + path.slice(source.length), true);
+          if (phone) panes.setPane("list");
+        }
       }
     },
     refresh: load,
     output,
     image: (src, alt) => <LocalImage binding={binding} src={src} alt={alt} />,
     openCreated: async (p) => {
-      if (!dirty) await open(p, true);
+      if (!dirty) await open(p, true, phone);
     },
     print: async (name) => {
       if (binding.android)
@@ -360,7 +407,7 @@ function Workspace({
   }
   return (
     <div
-      className="layout local-layout"
+      className={"layout local-layout" + (phone ? " android-phone" : "")}
       data-pane={panes.pane}
       data-columns={panes.columns}
       onPasteCapture={(e) => {
@@ -389,6 +436,7 @@ function Workspace({
       }}
     >
       <LibraryPanes
+        phone={phone}
         paths={files}
         entries={entries}
         panes={panes}
@@ -413,30 +461,32 @@ function Workspace({
         tools={
           <>
             {" "}
-            {["笔记", "搜索", "附件", "导出", "插件"].map((v) => (
-              <button
-                key={v}
-                className={v === view ? "on" : ""}
-                aria-current={v === view ? "page" : undefined}
-                disabled={busy}
-                onClick={() => {
-                  if (
-                    (v === "笔记" && v === view && path) ||
-                    (v !== view && (pluginBytes || v === "插件"))
-                  ) {
-                    if (!leave()) return;
-                    choose("");
-                    setPluginBytes(null);
-                    setPluginDirty(false);
-                    setSaved(text);
-                  }
-                  setView(v);
-                  panes.setPane(v === "笔记" ? "list" : "doc");
-                }}
-              >
-                {v}
-              </button>
-            ))}
+            {["笔记", "搜索", "附件", "导出", "插件"]
+              .filter((v) => !phone || v !== "笔记")
+              .map((v) => (
+                <button
+                  key={v}
+                  className={v === view ? "on" : ""}
+                  aria-current={v === view ? "page" : undefined}
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      (v === "笔记" && v === view && path) ||
+                      (v !== view && (pluginBytes || v === "插件"))
+                    ) {
+                      if (!leave()) return;
+                      choose("");
+                      setPluginBytes(null);
+                      setPluginDirty(false);
+                      setSaved(text);
+                    }
+                    setView(v);
+                    panes.setPane(v === "笔记" ? "list" : "doc");
+                  }}
+                >
+                  {v}
+                </button>
+              ))}
           </>
         }
         account={
@@ -484,6 +534,14 @@ function Workspace({
         }
       />
       <main className="workspace">
+        {phone && view !== "笔记" && (
+          <header className="phone-head">
+            <button aria-label="返回笔记库工具" onClick={back}>
+              <PhoneIcon name="back" />
+            </button>
+            <h1>{view}</h1>
+          </header>
+        )}
         {newPath !== null && (
           <form
             className="new-path"
@@ -548,6 +606,20 @@ function Workspace({
             {path && (
               <>
                 <NoteHeading
+                  handset={
+                    phone
+                      ? {
+                          back,
+                          dirty,
+                          edit: () => setMode(writingMode(path, text)),
+                          finish: () =>
+                            run(async () => {
+                              if (text !== saved) await save();
+                              setMode("read");
+                            }),
+                        }
+                      : undefined
+                  }
                   path={path}
                   mode={mode}
                   change={pluginBytes ? undefined : setMode}
@@ -588,13 +660,15 @@ function Workspace({
                   }
                   more={
                     <>
-                      <button
-                        onClick={() =>
-                          panes.setColumns(panes.columns === 1 ? 3 : 1)
-                        }
-                      >
-                        {panes.columns === 1 ? "退出专注" : "专注模式"}
-                      </button>
+                      {!phone && (
+                        <button
+                          onClick={() =>
+                            panes.setColumns(panes.columns === 1 ? 3 : 1)
+                          }
+                        >
+                          {panes.columns === 1 ? "退出专注" : "专注模式"}
+                        </button>
+                      )}
                       {!pluginBytes && /\.md$/i.test(path) && (
                         <MarkdownExport
                           path={path}
@@ -631,6 +705,7 @@ function Workspace({
                     <div className="document-body" inert={busy}>
                       <Document
                         key={path}
+                        focusSource={phone && mode === "edit"}
                         attach={() => picker.current?.click()}
                         markdown={/\.md$/i.test(path)}
                         text={text}
@@ -699,6 +774,23 @@ function Workspace({
     </div>
   );
 }
+function EncryptedWorkspace({
+  android,
+  close,
+  children,
+}: {
+  android: boolean;
+  close: () => void;
+  children: React.ReactNode;
+}) {
+  useAndroidBack(android, close);
+  return (
+    <div className="local-workspace">
+      <button onClick={close}>返回同步设置</button>
+      {children}
+    </div>
+  );
+}
 const root = createRoot(document.getElementById("desktop-editor")!);
 window.addEventListener("open-notebook", (e) => {
   const binding = (e as CustomEvent<Binding>).detail,
@@ -744,17 +836,15 @@ window.addEventListener("open-encrypted", (event) => {
     }
   };
   root.render(
-    <div className="local-workspace">
-      <button
-        onClick={() => {
-          if (dirty && !confirm("放弃未保存的加密库编辑？")) return;
-          root.render(null);
-          settings.hidden = false;
-        }}
-      >
-        返回同步设置
-      </button>
+    <EncryptedWorkspace
+      android={!!android}
+      close={() => {
+        if (dirty && !confirm("放弃未保存的加密库编辑？")) return;
+        root.render(null);
+        settings.hidden = false;
+      }}
+    >
       <EncryptedVaults io={io} dirty={changed} exportFile={output} />
-    </div>,
+    </EncryptedWorkspace>,
   );
 });
