@@ -1378,15 +1378,53 @@ pre {
   padding: 16px 22px;
 }
 .workspace > .message {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  margin: 0;
-  background: #eef4ff;
-  padding: 6px 12px;
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 32px));
+  margin: 0;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid #d9e3f2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px #21335126;
+  color: #30496f;
+  animation: message-in 160ms ease-out;
+  overflow-wrap: anywhere;
+}
+.workspace > .message > button {
+  flex: none;
+  min-width: 24px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: #6d7c93;
+  line-height: 1;
+}
+.workspace > .message > button:hover {
+  background: #eef3fa;
+}
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 720px) {
+  .workspace > .message {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+  }
 }
 .file-action {
   position: relative;

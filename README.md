@@ -25,7 +25,17 @@ docker run -d --name wenote -p 127.0.0.1:8080:8080 \
 
 ## 启动网页和服务端
 
-在仓库根目录执行以下命令。Go 服务使用 SQLite，需要可用的 C 编译器。
+在装有 Python 3.8+、Node.js/npm、Go 和 C 编译器的 macOS 或 Linux 上，从仓库根目录执行：
+
+```sh
+./scripts/local.py start     # 构建网页和 API，在后台启动
+./scripts/local.py status    # 查看地址和进程号
+./scripts/local.py stop      # 停止服务，保留账户、笔记和附件
+```
+
+默认端口为 `8080`。如需换端口，停止服务后执行 `./scripts/local.py start --port 8081`。首次启动或前端依赖锁文件变化时会自动安装依赖；修改源码后，停止再启动即可测试新版本。数据沿用 `services/api/data/`，服务日志写入 `dist/local/server.log`。
+
+也可以从仓库根目录手动在前台启动：
 
 ```sh
 npm ci --prefix apps/web
@@ -34,7 +44,7 @@ cd services/api
 go run ./cmd/wenote-api -addr 127.0.0.1:8080 -web-dir ../../apps/web/dist
 ```
 
-在浏览器打开 `http://localhost:8080`，注册账户并用左侧的 `＋` 创建笔记库。点击「新建笔记」或「上传笔记」即可开始。文件路径可以包含目录，例如 `daily/周一.md`。源码编辑器可以插入附件。点击「分享快照」，填写另一个已注册账户的邮箱以及文件或目录路径。收件人在目标笔记库的「收件箱」确认导入。
+在浏览器打开启动地址（默认 `http://localhost:8080`），注册账户并用左侧的 `＋` 创建笔记库。点击「新建笔记」或「上传笔记」即可开始。文件路径可以包含目录，例如 `daily/周一.md`。源码编辑器可以插入附件。点击「分享快照」，填写另一个已注册账户的邮箱以及文件或目录路径。收件人在目标笔记库的「收件箱」确认导入。
 
 ## 编辑、查找和导出
 
