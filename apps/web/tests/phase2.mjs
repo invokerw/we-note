@@ -82,6 +82,10 @@ try {
   page.setDefaultTimeout(12000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("console", (m) => {
+    if (m.type() === "error" && /CodeMirror plugin crashed/.test(m.text()))
+      errors.push(m.text());
+  });
   await page.goto(origin);
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
@@ -190,70 +194,179 @@ try {
   assert.equal(await split.getByLabel("笔记源码").innerText(), "**分屏草稿**");
   await button("编辑模式").click();
   await button("所见所得").click();
-  const draft = page.locator(".live strong [data-text-start]");
-  const caret = await draft.evaluate((el) => {
-    const range = document.createRange();
-    range.setStart(el.firstChild, 2);
-    range.collapse(true);
-    const rect = range.getBoundingClientRect();
-    return { x: rect.x, y: rect.y + rect.height / 2 };
-  });
-  await page.mouse.click(caret.x, caret.y);
-  const currentBlock = page.getByLabel("当前段落源码");
+  const writing = page.getByRole("textbox", { name: "笔记正文" });
+  const keys = page.keyboard;
+  async function switchMode(name) {
+    await button("编辑模式").click();
+    await button(name).click();
+  }
+  async function checkSource(expected) {
+    await switchMode("源码");
+    const lines = page.getByLabel("笔记源码").locator(".cm-line");
+    assert.equal((await lines.allTextContents()).join("\n"), expected);
+    await switchMode("所见所得");
+  }
+  async function writeDraft(value) {
+    await writing.press("ControlOrMeta+a");
+    if (value) await keys.insertText(value);
+    else await keys.press("Backspace");
+  }
+  async function clickTextAt(locator, text, offset) {
+    const point = await locator.evaluate(
+      (el, { text, offset }) => {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const node = walker.currentNode,
+            index = node.textContent.indexOf(text);
+          if (index < 0) continue;
+          const r = document.createRange();
+          r.setStart(node, index + offset);
+          r.collapse(true);
+          const rect = r.getBoundingClientRect();
+          return { x: rect.x, y: rect.y + rect.height / 2 };
+        }
+        throw Error("Missing editable text: " + text);
+      },
+      { text, offset },
+    );
+    await page.mouse.click(point.x, point.y);
+  }
+  assert.equal(
+    await writing.evaluate((el) => el === document.activeElement),
+    true,
+  );
+  await clickTextAt(writing, "分屏草稿", 2);
   const ime = await page.context().newCDPSession(page);
-  await ime.send("Input.imeSetComposition", {
-    text: "zhong",
-    selectionStart: 5,
-    selectionEnd: 5,
-  });
+  for (const text of ["z", "zhong"])
+    await ime.send("Input.imeSetComposition", {
+      text,
+      selectionStart: text.length,
+      selectionEnd: text.length,
+    });
+  await writing.evaluate((el) =>
+    el.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        isComposing: true,
+        keyCode: 229,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
   await ime.send("Input.insertText", { text: "中" });
   await ime.detach();
-  await currentBlock.press("Escape");
-  assert.equal(await page.locator(".live strong").innerText(), "分屏中草稿");
-  await page.locator(".live strong").click();
-  await currentBlock.fill("行内撰写");
-  await currentBlock.press("ControlOrMeta+a");
-  await currentBlock.press("ControlOrMeta+b");
-  await currentBlock.locator(".live-strong").waitFor();
-  await currentBlock.press("ControlOrMeta+b");
-  assert.equal(await currentBlock.textContent(), "行内撰写");
-  await currentBlock.press("ControlOrMeta+b");
-  await currentBlock.locator(".live-strong").waitFor();
-  await currentBlock.press("ArrowRight");
-  await currentBlock.press("End");
-  await currentBlock.press("Enter");
-  await page.keyboard.insertText("接着写。");
-  await currentBlock.press("Escape");
-  await page
-    .locator(".live .reading strong")
-    .filter({ hasText: "行内撰写" })
-    .waitFor();
-  await page
-    .locator(".live .reading > p")
-    .filter({ hasText: "接着写。" })
-    .focus();
-  await page.keyboard.press("Enter");
-  await currentBlock.press("Home");
-  await currentBlock.press("ArrowUp");
-  await currentBlock.filter({ hasText: "行内撰写" }).waitFor();
-  await currentBlock.press("Escape");
+  await checkSource("**分屏中草稿**");
+
+  await writeDraft("清晨整理笔记");
+  await clickTextAt(writing, "清晨整理笔记", 2);
+  await keys.press("Enter");
+  await checkSource("清晨\n\n整理笔记");
+  await keys.press("Backspace");
+  await checkSource("清晨整理笔记");
+  await keys.press("ControlOrMeta+z");
+  await checkSource("清晨\n\n整理笔记");
+  await keys.press("ControlOrMeta+Shift+z");
+  await keys.press("Shift+Enter");
+  await checkSource("清晨  \n整理笔记");
+
+  await writeDraft("第一段\n\n第二段");
+  await clickTextAt(writing, "第一段", 3);
+  await keys.insertText("补记");
+  await clickTextAt(writing, "第二段", 2);
+  await keys.press("ControlOrMeta+z");
+  await checkSource("第一段\n\n第二段");
+  await clickTextAt(writing, "第一段", 1);
+  await keys.down("Shift");
+  await keys.press("ArrowDown");
+  await keys.up("Shift");
+  await keys.insertText("起");
+  await checkSource("第起二段");
+  await keys.press("ControlOrMeta+z");
+  await writing.press("ControlOrMeta+a");
+  await writing.evaluate((el) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "从剪贴板\r\n\r\n粘贴全文");
+    el.dispatchEvent(
+      new ClipboardEvent("paste", {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await checkSource("从剪贴板\n\n粘贴全文");
+  await keys.press("ControlOrMeta+z");
+  await checkSource("第一段\n\n第二段");
+
+  await writing.press("ControlOrMeta+a");
+  await keys.press("ControlOrMeta+b");
+  await checkSource("**第一段**\n\n**第二段**");
+  await keys.press("ControlOrMeta+b");
+  await checkSource("第一段\n\n第二段");
+  await writeDraft("");
+  await keys.press("ControlOrMeta+b");
+  await keys.insertText("行内撰写");
+  await keys.press("ControlOrMeta+b");
+  await keys.insertText("收尾");
+  await checkSource("**行内撰写**收尾");
+  await clickTextAt(writing, "行内撰写", 2);
+  await keys.press("Enter");
+  await checkSource("**行内**\n\n**撰写**收尾");
+  await writeDraft("写清楚");
+  await button("标题").click();
+  await checkSource("## 写清楚");
+  await writeDraft("- [x] 第一项");
+  await keys.press("Enter");
+  await keys.insertText("第二项");
+  await keys.press("Enter");
+  await keys.press("Enter");
+  await keys.insertText("正文");
+  await checkSource("- [x] 第一项\n- [ ] 第二项\n\n正文");
+  await writeDraft("1. 一");
+  await keys.press("Enter");
+  await keys.insertText("二");
+  await checkSource("1. 一\n2. 二");
+  await writeDraft("```js");
+  await keys.press("Enter");
+  await keys.insertText("let n = 1");
+  await keys.press("Enter");
+  await keys.insertText("n++");
+  await checkSource("```js\nlet n = 1\nn++\n```");
   await button("工作").first().click();
   page.once("dialog", (dialog) => dialog.accept());
   await button("目标.md").click();
   await button("路线.md").click();
   await button("编辑模式").click();
   await button("所见所得").click();
-  await page.getByText("保持原样。", { exact: true }).click();
-  await page.getByLabel("当前段落源码").fill("新的正文。");
+  await writing.locator(".live-preview table td").first().waitFor();
+  await writing.locator(".katex").waitFor();
+  await writing.locator(".callout").waitFor();
+  await writing.locator('img[alt="Mermaid 图表"]').waitFor();
+  await clickTextAt(writing.locator("table"), "子项", 1);
+  await keys.insertText("表");
+  await writing.getByText("保持原样。", { exact: true }).click();
+  assert.equal(
+    await writing.locator("table tbody td").first().innerText(),
+    "子表项",
+  );
+  await keys.press("ControlOrMeta+z");
+  await clickTextAt(writing, "保持原样。", 0);
+  for (let i = 0; i < "保持原样。".length; i++)
+    await keys.press("Shift+ArrowRight");
+  await keys.insertText("新的正文。");
   await button("更多操作").click();
   await button("专注模式").click();
   assert.equal(await page.locator(".sidebar").isVisible(), false);
   await button("退出专注").click();
-  assert.equal(await page.getByLabel("当前段落源码").innerText(), "新的正文。");
-  await button("完成段落").click();
+  await writing.getByText("新的正文。", { exact: true }).waitFor();
   await page.getByRole("checkbox", { name: "任务完成" }).click();
-  await button("保存").click();
+  await writing.press("ControlOrMeta+s");
   await page.getByText("已保存新版本").waitFor();
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute("aria-label") === "笔记正文",
+  );
   const bytes = Buffer.from(
     await (
       await api(base + "/files/" + first.file_id + "/content")
@@ -280,14 +393,11 @@ try {
     .getByRole("region", { name: "反向链接" })
     .getByRole("button", { name: "工作/路线.md" })
     .click();
-  await button("编辑模式").click();
-  await button("源码").click();
-  const source = page.getByLabel("笔记源码");
-  await source.click();
-  await source.press("Control+End");
+  await switchMode("所见所得");
+  await clickTextAt(writing, "新的正文。", "新的正文。".length);
   const png =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aQAAAABJRU5ErkJggg==";
-  await source.evaluate((el, b64) => {
+  await writing.evaluate((el, b64) => {
     const data = new DataTransfer();
     data.items.add(
       new File(
@@ -304,9 +414,16 @@ try {
       }),
     );
   }, png);
-  await page.waitForFunction(() =>
-    document.querySelector(".cm-content")?.textContent.includes("/assets/"),
+  await writing.locator('img[alt="剪贴板.png"]').waitFor();
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute("aria-label") === "笔记正文",
   );
+  await keys.insertText("图注");
+  await switchMode("源码");
+  const withImage = (
+    await page.getByLabel("笔记源码").locator(".cm-line").allTextContents()
+  ).join("\n");
+  assert.match(withImage, /新的正文。\n!\[剪贴板.png\]\([^)]+\)\n图注/);
   await button("保存").click();
   await page.getByText("已保存新版本").waitFor();
   await button("附件").click();

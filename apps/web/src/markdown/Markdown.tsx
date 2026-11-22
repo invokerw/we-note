@@ -1,13 +1,13 @@
 import { createPortal } from "react-dom";
 import { boardText, boardStrokes, Whiteboard } from "./Whiteboard";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import SplitEditor from "./SplitEditor";
-import { inspect, type Branch } from "./document";
+import { inspect, taskCheckChange, type Branch } from "./document";
 import HeadingEditor from "./HeadingEditor";
 import Source from "./Source";
-import { syntaxTree } from "@codemirror/language";
-import type { EditorView } from "@codemirror/view";
-import { MarkdownView, type MarkdownIO, sourceOffset } from "./MarkdownView";
+import { formatSelection } from "./format";
+import { EditorView } from "@codemirror/view";
+import { MarkdownView, type MarkdownIO } from "./MarkdownView";
 export { MarkdownView, type MarkdownIO } from "./MarkdownView";
 
 function Branches({
@@ -61,7 +61,7 @@ export function Document({
   mode,
   setMode,
   io,
-  select,
+  editor,
   markdown = true,
   focusSource = false,
   metadataHost,
@@ -72,23 +72,18 @@ export function Document({
   mode: Mode;
   setMode: (m: Mode) => void;
   io: MarkdownIO;
-  select: (a: number, b: number) => void;
+  editor: RefObject<EditorView | null>;
   markdown?: boolean;
   focusSource?: boolean;
   metadataHost?: HTMLElement | null;
   attach?: () => void;
 }) {
-  const info = useMemo(() => inspect(markdown ? text : ""), [text, markdown]);
-  const [block, setBlock] = useState<{
-    start: number;
-    tail: number;
-    caret: number;
-    original: string;
-  } | null>(null);
+  const metadataText =
+    markdown && (mode === "map" || metadataHost !== null) ? text : "";
+  const info = useMemo(() => inspect(metadataText), [metadataText]);
   const root = useRef<HTMLDivElement>(null);
   const jumpOffset = useRef<number | null>(null);
   useEffect(() => {
-    if (mode !== "live") setBlock(null);
     if (mode === "read" && jumpOffset.current !== null) {
       root.current
         ?.querySelector(`[data-block-start="${jumpOffset.current}"]`)
@@ -97,6 +92,15 @@ export function Document({
     }
   }, [mode]);
   function jump(n: Branch) {
+    const cm = editor.current;
+    if (cm) {
+      cm.dispatch({
+        selection: { anchor: n.offset },
+        effects: EditorView.scrollIntoView(n.offset, { y: "center" }),
+      });
+      cm.focus();
+      return;
+    }
     if (mode === "read")
       root.current
         ?.querySelector(`[data-block-start="${n.offset}"]`)
@@ -106,156 +110,26 @@ export function Document({
       setMode("read");
     }
   }
-  function activate(start: number, end: number, caret = 0) {
-    const pos = Math.min(Math.max(caret, 0), end - start);
-    select(start + pos, start + pos);
-    setBlock({
-      start,
-      tail: text.length - end,
-      caret: pos,
-      original: text.slice(start, end),
-    });
-  }
   const toggle = (offset: number) => {
-    const body = text.slice(offset);
-    const m = body.match(/^(?:[-+*]|\d+[.)])\s+\[([ xX])\]/);
-    if (m) {
-      const at = offset + m[0].length - 2;
-      edit(text.slice(0, at) + (m[1] === " " ? "x" : " ") + text.slice(at + 1));
-    }
+    const change = taskCheckChange(text, offset);
+    if (change)
+      edit(text.slice(0, change.from) + change.insert + text.slice(change.to));
   };
-  const editor = useRef<EditorView | null>(null);
   function format(before: string, after: string, sample: string) {
     const cm = editor.current;
-    if (!cm) {
-      const start = text.length + (text ? 2 : 0);
-      edit(text + (text ? "\n\n" : "") + before + sample + after);
-      setBlock({
-        start,
-        tail: 0,
-        original: "",
-        caret: before.length + sample.length,
-      });
-      return;
-    }
-    const range = cm.state.selection.main;
-    const inlineNode = {
-      "**": "StrongEmphasis",
-      "*": "Emphasis",
-      "~~": "Strikethrough",
-      "`": "InlineCode",
-    }[before];
-    if (inlineNode) {
-      let node = syntaxTree(cm.state).resolveInner(range.from, 1);
-      while (node.parent && node.name !== inlineNode) node = node.parent;
-      const first = node.firstChild,
-        last = node.lastChild;
-      if (
-        node.name === inlineNode &&
-        first &&
-        last &&
-        first !== last &&
-        (range.empty || (range.from === first.to && range.to === last.from))
-      ) {
-        cm.dispatch({
-          changes: [
-            { from: first.from, to: first.to },
-            { from: last.from, to: last.to },
-          ],
-          userEvent: "input.format",
-        });
-        cm.focus();
-        return;
-      }
-    }
-    const value = cm.state.sliceDoc(range.from, range.to) || sample;
-    const prefix =
-      ["## ", "> ", "- ", "- [ ] "].includes(before) &&
-      range.from > cm.state.doc.lineAt(range.from).from
-        ? "\n" + before
-        : before;
-    const anchor = range.from + prefix.length;
-    cm.dispatch({
-      changes: {
-        from: range.from,
-        to: range.to,
-        insert: prefix + value + after,
-      },
-      selection: { anchor, head: anchor + value.length },
-    });
-    cm.focus();
+    if (cm && !cm.composing) formatSelection(cm, before, after, sample);
   }
-  const bounds =
-    mode === "live"
-      ? (block ?? (text ? null : { start: 0, tail: 0, caret: 0, original: "" }))
-      : null;
   const sourcePane = (
     <Source
       editor={editor}
-      focus={focusSource}
-      label="笔记源码"
+      focus={mode === "live" || focusSource}
+      live={mode === "live"}
+      io={io}
+      label={mode === "live" ? "笔记正文" : "笔记源码"}
       text={text}
       onChange={edit}
-      onSelect={select}
     />
   );
-  function finishBlock() {
-    setBlock(null);
-    requestAnimationFrame(() =>
-      root.current
-        ?.querySelector<HTMLElement>(`[data-block-start="${bounds?.start}"]`)
-        ?.focus({ preventScroll: true }),
-    );
-  }
-  function liveKey(event: KeyboardEvent, cm: EditorView) {
-    if (!bounds) return false;
-    if (
-      event.key === "Escape" ||
-      (event.key === "Enter" && (event.ctrlKey || event.metaKey))
-    ) {
-      finishBlock();
-      return true;
-    }
-    const range = cm.state.selection.main,
-      length = cm.state.doc.length;
-    if (
-      !range.empty ||
-      event.shiftKey ||
-      event.altKey ||
-      event.metaKey ||
-      event.ctrlKey
-    )
-      return false;
-    const end = text.length - bounds.tail;
-    const type = syntaxTree(cm.state).topNode.lastChild?.name ?? "";
-    if (
-      event.key === "Enter" &&
-      range.head === length &&
-      /^(Paragraph|ATXHeading[1-6]|SetextHeading[12])$/.test(type)
-    ) {
-      cm.dispatch(cm.state.replaceSelection("\n\n"), {
-        scrollIntoView: true,
-        userEvent: "input",
-      });
-      return true;
-    }
-    const up = event.key === "ArrowUp" && range.head === 0;
-    const down = event.key === "ArrowDown" && range.head === length;
-    if (up || down) {
-      const active = cm.dom.closest(".live-block");
-      const next = (
-        up ? active?.previousElementSibling : active?.nextElementSibling
-      ) as HTMLElement | null;
-      if (next?.hasAttribute("data-block-start")) {
-        const slot = { start: bounds.start, end, original: bounds.original };
-        const a = sourceOffset(Number(next.dataset.blockStart), slot),
-          b = sourceOffset(Number(next.dataset.blockEnd), slot);
-        activate(a, b, up ? b - a : 0);
-        return true;
-      }
-    }
-    return false;
-  }
   const strokes = markdown ? boardStrokes(text) : null;
   if (strokes && (mode === "live" || mode === "read"))
     return (
@@ -291,6 +165,8 @@ export function Document({
         if (
           !markdown ||
           !editor.current?.hasFocus ||
+          editor.current.composing ||
+          e.nativeEvent.isComposing ||
           !(e.ctrlKey || e.metaKey) ||
           e.shiftKey ||
           e.altKey
@@ -330,8 +206,12 @@ export function Document({
           )}
         </nav>
       )}
-      {mode === "split" || mode === "edit" ? (
-        <SplitEditor editor={editor} source={sourcePane}>
+      {mode === "split" || mode === "edit" || mode === "live" ? (
+        <SplitEditor
+          editor={editor}
+          source={sourcePane}
+          label={mode === "live" ? "正文编辑区" : "源码栏"}
+        >
           {mode === "split" && (
             <MarkdownView text={text} io={io} toggle={toggle} />
           )}
@@ -347,79 +227,6 @@ export function Document({
             )}
           </nav>
         </>
-      ) : mode === "live" ? (
-        <div className="live">
-          <MarkdownView
-            text={text}
-            io={io}
-            activate={activate}
-            toggle={toggle}
-            slot={
-              bounds
-                ? {
-                    start: bounds.start,
-                    end: text.length - bounds.tail,
-                    original: bounds.original,
-                    content: (
-                      <div className="live-block">
-                        <Source
-                          key={bounds.start}
-                          editor={editor}
-                          label="当前段落源码"
-                          focus
-                          inline={{ caret: bounds.caret, keyDown: liveKey }}
-                          text={text.slice(
-                            bounds.start,
-                            text.length - bounds.tail,
-                          )}
-                          onSelect={(a, b) =>
-                            select(bounds.start + a, bounds.start + b)
-                          }
-                          onChange={(s) => {
-                            if (!block) setBlock(bounds);
-                            edit(
-                              text.slice(0, bounds.start) +
-                                s +
-                                text.slice(text.length - bounds.tail),
-                            );
-                          }}
-                        />
-                        <button
-                          className="finish-block"
-                          title="完成段落 (Esc)"
-                          aria-label="完成段落"
-                          onClick={finishBlock}
-                        >
-                          ✓
-                        </button>
-                      </div>
-                    ),
-                  }
-                : undefined
-            }
-          />
-          <button
-            className="add-paragraph"
-            onClick={() => {
-              const prefix =
-                !text || text.endsWith("\n\n")
-                  ? ""
-                  : text.endsWith("\n")
-                    ? "\n"
-                    : "\n\n";
-              edit(text + prefix);
-              select(text.length + prefix.length, text.length + prefix.length);
-              setBlock({
-                start: text.length + prefix.length,
-                tail: 0,
-                original: "",
-                caret: 0,
-              });
-            }}
-          >
-            添加段落
-          </button>
-        </div>
       ) : markdown ? (
         <MarkdownView text={text} io={io} />
       ) : (

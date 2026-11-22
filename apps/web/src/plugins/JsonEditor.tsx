@@ -107,13 +107,7 @@ export function JsonEditor({
           压缩
         </button>
       </div>
-      <Source
-        label="JSON 源码"
-        language="json"
-        text={text}
-        onChange={edit}
-        onSelect={() => {}}
-      />
+      <Source label="JSON 源码" language="json" text={text} onChange={edit} />
       {parsed.error && <p role="alert">{parsed.error}</p>}
       <fieldset disabled={!parsed.root}>
         <legend>按 JSON Pointer 编辑</legend>

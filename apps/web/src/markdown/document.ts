@@ -10,6 +10,15 @@ import type { Root, PhrasingContent } from "mdast";
 
 export const extensions = [frontmatter, gfm, math];
 const parser = unified().use(remarkParse).use(extensions);
+export function parseMarkdown(source: string) {
+  return parser.parse(source);
+}
+export function taskCheckChange(source: string, offset: number) {
+  const match = /^(?:[-+*]|\d+[.)])\s+\[([ xX])\]/.exec(source.slice(offset));
+  if (!match) return;
+  const from = offset + match[0].length - 2;
+  return { from, to: from + 1, insert: match[1] === " " ? "x" : " " };
+}
 export type Branch = {
   title: string;
   level: number;

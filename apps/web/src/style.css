@@ -1029,7 +1029,6 @@ pre {
   text-decoration: line-through;
 }
 .document-mode > .reading,
-.document-mode > .live,
 .document-mode > pre {
   max-width: 960px;
   margin: 0 auto;
@@ -1041,12 +1040,13 @@ pre {
   align-items: center;
   font-size: 13px;
 }
-.document-mode > :is(.reading, .live) {
+.document-mode > .reading {
   width: 100%;
   max-width: 52rem;
   padding: clamp(20px, 4vw, 48px) clamp(18px, 4vw, 54px);
 }
-.reading {
+.reading,
+.mode-live .source .cm-editor {
   font:
     16px/1.8 Inter,
     system-ui,
@@ -1058,7 +1058,7 @@ pre {
   min-width: 0;
 }
 .reading :is(h1, h2, h3, h4, h5, h6),
-.live-block .cm-line[class*="live-h"] {
+.mode-live .cm-line[class*="live-h"] {
   font-family: inherit;
   color: #1d2e45;
   font-weight: 650;
@@ -1162,74 +1162,90 @@ pre {
   overflow-y: hidden;
   padding-block: 0.2em;
 }
-.live .reading > [data-block-start] {
-  cursor: text;
-  scroll-margin-block: 4rem;
-}
-.live-block {
-  position: relative;
-  margin: 0.8em 0;
-}
-.live-block .source {
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
-}
-.live-block .cm-editor {
-  font: inherit;
-  color: inherit;
-}
-.live-block .cm-editor.cm-focused {
+.mode-live .cm-editor.cm-focused {
   outline: none;
 }
-.live-block .cm-scroller {
-  font-family: inherit;
-  line-height: inherit;
+.mode-live .cm-scroller {
+  font: inherit;
+  overflow: auto;
 }
-.live-block .cm-content {
-  min-height: 1.8em;
-  padding: 0;
+.mode-live .cm-content {
+  width: 100%;
+  max-width: 52rem;
+  min-height: 100%;
+  margin-inline: auto;
+  padding: clamp(20px, 4vw, 48px) clamp(18px, 4vw, 54px) 5rem;
   caret-color: var(--accent);
 }
-.live-block .cm-line {
+.mode-live .cm-line {
   padding: 0;
 }
-.live-block .cm-line span {
+.mode-live .cm-line.live-blank {
+  line-height: 0.85em;
+}
+.mode-live .cm-line span {
   color: inherit;
 }
-.live-block .live-strong {
+.mode-live .cm-line .live-strong {
   font-weight: 700;
 }
-.live-block .live-em {
+.mode-live .cm-line .live-em {
   font-style: italic;
 }
-.live-block .live-strike {
+.mode-live .cm-line .live-strike {
   text-decoration: line-through;
 }
-.live-block .cm-line.live-quote {
+.mode-live .cm-line.live-quote {
   border-inline-start: 3px solid #b3c5dc;
   padding-inline-start: 0.8em;
   color: #516079;
+  background: #f6f8fb;
 }
-.live-block .cm-line .live-link {
+.mode-live .cm-line.live-fence {
+  background: #f1f4f7;
+  padding-inline: 0.65em;
+  font:
+    0.92em/1.65 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+}
+.mode-live .cm-line .live-link {
   color: #345fae;
   text-decoration: underline;
 }
-.live-block .cm-line .live-marker {
+.mode-live .cm-line .live-marker {
   color: #78899d;
   font-weight: normal;
 }
-.finish-block {
-  position: absolute;
-  inset: 0 auto auto 100%;
-  font-size: 12px;
-  padding: 3px;
-  color: var(--accent);
+.mode-live .cm-line .live-bullet {
+  color: transparent;
+  position: relative;
 }
-.add-paragraph {
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: 0.5em;
+.live-bullet::before {
+  content: "•";
+  position: absolute;
+  color: #516079;
+}
+.live-task {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.live-preview {
+  cursor: text;
+  white-space: normal;
+}
+.live-preview .reading > :first-child {
+  margin-top: 0;
+}
+.live-preview .reading > :last-child {
+  margin-bottom: 0;
+}
+.live-preview .reading a {
+  color: #345fae;
 }
 .document-mode > .metadata,
 .document > .backlinks {
@@ -1249,6 +1265,7 @@ pre {
 }
 .document-mode.mode-read,
 .document-mode.mode-edit,
+.document-mode.mode-live,
 .document-mode.mode-split {
   display: flex;
   flex-direction: column;
@@ -1257,6 +1274,7 @@ pre {
   width: 100%;
   flex: none;
 }
+.mode-live .format-bar,
 .mode-split .format-bar,
 .mode-edit .format-bar {
   flex: none;
@@ -1447,7 +1465,7 @@ pre {
     min-height: 44px;
   }
   .document-mode > .reading,
-  .document-mode > .live {
+  .mode-live .cm-content {
     padding: 12px 18px;
   }
   .split-pane > header {

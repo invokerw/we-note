@@ -1,81 +1,130 @@
-import { useEffect, useRef, type RefObject } from "react";
-import { EditorView, placeholder } from "@codemirror/view";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import {
+  drawSelection,
+  EditorView,
+  highlightSpecialChars,
+  keymap,
+  placeholder,
+} from "@codemirror/view";
 import { json } from "@codemirror/lang-json";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { basicSetup, minimalSetup } from "codemirror";
-import { Prec } from "@codemirror/state";
+import { basicSetup } from "codemirror";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { Compartment, Prec } from "@codemirror/state";
 import { liveStyle } from "./liveStyle";
+import { liveKeys } from "./liveCommands";
+import { livePreview } from "./livePreview";
+import type { MarkdownIO } from "./MarkdownView";
+import { changedRange } from "./textFile";
+
+// Saving and uploading temporarily make the document inert. Restore its caret
+// after React unlocks it, unless the user has focused something else.
+export function resumeWriting(
+  view: EditorView,
+  trigger: Element | null = view.contentDOM,
+) {
+  requestAnimationFrame(() => {
+    const active = view.root.activeElement;
+    if (
+      view.dom.isConnected &&
+      (active === trigger || active === document.body)
+    )
+      view.focus();
+  });
+}
+
+export function captureInsertion(view: EditorView | null) {
+  if (!view) return;
+  const { doc, selection } = view.state,
+    trigger = view.root.activeElement;
+  return (text: string) => {
+    if (!view.dom.isConnected) return false;
+    const { from, to } = (
+      view.state.doc === doc ? selection : view.state.selection
+    ).main;
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + text.length },
+      userEvent: "input.paste",
+      scrollIntoView: true,
+    });
+    resumeWriting(view, trigger);
+    return true;
+  };
+}
 
 export default function Source({
   text,
   onChange,
-  onSelect,
   label,
   focus = false,
   language = "markdown",
   editor,
-  inline,
+  live = false,
+  io,
 }: {
   text: string;
   onChange: (v: string) => void;
-  onSelect: (start: number, end: number) => void;
   label: string;
   focus?: boolean;
   language?: "markdown" | "json";
   editor?: RefObject<EditorView | null>;
-  inline?: {
-    caret: number;
-    keyDown: (event: KeyboardEvent, view: EditorView) => boolean;
-  };
+  live?: boolean;
+  io?: MarkdownIO;
 }) {
   const host = useRef<HTMLDivElement>(null),
-    view = useRef<EditorView | null>(null),
-    props = useRef({ onChange, onSelect, inline });
-  props.current = { onChange, onSelect, inline };
+    view = useRef<EditorView | null>(null);
+  const synced = useRef(text);
+  const props = useRef({ onChange, io });
+  props.current = { onChange, io };
+  const compartment = useMemo(() => new Compartment(), []);
+  const setup = useMemo(
+    () => [
+      live
+        ? [
+            history(),
+            keymap.of([...defaultKeymap, ...historyKeymap]),
+            drawSelection(),
+            highlightSpecialChars(),
+            liveStyle,
+            livePreview({
+              get image() {
+                return props.current.io?.image;
+              },
+              get link() {
+                return props.current.io?.link;
+              },
+            }),
+            Prec.highest(liveKeys),
+            placeholder("开始写作…"),
+          ]
+        : basicSetup,
+      EditorView.contentAttributes.of({
+        "aria-label": label,
+        role: "textbox",
+        "aria-multiline": "true",
+      }),
+    ],
+    [live, label],
+  );
   useEffect(() => {
     const cm = new EditorView({
       parent: host.current!,
       doc: text,
-      selection: { anchor: Math.min(inline?.caret ?? 0, text.length) },
       extensions: [
-        inline
-          ? [
-              minimalSetup,
-              liveStyle,
-              placeholder("开始写作…"),
-              Prec.highest(
-                EditorView.domEventHandlers({
-                  keydown: (e, view) =>
-                    !e.isComposing &&
-                    !view.composing &&
-                    (props.current.inline?.keyDown(e, view) ?? false),
-                }),
-              ),
-            ]
-          : basicSetup,
+        compartment.of(setup),
         language === "json" ? json() : markdown({ base: markdownLanguage }),
         EditorView.lineWrapping,
-        EditorView.contentAttributes.of({
-          "aria-label": label,
-          role: "textbox",
-          "aria-multiline": "true",
-        }),
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) props.current.onChange(u.state.doc.toString());
-          if (u.docChanged || u.selectionSet) {
-            const s = u.state.selection.main;
-            props.current.onSelect(s.from, s.to);
+          if (u.docChanged) {
+            synced.current = u.state.doc.toString();
+            props.current.onChange(synced.current);
           }
         }),
       ],
     });
     view.current = cm;
     if (editor) editor.current = cm;
-    props.current.onSelect(
-      cm.state.selection.main.from,
-      cm.state.selection.main.to,
-    );
-    if (focus) cm.focus();
     return () => {
       if (editor?.current === cm) editor.current = null;
       cm.destroy();
@@ -84,10 +133,22 @@ export default function Source({
   }, []);
   useEffect(() => {
     const cm = view.current;
-    if (cm && cm.state.doc.toString() !== text)
-      cm.dispatch({
-        changes: { from: 0, to: cm.state.doc.length, insert: text },
-      });
+    if (cm && compartment.get(cm.state) !== setup)
+      cm.dispatch({ effects: compartment.reconfigure(setup) });
+    if (focus) cm?.focus();
+  }, [setup, focus]);
+  useEffect(() => {
+    const cm = view.current;
+    if (!cm) return;
+    const old = synced.current;
+    if (old === text) return;
+    const { start, oldEnd, newEnd } = changedRange(old, text);
+    const { from, to } = cm.state.selection.main;
+    cm.dispatch({
+      changes: { from: start, to: oldEnd, insert: text.slice(start, newEnd) },
+      selection:
+        from === start && to === oldEnd ? { anchor: newEnd } : undefined,
+    });
   }, [text]);
   return <div className="source" ref={host} />;
 }

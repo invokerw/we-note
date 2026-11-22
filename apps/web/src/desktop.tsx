@@ -8,6 +8,8 @@ import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { boardStrokes } from "./markdown/Whiteboard";
+import { captureInsertion, resumeWriting } from "./markdown/Source";
+import type { EditorView } from "@codemirror/view";
 import { Document, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { Resources, type ResourceClient, type Hit } from "./Resources";
@@ -123,7 +125,7 @@ function Workspace({
   const [pluginBytes, setPluginBytes] = useState<Uint8Array | null>(null),
     [pluginDirty, setPluginDirty] = useState(false);
   const source = useRef(new TextFile("")),
-    selection = useRef<[number, number]>([0, 0]),
+    editor = useRef<EditorView | null>(null),
     picker = useRef<HTMLInputElement>(null);
   const vault = binding.vault,
     dirty = pluginDirty || text !== saved,
@@ -215,6 +217,7 @@ function Workspace({
   }, [dirty]);
   async function run(fn: () => Promise<void>) {
     if (busy) return;
+    const writing = editor.current?.hasFocus ? editor.current : null;
     setBusy(true);
     try {
       await fn();
@@ -222,6 +225,7 @@ function Workspace({
       notify(String(e));
     } finally {
       setBusy(false);
+      if (writing) resumeWriting(writing);
     }
   }
   async function open(p: string, discardConfirmed = false, writing = false) {
@@ -247,7 +251,6 @@ function Workspace({
     panes.setPane("doc");
     setView("笔记");
     setLinks([]);
-    selection.current = [0, 0];
     setMode(writing && !special ? writingMode(p, source.current.text) : "read");
     notify("");
   }
@@ -347,6 +350,8 @@ function Workspace({
     setText(next);
   }
   async function attach(input: File[]) {
+    const insertHere = captureInsertion(editor.current),
+      file = source.current;
     const token = await binding.access();
     const links = [];
     for (const f of input) {
@@ -399,11 +404,11 @@ function Workspace({
           ")",
       );
     }
-    const [start, end] = selection.current;
     const value = "\n" + links.join("\n") + "\n";
-    edit(text.slice(0, start) + value + text.slice(end));
-    selection.current = [start + value.length, start + value.length];
-    if (mode !== "split") setMode("edit");
+    if (file === source.current && !insertHere?.(value)) {
+      edit(file.text + value);
+      setMode("edit");
+    }
   }
   return (
     <div
@@ -712,9 +717,7 @@ function Workspace({
                         edit={edit}
                         mode={mode}
                         setMode={setMode}
-                        select={(a, b) => {
-                          selection.current = [a, b];
-                        }}
+                        editor={editor}
                         io={{
                           image: (src, alt) => (
                             <LocalImage binding={binding} src={src} alt={alt} />

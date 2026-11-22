@@ -4,6 +4,8 @@ import { browserExport } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { captureInsertion, resumeWriting } from "./markdown/Source";
+import type { EditorView } from "@codemirror/view";
 import { Document, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { download, type Hit } from "./Resources";
@@ -143,6 +145,7 @@ export default function Editor({
   const source = useRef(new TextFile("")),
     saved = useRef("");
   const assetPicker = useRef<HTMLInputElement>(null);
+  const editor = useRef<EditorView | null>(null);
   useEffect(() => {
     let live = true;
     request(token, path + "/content")
@@ -178,6 +181,7 @@ export default function Editor({
     dirty(value !== saved.current);
   }
   async function run(f: () => Promise<void>) {
+    const writing = editor.current?.hasFocus ? editor.current : null;
     setBusy(true);
     try {
       await f();
@@ -185,6 +189,7 @@ export default function Editor({
       notify(String(e));
     } finally {
       setBusy(false);
+      if (writing) resumeWriting(writing);
     }
   }
   async function save() {
@@ -206,7 +211,6 @@ export default function Editor({
     await changed();
     notify("已保存新版本");
   }
-  const selection = useRef<[number, number]>([0, 0]);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -215,7 +219,7 @@ export default function Editor({
     };
   }, []);
   async function insert(files: File[]) {
-    const [start, end] = selection.current;
+    const insertHere = captureInsertion(editor.current);
     const parts = [];
     for (const file of files) {
       const url = await uploadAsset(token, vault, file, notify);
@@ -230,9 +234,10 @@ export default function Editor({
     }
     if (!alive.current) return;
     const inserted = "\n" + parts.join("\n") + "\n";
-    edit(text.slice(0, start) + inserted + text.slice(end));
-    selection.current = [start + inserted.length, start + inserted.length];
-    if (mode !== "split") setMode("edit");
+    if (!insertHere?.(inserted)) {
+      edit(source.current.text + inserted);
+      setMode("edit");
+    }
   }
   const editing = mode === "edit" || mode === "live" || mode === "split";
   function navigate(href: string, label: string) {
@@ -453,16 +458,14 @@ export default function Editor({
         ) : special ? null : (
           <div className="note-content" inert={!base || busy}>
             <Document
-              metadataHost={metadataHost}
+              metadataHost={panelOpen ? metadataHost : null}
               attach={() => assetPicker.current?.click()}
               markdown={note.format === "md"}
               text={text}
               edit={edit}
               mode={mode as Mode}
               setMode={setMode}
-              select={(a, b) => {
-                selection.current = [a, b];
-              }}
+              editor={editor}
               io={{
                 image: (src, alt) => (
                   <AssetImage

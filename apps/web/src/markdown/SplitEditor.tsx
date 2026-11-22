@@ -63,10 +63,12 @@ function correspondingScroll(
 export default function SplitEditor({
   editor,
   source,
+  label,
   children,
 }: {
   editor: RefObject<EditorView | null>;
   source: ReactNode;
+  label: string;
   children: ReactNode;
 }) {
   const split = Boolean(children);
@@ -113,7 +115,7 @@ export default function SplitEditor({
       data-stacked={stacked}
       style={{ "--split": `${ratio}%` } as CSSProperties}
     >
-      <section className="split-pane" aria-label="源码栏">
+      <section className="split-pane" aria-label={label}>
         <header hidden={!split}>Markdown 源码</header>
         {source}
       </section>

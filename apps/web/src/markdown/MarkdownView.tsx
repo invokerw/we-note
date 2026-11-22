@@ -65,29 +65,11 @@ export type MarkdownIO = {
   image?: (src: string, alt: string) => ReactNode;
   link?: (href: string, label: string) => boolean;
 };
-// Leave the active block's place in the full Markdown tree so that references
-// outside the block still resolve, and the same editor survives each keystroke.
-type SlotRange = { start: number; end: number; original: string };
-type LiveSlot = SlotRange & { content: ReactNode };
 const RenderContext = createContext<{
   io: MarkdownIO;
-  slot?: LiveSlot;
   toggle?: (pos: number) => void;
 }>({ io: {} });
-export function sourceOffset(pos: number, slot?: SlotRange) {
-  return slot && pos >= slot.start + slot.original.length
-    ? pos - slot.original.length + slot.end - slot.start
-    : pos;
-}
 const components: Components = {
-  div: function Block({ node, children, ...props }) {
-    const { slot } = useContext(RenderContext);
-    return node?.properties.dataLiveSlot ? (
-      slot?.content
-    ) : (
-      <div {...props}>{children}</div>
-    );
-  },
   img: function Image({ src, alt }) {
     const { io } = useContext(RenderContext);
     if (typeof src !== "string") return null;
@@ -116,14 +98,14 @@ const components: Components = {
       <code className={className}>{children}</code>
     ),
   li: function Item({ node, children, ...props }) {
-    const { toggle, slot } = useContext(RenderContext);
+    const { toggle } = useContext(RenderContext);
     return (
       <li
         {...props}
         onClick={(e) => {
           if (toggle && (e.target as Element).matches("input[type=checkbox]")) {
             e.stopPropagation();
-            toggle(sourceOffset(node?.position?.start.offset ?? 0, slot));
+            toggle(node?.position?.start.offset ?? 0);
           }
         }}
       >
@@ -144,25 +126,22 @@ const components: Components = {
     );
   },
 };
+const inlineComponents: Components = {
+  ...components,
+  p: ({ children }) => <>{children}</>,
+};
+
 export function MarkdownView({
   text,
   io,
-  activate,
   toggle,
-  slot,
+  preview,
 }: {
   text: string;
   io: MarkdownIO;
-  activate?: (start: number, end: number, caret?: number) => void;
   toggle?: (pos: number) => void;
-  slot?: LiveSlot;
+  preview?: "block" | "inline";
 }) {
-  const display = slot
-    ? text.slice(0, slot.start) + slot.original + text.slice(slot.end)
-    : text;
-  const slotStart = slot?.start,
-    originalLength = slot?.original.length ?? 0,
-    editable = Boolean(activate);
   const body = useMemo(
     () => (
       <Markdown
@@ -171,47 +150,23 @@ export function MarkdownView({
           [katex, { trust: false }],
           () => (tree: Root) => {
             for (const n of tree.children) {
-              if (n.type !== "element" || !n.position) continue;
-              const start = n.position.start.offset;
-              n.properties["data-block-start"] = start;
-              n.properties["data-block-end"] = n.position.end.offset;
-              if (editable) n.properties.tabIndex = 0;
+              if (n.type === "element" && n.position) {
+                n.properties["data-block-start"] = n.position.start.offset;
+              }
             }
-            if (slotStart !== undefined) {
-              const i = tree.children.findIndex(
-                (n) =>
-                  n.type === "element" &&
-                  (n.position?.start.offset ?? -1) >= slotStart,
-              );
-              const found =
-                i >= 0 && tree.children[i].position?.start.offset === slotStart;
-              tree.children.splice(
-                i < 0 ? tree.children.length : i,
-                found && originalLength ? 1 : 0,
-                {
-                  type: "element",
-                  tagName: "div",
-                  properties: { dataLiveSlot: true },
-                  children: [],
-                },
-              );
-            }
-            if (editable)
+            // A click in a rendered table cell should put the caret on that character.
+            if (preview)
               visit(tree, "text", (n, i, parent) => {
                 if (
                   i === undefined ||
-                  !parent ||
-                  !n.position ||
-                  parent.type !== "element"
+                  parent?.type !== "element" ||
+                  parent.tagName === "code" ||
+                  !n.position
                 )
                   return;
                 const start = n.position.start.offset!,
                   end = n.position.end.offset!;
-                if (
-                  parent.tagName === "code" ||
-                  display.slice(start, end) !== n.value
-                )
-                  return;
+                if (text.slice(start, end) !== n.value) return;
                 parent.children[i] = {
                   type: "element",
                   tagName: "span",
@@ -222,66 +177,19 @@ export function MarkdownView({
               });
           },
         ]}
-        components={components}
+        components={preview === "inline" ? inlineComponents : components}
       >
-        {display}
+        {text}
       </Markdown>
     ),
-    [display, slotStart, originalLength, editable],
+    [text, preview],
   );
   const strokes = boardStrokes(text);
   if (strokes) return <Whiteboard strokes={strokes} />;
-  function open(block: HTMLElement, caret?: number) {
-    const start = sourceOffset(Number(block.dataset.blockStart), slot);
-    activate?.(
-      start,
-      sourceOffset(Number(block.dataset.blockEnd), slot),
-      caret === undefined ? 0 : sourceOffset(caret, slot) - start,
-    );
-  }
+  const Tag = preview === "inline" ? "span" : "div";
   return (
-    <RenderContext.Provider value={{ io, toggle, slot }}>
-      <div
-        className="reading"
-        onClick={(e) => {
-          if (
-            !activate ||
-            (e.target as Element).closest("a,input,button,.source")
-          )
-            return;
-          const block = (e.target as Element).closest<HTMLElement>(
-            "[data-block-start]",
-          );
-          if (!block || !window.getSelection()?.isCollapsed) return;
-          const point = document.caretPositionFromPoint?.(e.clientX, e.clientY);
-          const range = point
-            ? null
-            : document.caretRangeFromPoint?.(e.clientX, e.clientY);
-          const node = point?.offsetNode ?? range?.startContainer;
-          const leaf =
-            node?.parentElement?.closest<HTMLElement>("[data-text-start]");
-          open(
-            block,
-            leaf && block.contains(leaf)
-              ? Number(leaf.dataset.textStart) +
-                  (point?.offset ?? range?.startOffset ?? 0)
-              : undefined,
-          );
-        }}
-        onKeyDown={(e) => {
-          const target = e.target as HTMLElement;
-          if (
-            activate &&
-            e.key === "Enter" &&
-            target.hasAttribute("data-block-start")
-          ) {
-            e.preventDefault();
-            open(target);
-          }
-        }}
-      >
-        {body}
-      </div>
+    <RenderContext.Provider value={{ io, toggle }}>
+      <Tag className="reading">{body}</Tag>
     </RenderContext.Provider>
   );
 }
