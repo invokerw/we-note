@@ -43,6 +43,7 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.HandleFunc("/api/v1/vaults/{vault_id}/sync/upload-sessions", api.createUploadSession)
 	mux.HandleFunc("/api/v1/vaults/{vault_id}/sync/upload-sessions/{upload_id}", api.getUploadSession)
 	mux.HandleFunc("/api/v1/vaults/{vault_id}/sync/upload-sessions/{upload_id}/complete", api.completeUploadSession)
+	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/entry", api.changeEntry)
 	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/files", api.writeFile("create_file"))
 	mux.HandleFunc("PUT /api/v1/vaults/{vault_id}/files/{file_id}/content", api.writeFile("update_file_content"))
 	mux.HandleFunc("PATCH /api/v1/vaults/{vault_id}/files/{file_id}", api.writeFile("move_file"))

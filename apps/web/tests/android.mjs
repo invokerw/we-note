@@ -139,6 +139,55 @@ try {
   adb("shell", "am", "force-stop", pkg);
   page = await launch();
   await button("打开本地编辑器").click();
+  const cdp = await page.context().newCDPSession(page);
+  const row = button("原稿.md");
+  await row.waitFor();
+  const box = await row.boundingBox();
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: box.x + 20, y: box.y + 12 }],
+  });
+  const item = (name) => page.getByRole("menuitem", { name, exact: true });
+  await item("复制").waitFor();
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await item("复制").click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "确定", exact: true }).click();
+  await button("原稿 副本.md").waitFor();
+  await button("原稿 副本.md 的操作").click();
+  await item("重命名").click();
+  await dialog.getByLabel("名称").fill("临时.md");
+  await dialog.getByRole("button", { name: "确定", exact: true }).click();
+  await button("临时.md 的操作").click();
+  await item("导出为PDF").click();
+  await dialog.getByText("第一版", { exact: true }).waitFor();
+  await dialog.getByRole("button", { name: "打印 / 保存为 PDF" }).click();
+  let printing = false;
+  for (let i = 0; i < 30; i++) {
+    if (
+      /mCurrentFocus=Window\{[^\n]*printspooler/i.test(
+        adb("shell", "dumpsys", "window"),
+      )
+    ) {
+      printing = true;
+      break;
+    }
+    await delay(150);
+  }
+  assert(printing, "Android system print dialog");
+  adb("shell", "input", "keyevent", "4");
+  await dialog.getByRole("button", { name: "关闭", exact: true }).click();
+  await button("临时.md 的操作").click();
+  await item("删除").click();
+  await dialog.getByRole("button", { name: "确认删除" }).click();
+  await button("临时.md").waitFor({ state: "detached" });
+  await cdp.detach();
+  console.log(
+    "Android long press, offline copy/rename/delete and native print passed",
+  );
   await button("原稿.md").click();
   await button("编辑模式").click();
   await button("源码").click();

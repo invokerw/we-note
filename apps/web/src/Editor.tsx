@@ -24,7 +24,7 @@ type Props = {
   dirty: (flag: boolean) => void;
   notify: (msg: string) => void;
 };
-function AssetImage({
+export function AssetImage({
   src,
   alt,
   token,

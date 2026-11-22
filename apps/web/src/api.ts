@@ -6,6 +6,7 @@ export type Note = {
   format: string;
   updated_at?: string;
   current_version_id: string;
+  current_content_hash?: string;
 };
 export type Version = {
   version_id: string;

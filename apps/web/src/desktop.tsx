@@ -12,6 +12,7 @@ import { resolvePath, linkTarget } from "./markdown/document";
 import { Resources, type ResourceClient, type Hit } from "./Resources";
 import { multipart, multipartThreshold } from "./multipart";
 import { base64 } from "./api";
+import { containsEntry, entryPath, type EntryIO } from "./libraryEntries";
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
 import "./style.css";
 
@@ -86,7 +87,7 @@ function Workspace({
   binding: Binding;
   close: () => void;
 }) {
-  const [files, list] = useState<string[]>([]),
+  const [revisions, list] = useState<Record<string, string>>({}),
     [path, choose] = useState(""),
     [text, setText] = useState(""),
     [saved, setSaved] = useState(""),
@@ -94,6 +95,10 @@ function Workspace({
     [mode, setMode] = useState<Mode>("read"),
     [message, notify] = useState(""),
     [busy, setBusy] = useState(false);
+  const files = useMemo(
+    () => Object.entries(revisions).map(([p, h]) => entryPath(p, h)),
+    [revisions],
+  );
   const panes = usePanes();
   const [view, setView] = useState("笔记"),
     [newPath, setNewPath] = useState<string | null>(null),
@@ -153,7 +158,7 @@ function Workspace({
     );
   }
   async function load() {
-    list(await local<string[]>(vault, "list"));
+    list(await local<Record<string, string>>(vault, "library"));
   }
   useEffect(() => {
     load().catch((e) => notify(String(e)));
@@ -216,6 +221,56 @@ function Workspace({
     });
     notify("已保存到 " + dest);
   };
+  const entries: EntryIO = {
+    revisions,
+    read: async (p) =>
+      fromBase64(
+        (await local<{ data: string }>(vault, "read_bytes", { path: p })).data,
+      ),
+    write: async (p, bytes) => {
+      await local(vault, "save_bytes", {
+        path: p,
+        base: null,
+        data: base64(bytes),
+      });
+    },
+    change: async (operation, source, destination, expected) => {
+      const affected =
+        path && operation !== "copy" && containsEntry(source, path);
+      if (affected && dirty) throw Error("请先保存正在编辑的笔记");
+      await local(vault, "change_entry", {
+        operation,
+        source,
+        destination,
+        expected,
+      });
+      if (affected) {
+        if (operation === "delete") {
+          choose("");
+          setPluginBytes(null);
+          setText("");
+          setSaved("");
+          setLinks([]);
+        } else await open(destination + path.slice(source.length), true);
+      }
+    },
+    refresh: load,
+    output,
+    image: (src, alt) => <LocalImage binding={binding} src={src} alt={alt} />,
+    openCreated: async (p) => {
+      if (!dirty) await open(p, true);
+    },
+    print: async (name) => {
+      if (binding.android)
+        await window.__TAURI__.core.invoke("mobile_control", {
+          action: "printNote",
+          payload: { name },
+        });
+      else if (/Mac/.test(navigator.platform))
+        await window.__TAURI__.core.invoke("print_note", {});
+      else window.print();
+    },
+  };
   async function savePlugin(data: Uint8Array) {
     setBusy(true);
     try {
@@ -226,6 +281,7 @@ function Workspace({
           data: base64(data),
         }),
       );
+      await load();
       notify("已保存到本地目录");
     } finally {
       setBusy(false);
@@ -334,6 +390,7 @@ function Workspace({
     >
       <LibraryPanes
         paths={files}
+        entries={entries}
         panes={panes}
         active={view === "笔记" ? path : ""}
         busy={busy}

@@ -129,6 +129,13 @@ enum LocalAction {
         data: String,
     },
     List,
+    Library,
+    ChangeEntry {
+        operation: String,
+        source: String,
+        destination: String,
+        expected: std::collections::BTreeMap<String, String>,
+    },
     Read {
         path: String,
     },
@@ -199,6 +206,15 @@ async fn notebook(
                     .and_then(|bytes| book.export_bytes(&dir, &name, &bytes))
                     .map(serde_json::Value::String)
             }
+            Library => book.library().map(|v| serde_json::json!(v)),
+            ChangeEntry {
+                operation,
+                source,
+                destination,
+                expected,
+            } => book
+                .change_entry(&operation, &source, &destination, &expected)
+                .map(|_| serde_json::Value::Null),
             List => book.files().map(|v| serde_json::json!(v)),
             Read { path } => book.read(&path),
             Save { path, base, text } => book
@@ -270,6 +286,18 @@ async fn recent_notebook(app: tauri::AppHandle) -> Result<Option<serde_json::Val
     wenote_sync::notebook::Notebook::recent(&data).map_err(|e| e.to_string())
 }
 #[tauri::command]
+fn print_note(webview: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        webview.print().map_err(|e| e.to_string())
+    }
+    #[cfg(mobile)]
+    {
+        let _ = webview;
+        Err("请使用系统打印".into())
+    }
+}
+#[tauri::command]
 fn is_android() -> bool {
     cfg!(target_os = "android")
 }
@@ -289,6 +317,7 @@ pub fn run() {
             export_decrypted_file,
             devices,
             is_android,
+            print_note,
             recent_notebook,
             mobile::mobile_control
         ])

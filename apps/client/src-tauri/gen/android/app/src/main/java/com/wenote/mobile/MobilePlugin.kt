@@ -120,6 +120,26 @@ private const val jobId = 103
 
 @TauriPlugin
 class MobilePlugin(private val host: Activity) : Plugin(host) {
+    private lateinit var noteWebView: android.webkit.WebView
+
+    override fun load(webView: android.webkit.WebView) {
+        noteWebView = webView
+    }
+
+    @Command
+    fun printNote(invoke: Invoke) {
+        val name = invoke.getArgs().getString("name")
+        host.runOnUiThread {
+            try {
+                val manager = host.getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+                manager.print(name, noteWebView.createPrintDocumentAdapter(name), null)
+                invoke.resolve()
+            } catch (e: Exception) {
+                invoke.reject(e.message)
+            }
+        }
+    }
+
     private val scheduler
         get() = host.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
 

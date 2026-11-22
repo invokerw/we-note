@@ -1,3 +1,5 @@
+import { EntryMenus } from "./EntryMenu";
+import { isFolder, parentFolder, type EntryIO } from "./libraryEntries";
 import {
   useEffect,
   useId,
@@ -199,6 +201,7 @@ function FolderRows({
   return (
     <li>
       <div
+        data-library-path={node.prefix}
         className={"folder-row" + (active === node.prefix ? " current" : "")}
       >
         {node.children.size ? (
@@ -247,6 +250,7 @@ export function LibraryPanes({
   tools,
   account,
   listActions,
+  entries,
   busy = false,
   libraryTitle,
 }: {
@@ -260,6 +264,7 @@ export function LibraryPanes({
   tools: ReactNode;
   account: ReactNode;
   listActions?: ReactNode;
+  entries?: EntryIO;
   busy?: boolean;
   libraryTitle: string;
 }) {
@@ -308,7 +313,8 @@ export function LibraryPanes({
     const notes: string[] = [];
     for (const path of paths) {
       if (q) {
-        if (path.toLocaleLowerCase().includes(q)) notes.push(path);
+        if (!isFolder(path) && path.toLocaleLowerCase().includes(q))
+          notes.push(path);
         continue;
       }
       if (folder !== null) {
@@ -316,11 +322,11 @@ export function LibraryPanes({
         const end = path.indexOf("/", folder.length);
         if (end !== -1) {
           const dir = path.slice(0, end + 1);
-          counts.set(dir, (counts.get(dir) || 0) + 1);
+          counts.set(dir, (counts.get(dir) || 0) + (isFolder(path) ? 0 : 1));
           continue;
         }
       }
-      notes.push(path);
+      if (!isFolder(path)) notes.push(path);
     }
     const collator = new Intl.Collator("zh-CN", { numeric: true });
     const compare = (a: string, b: string) =>
@@ -331,7 +337,15 @@ export function LibraryPanes({
     };
   }, [paths, q, folder, reverse]);
   return (
-    <>
+    <EntryMenus
+      paths={paths}
+      io={busy ? undefined : entries}
+      onChange={(src, dst) => {
+        if (!src) pickFolder(dst);
+        else if (folder !== null && folder.startsWith(src))
+          pickFolder(dst ? dst + folder.slice(src.length) : parentFolder(src));
+      }}
+    >
       {columns < 3 && (
         <button className="restore-layout" onClick={() => setColumns(3)}>
           {columns === 1 ? "退出专注" : "展开目录"}
@@ -429,40 +443,50 @@ export function LibraryPanes({
                 : folder.split("/").at(-2) || "我的文件夹"}
           </strong>
         </div>
-        <div className="list-scroll">
+        <div
+          className="list-scroll"
+          data-library-path={folder || ""}
+          data-library-background
+          tabIndex={-1}
+        >
           {directories.map(([dir, count]) => (
-            <button className="entry" key={dir} onClick={() => pickFolder(dir)}>
-              <span>
-                <i className="folder-icon" />
-                {dir.split("/").at(-2)}
-              </span>
-              <small>{count} 篇笔记</small>
-            </button>
+            <div className="entry-row" key={dir} data-library-path={dir}>
+              <button className="entry" onClick={() => pickFolder(dir)}>
+                <span>
+                  <i className="folder-icon" />
+                  {dir.split("/").at(-2)}
+                </span>
+                <small>{count} 篇笔记</small>
+              </button>
+              {entries && <EntryMore name={dir} />}
+            </div>
           ))}
           {notes.map((path) => (
-            <button
-              className={"entry" + (active === path ? " current" : "")}
-              key={path}
-              aria-label={path.split("/").at(-1)}
-              title={path}
-              disabled={busy}
-              aria-current={active === path ? "page" : undefined}
-              onClick={() => open(path)}
-            >
-              <span>
-                <i className="file-icon" aria-hidden="true">
-                  {path.split(".").at(-1)?.slice(0, 1).toUpperCase()}
-                </i>
-                {path.split("/").at(-1)}
-              </span>
-              <small>
-                {dates?.get(path)?.slice(0, 10).replaceAll("-", ".") ||
-                  libraryTitle}
-                {(q || folder === null) && path.includes("/")
-                  ? " · " + path.slice(0, path.lastIndexOf("/"))
-                  : ""}
-              </small>
-            </button>
+            <div className="entry-row" key={path} data-library-path={path}>
+              <button
+                className={"entry" + (active === path ? " current" : "")}
+                aria-label={path.split("/").at(-1)}
+                title={path}
+                disabled={busy}
+                aria-current={active === path ? "page" : undefined}
+                onClick={() => open(path)}
+              >
+                <span>
+                  <i className="file-icon" aria-hidden="true">
+                    {path.split(".").at(-1)?.slice(0, 1).toUpperCase()}
+                  </i>
+                  {path.split("/").at(-1)}
+                </span>
+                <small>
+                  {dates?.get(path)?.slice(0, 10).replaceAll("-", ".") ||
+                    libraryTitle}
+                  {(q || folder === null) && path.includes("/")
+                    ? " · " + path.slice(0, path.lastIndexOf("/"))
+                    : ""}
+                </small>
+              </button>
+              {entries && <EntryMore name={path} />}
+            </div>
           ))}
           {!notes.length && !directories.length && (
             <p className="list-empty">
@@ -474,6 +498,18 @@ export function LibraryPanes({
           总共 {directories.length + notes.length} 项{listActions}
         </footer>
       </section>
-    </>
+    </EntryMenus>
+  );
+}
+function EntryMore({ name }: { name: string }) {
+  return (
+    <button
+      type="button"
+      className="entry-more"
+      aria-haspopup="menu"
+      aria-label={(name.split("/").filter(Boolean).at(-1) || name) + " 的操作"}
+    >
+      •••
+    </button>
   );
 }

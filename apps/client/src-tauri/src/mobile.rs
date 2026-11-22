@@ -42,7 +42,7 @@ pub async fn mobile_control(
 ) -> Result<Value, String> {
     if !matches!(
         action.as_str(),
-        "restore" | "enable" | "disable" | "access" | "share" | "exportDocument"
+        "restore" | "enable" | "disable" | "access" | "share" | "exportDocument" | "printNote"
     ) {
         return Err("未知移动端操作".into());
     }

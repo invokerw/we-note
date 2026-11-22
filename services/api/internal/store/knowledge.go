@@ -164,7 +164,7 @@ func (r *Repository) Search(ctx context.Context, vault, q, tag string) ([]NoteHi
 		return nil, err
 	}
 	q = strings.ToLower(strings.TrimSpace(q))
-	rows, err := r.db.QueryContext(ctx, `SELECT f.id,f.path`+indexedNotes+` AND (instr(i.body,?) OR instr(lower(f.path),?) OR ?='') AND (?='' OR EXISTS(SELECT 1 FROM json_each(i.metadata,'$.tags') WHERE value=?)) ORDER BY f.path`, vault, q, q, q, tag, tag)
+	rows, err := r.db.QueryContext(ctx, `SELECT f.id,f.path`+indexedNotes+` AND NOT (f.path GLOB '*/.wenote-folder.json' AND f.current_content_hash='sha256:62837e3e3cc858e7102d86bce9f026008296ae23e621644486d155744e372496') AND (instr(i.body,?) OR instr(lower(f.path),?) OR ?='') AND (?='' OR EXISTS(SELECT 1 FROM json_each(i.metadata,'$.tags') WHERE value=?)) ORDER BY f.path`, vault, q, q, q, tag, tag)
 	if err != nil {
 		return nil, err
 	}

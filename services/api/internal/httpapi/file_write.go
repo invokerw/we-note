@@ -69,3 +69,20 @@ func (a *API) versionContent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+func (a *API) changeEntry(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	var input store.EntryChange
+	if err := decodeJSONLimit(w, r, &input, 4<<20); err != nil {
+		writeError(w, 400, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if err := a.repository.ChangeEntry(r.Context(), user.ID, r.PathValue("vault_id"), r.Header.Get("Idempotency-Key"), input); err != nil {
+		resourceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

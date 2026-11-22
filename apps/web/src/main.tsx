@@ -10,8 +10,15 @@ import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Manager from "./plugins/Manager";
+import { browserExport } from "./plugins/archive";
+import {
+  containsEntry,
+  entryPath,
+  marker,
+  type EntryIO,
+} from "./libraryEntries";
 import { initialBytes } from "./plugins/xmind";
-import Editor from "./Editor";
+import Editor, { AssetImage } from "./Editor";
 import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Share, Vault } from "./api";
 import { Cover, LibraryPanes, usePanes } from "./LibraryUI";
@@ -155,7 +162,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         const result = await (await request(token, base + "/files")).json();
         if (live) {
           setFiles(result.files);
-          setNote(result.files[0] || null);
+          setNote(
+            (result.files as Note[]).find(
+              (f) => entryPath(f.path, f.current_content_hash) === f.path,
+            ) || null,
+          );
         }
       });
     return () => {
@@ -246,7 +257,56 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     const file = byPath.get(path);
     if (file) select(file);
   };
-  const paths = files.map((f) => f.path);
+  const paths = files.map((f) => entryPath(f.path, f.current_content_hash));
+  const entries: EntryIO = {
+    revisions: Object.fromEntries(
+      files.map((f) => [f.path, f.current_version_id]),
+    ),
+    read: async (path) => {
+      const f = byPath.get(path);
+      if (!f) throw Error("笔记已移动或删除");
+      return new Uint8Array(
+        await (
+          await request(token, base + "/files/" + f.file_id + "/content")
+        ).arrayBuffer(),
+      );
+    },
+    write: async (path, bytes) => {
+      await request(token, base + "/files", "POST", {
+        path,
+        content: base64(bytes),
+      });
+    },
+    change: async (operation, source, destination, expected) => {
+      if (
+        dirty.current &&
+        note &&
+        operation !== "copy" &&
+        containsEntry(source, note.path)
+      )
+        throw Error("请先保存正在编辑的笔记");
+      await request(token, base + "/entry", "POST", {
+        operation,
+        source,
+        destination,
+        expected,
+      });
+    },
+    refresh: list,
+    output: browserExport,
+    image: (src, alt) => (
+      <AssetImage src={src} alt={alt} token={token} origin={origin} />
+    ),
+    print: () => window.print(),
+    openCreated: async (path) => {
+      if (dirty.current) return;
+      const fresh: Note[] = (
+        await (await request(token, base + "/files")).json()
+      ).files;
+      const target = fresh.find((f) => f.path === path);
+      if (target) select(target);
+    },
+  };
   const goToSection = (id: string, label: string) => (
     <button
       key={id}
@@ -264,6 +324,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         key={vault}
         panes={panes}
         paths={paths}
+        entries={vault ? entries : undefined}
         dates={new Map(files.map((f) => [f.path, f.updated_at || ""]))}
         active={note?.path || ""}
         open={openPath}
@@ -477,17 +538,24 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               (trash.length ? (
                 trash.map((f) => (
                   <div className="row" key={f.file_id}>
-                    {f.path}
+                    {entryPath(f.path, f.current_content_hash)}
                     <button
                       onClick={() =>
                         run(async () => {
-                          const p = prompt("恢复路径", f.path);
+                          const old = entryPath(f.path, f.current_content_hash);
+                          const p = prompt("恢复路径", old);
                           if (!p) return;
                           await request(
                             token,
                             base + "/files/" + f.file_id + "/restore",
                             "POST",
-                            { base_version_id: f.current_version_id, path: p },
+                            {
+                              base_version_id: f.current_version_id,
+                              path:
+                                old === f.path
+                                  ? p
+                                  : p.replace(/\/$/, "") + "/" + marker,
+                            },
                           );
                           await list();
                           await section("trash");

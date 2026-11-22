@@ -1,3 +1,4 @@
+import { boardText, boardStrokes, Whiteboard } from "./Whiteboard";
 import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import katex from "rehype-katex";
@@ -71,6 +72,8 @@ export function MarkdownView({
   activate?: (start: number, end: number) => void;
   toggle?: (pos: number) => void;
 }) {
+  const strokes = boardStrokes(text);
+  if (strokes) return <Whiteboard strokes={strokes} />;
   return (
     <div
       className="reading"
@@ -290,6 +293,15 @@ export function Document({
     cm.focus();
   }
   const bounds = mode === "live" ? block : null;
+  const strokes = markdown ? boardStrokes(text) : null;
+  if (strokes && (mode === "live" || mode === "read"))
+    return (
+      <Whiteboard
+        strokes={strokes}
+        change={mode === "live" ? (lines) => edit(boardText(lines)) : undefined}
+        activate={() => setMode("live")}
+      />
+    );
   return (
     <div ref={root} className={"document-mode mode-" + mode}>
       {(mode === "edit" || mode === "split" || mode === "live") && (

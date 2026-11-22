@@ -4,9 +4,11 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use fs2::FileExt;
 use serde_json::{json, Value};
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
+use unicode_normalization::UnicodeNormalization;
 
 /// Local editor operations are restricted to a folder previously bound by the sync engine.
 pub struct Notebook {
@@ -73,7 +75,144 @@ impl Notebook {
         &self.origin
     }
     pub fn files(&self) -> Result<Vec<String>> {
-        Ok(disk::scan(&self.root)?.into_keys().collect())
+        Ok(self.library()?.into_keys().collect())
+    }
+    pub fn library(&self) -> Result<BTreeMap<String, String>> {
+        disk::scan(&self.root)
+    }
+
+    pub fn change_entry(
+        &self,
+        operation: &str,
+        source: &str,
+        destination: &str,
+        expected: &BTreeMap<String, String>,
+    ) -> Result<()> {
+        let lock = fs::OpenOptions::new()
+            .write(true)
+            .open(self.state_dir.join("lock"))?;
+        lock.try_lock_exclusive().context("正在同步，请稍后重试")?;
+        let folder = source.ends_with('/');
+        let name = source.strip_suffix('/').unwrap_or(source);
+        let from = if folder {
+            disk::local_path(&self.root, name)?
+        } else {
+            self.path(name)?
+        };
+        let files = self.library()?;
+        let selected: BTreeMap<_, _> = files
+            .iter()
+            .filter(|(p, _)| *p == source || (folder && p.starts_with(source)))
+            .map(|(p, h)| (p.clone(), h.clone()))
+            .collect();
+        if selected.is_empty() || &selected != expected {
+            bail!("目录内容已更改，请刷新后重试")
+        }
+        if folder {
+            // Moving or recycling a directory must never take unrelated files with it.
+            for item in walkdir::WalkDir::new(&from) {
+                let item = item?;
+                let relative = item
+                    .path()
+                    .strip_prefix(&self.root)?
+                    .to_str()
+                    .context("无效的路径")?
+                    .replace(std::path::MAIN_SEPARATOR, "/")
+                    .nfc()
+                    .collect::<String>();
+                if !item.file_type().is_dir()
+                    && (!item.file_type().is_file() || !selected.contains_key(&relative))
+                {
+                    bail!("文件夹含其他文件或符号链接，请先移出这些项目")
+                }
+                if item.file_name().eq_ignore_ascii_case(".wenote")
+                    || item.file_name().eq_ignore_ascii_case(".git")
+                {
+                    bail!("文件夹含受保护的目录")
+                }
+            }
+        }
+        let to = match operation {
+            "delete" => self
+                .state_dir
+                .join("trash")
+                .join(uuid::Uuid::new_v4().to_string())
+                .join(name),
+            "move" | "copy" => {
+                let dest = destination.strip_suffix('/').unwrap_or(destination);
+                if folder != destination.ends_with('/')
+                    || (folder
+                        && destination
+                            .to_lowercase()
+                            .starts_with(&source.to_lowercase()))
+                {
+                    bail!("无效的目标路径")
+                }
+                let path = if folder {
+                    disk::local_path(&self.root, dest)?
+                } else {
+                    self.path(dest)?
+                };
+                let key = dest.to_lowercase();
+                if path.try_exists()?
+                    || files.keys().any(|p| {
+                        let p = p.to_lowercase();
+                        p == key
+                            || p.starts_with(&(key.clone() + "/"))
+                            || key.starts_with(&(p + "/"))
+                    })
+                {
+                    bail!("目标位置已存在同名项目")
+                }
+                path
+            }
+            _ => bail!("未知的目录操作"),
+        };
+        let parent = to.parent().context("无效的目标位置")?;
+        fs::create_dir_all(parent)?;
+        if operation != "copy" {
+            match fs::rename(&from, &to) {
+                Ok(()) => return Ok(()),
+                Err(err)
+                    if operation == "delete"
+                        && err.kind() == std::io::ErrorKind::CrossesDevices =>
+                {
+                    // An external-volume notebook needs a same-volume trash for an atomic move.
+                    let mut trash = self.root.clone();
+                    for part in [".wenote", "trash"] {
+                        trash.push(part);
+                        if !trash.try_exists()? {
+                            fs::create_dir(&trash)?;
+                        }
+                        if !fs::symlink_metadata(&trash)?.file_type().is_dir() {
+                            bail!("无效的本地回收站")
+                        }
+                    }
+                    let location = trash.join(uuid::Uuid::new_v4().to_string()).join(name);
+                    fs::create_dir_all(location.parent().context("无效的回收站路径")?)?;
+                    fs::rename(from, location)?;
+                    return Ok(());
+                }
+                Err(err) => return Err(err.into()),
+            }
+        }
+        // Publish the copy only after all files have been read and verified.
+        let staging = tempfile::tempdir_in(parent)?;
+        let staged = staging.path().join("entry");
+        for (path, hash) in &selected {
+            let bytes = fs::read(self.path(path)?)?;
+            if digest(&bytes) != *hash {
+                bail!("文件已更改，请刷新后重试")
+            }
+            let dest = if folder {
+                staged.join(path.strip_prefix(source).context("无效的源路径")?)
+            } else {
+                staged.clone()
+            };
+            disk::atomic(&dest, &bytes)?;
+        }
+        fs::rename(&staged, &to)?;
+        Ok(())
     }
     fn path(&self, path: &str) -> Result<PathBuf> {
         if !matches!(
@@ -290,5 +429,62 @@ impl Notebook {
             .into_iter()
             .find(|(_, f)| f.path == path)
             .map(|(id, _)| id))
+    }
+}
+
+#[cfg(test)]
+mod entry_tests {
+    use super::*;
+
+    #[test]
+    fn folder_changes_check_snapshot_and_keep_original_bytes() -> Result<()> {
+        let data = tempfile::tempdir()?;
+        let book = Notebook {
+            root: data.path().join("notes"),
+            state_dir: data.path().join("state"),
+            vault: "vault".into(),
+            origin: String::new(),
+        };
+        fs::create_dir_all(&book.root)?;
+        fs::create_dir_all(&book.state_dir)?;
+        fs::File::create(book.state_dir.join("lock"))?;
+        book.save_bytes("Docs/nested/a.xmind", None, b"\x00\xff")?;
+        let expected = book.library()?;
+        assert!(book
+            .change_entry("move", "Docs/", "Docs/nested/deeper/", &expected)
+            .is_err());
+        book.change_entry("copy", "Docs/", "Copy/", &expected)?;
+        assert_eq!(
+            fs::read(book.root.join("Copy/nested/a.xmind"))?,
+            b"\x00\xff"
+        );
+        assert!(book
+            .change_entry("move", "Docs/", "Copy/", &expected)
+            .is_err());
+        fs::write(book.root.join("Docs/untracked.bin"), b"external")?;
+        assert!(book.change_entry("delete", "Docs/", "", &expected).is_err());
+        assert!(book.root.join("Docs/untracked.bin").is_file());
+        book.change_entry(
+            "move",
+            "Copy/nested/a.xmind",
+            "new.md",
+            &BTreeMap::from([("Copy/nested/a.xmind".into(), digest(b"\x00\xff"))]),
+        )?;
+        let file = BTreeMap::from([("new.md".into(), digest(b"\x00\xff"))]);
+        fs::write(book.root.join("new.md"), b"changed")?;
+        assert!(book.change_entry("delete", "new.md", "", &file).is_err());
+        book.change_entry(
+            "delete",
+            "new.md",
+            "",
+            &BTreeMap::from([("new.md".into(), digest(b"changed"))]),
+        )?;
+        assert!(!book.root.join("new.md").exists());
+        let trash = fs::read_dir(book.state_dir.join("trash"))?
+            .next()
+            .unwrap()?
+            .path();
+        assert_eq!(fs::read(trash.join("new.md"))?, b"changed");
+        Ok(())
     }
 }
