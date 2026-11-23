@@ -170,3 +170,22 @@ func (r *Repository) ListAssets(ctx context.Context, vault string) ([]Asset, err
 	}
 	return assets, rows.Err()
 }
+
+func (r *Repository) SetMailBase(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "" {
+		return errors.New("invalid mail URL")
+	}
+	local := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
+	if u.Scheme != "https" && !(local && u.Scheme == "http") {
+		return errors.New("mail URL requires HTTPS or loopback HTTP")
+	}
+	r.mailBase = strings.TrimRight(raw, "/")
+	return nil
+}
+func (r *Repository) MailBase() string {
+	if r.mailBase != "" {
+		return r.mailBase
+	}
+	return r.publicBase
+}

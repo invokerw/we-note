@@ -30,15 +30,38 @@ import {
   type UserPreferences,
 } from "./preferences";
 import "./style.css";
+import Admin from "./Admin";
+import { AccountAction, accountAction } from "./AccountAction";
 function Auth({ login }: { login: (s: string) => void }) {
   const [register, setRegister] = useState(false),
+    [bootstrap, setBootstrap] = useState(false),
+    [mode, setMode] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!location.pathname.startsWith("/gm")) {
+      request("", "/api/v1/auth/registration")
+        .then((r) => r.json())
+        .then((p) => setMode(p.registration_mode))
+        .catch((e) => setError(String(e)));
+      return;
+    }
+    request("", "/api/v1/admin/bootstrap")
+      .then((r) => r.json())
+      .then((result) => setBootstrap(Boolean(result.available)))
+      .catch(() => {});
+  }, []);
   return (
     <div className="auth">
       <Cover />
       <div className="entry-form">
-        <h1>{register ? "创建账户" : "打开你的笔记库"}</h1>
+        <h1>
+          {bootstrap
+            ? "初始化 GM 管理员"
+            : register
+              ? "创建账户"
+              : "打开你的笔记库"}
+        </h1>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -49,8 +72,25 @@ function Auth({ login }: { login: (s: string) => void }) {
               };
             setBusy(true);
             try {
-              if (register)
-                await request("", "/api/v1/auth/register", "POST", body);
+              if (bootstrap) {
+                await request("", "/api/v1/admin/bootstrap", "POST", {
+                  ...body,
+                  setup_token: data.get("setup_token"),
+                });
+              } else if (register) {
+                const registration = await (
+                  await request("", "/api/v1/auth/register", "POST", body)
+                ).json();
+                if (registration.verification_required) {
+                  setRegister(false);
+                  setError(
+                    registration.delivery_status === "sent"
+                      ? "请查收验证邮件后登录。"
+                      : "请联系管理员检查 SMTP，再重发验证邮件。",
+                  );
+                  return;
+                }
+              }
               const s = await (
                 await request("", "/api/v1/auth/login", "POST", body)
               ).json();
@@ -63,6 +103,18 @@ function Auth({ login }: { login: (s: string) => void }) {
             }
           }}
         >
+          {bootstrap && (
+            <label>
+              服务器初始化令牌
+              <input
+                required
+                type="password"
+                name="setup_token"
+                autoComplete="off"
+                placeholder="数据库目录中的 setup.token"
+              />
+            </label>
+          )}
           <label>
             邮箱
             <input type="email" name="email" autoComplete="username" required />
@@ -78,17 +130,29 @@ function Auth({ login }: { login: (s: string) => void }) {
             />
           </label>
           <button disabled={busy} className="primary">
-            {register ? "注册并登录" : "登录"}
+            {bootstrap ? "创建管理员并登录" : register ? "注册并登录" : "登录"}
           </button>
         </form>
-        <button
-          onClick={() => {
-            setRegister(!register);
-            setError("");
-          }}
-        >
-          {register ? "已有账户，登录" : "创建账户"}
-        </button>
+        {mode === "invite_only" && (
+          <p>本站仅限邀请注册，请通过邀请邮件创建账户。</p>
+        )}
+        {mode === "closed" && <p>本站已关闭注册。</p>}
+        {!bootstrap && mode === "open" && (
+          <button
+            onClick={() => {
+              setRegister(!register);
+              setError("");
+            }}
+          >
+            {register ? "已有账户，登录" : "创建账户"}
+          </button>
+        )}
+        {!bootstrap && (
+          <p>
+            <a href="/#forgot">找回密码</a> ·{" "}
+            <a href="/#resend">重发验证邮件</a>
+          </p>
+        )}
         {error && <p role="alert">{error}</p>}
       </div>
     </div>
@@ -104,12 +168,18 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [shares, setShares] = useState<Share[]>([]),
     [message, msg] = useState(""),
     [origin, setOrigin] = useState(location.origin),
-    [preferences, setPreferences] = useState<UserPreferences>(
-      loadLocalPreferences,
-    );
+    [preferences, setPreferences] =
+      useState<UserPreferences>(loadLocalPreferences);
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const panes = usePanes();
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    request(token, "/api/v1/me")
+      .then((r) => r.json())
+      .then((u) => setIsAdmin(u.role === "system_admin"))
+      .catch(() => setIsAdmin(false));
+  }, [token]);
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
   const encryptedIO = useCallback<EncryptedIO>(
@@ -424,13 +494,33 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           </>
         }
         account={
-          <button
-            onClick={() => {
-              if (leave()) logout();
-            }}
-          >
-            退出登录
-          </button>
+          <>
+            {isAdmin && (
+              <a
+                href="/gm"
+                onClick={(e) => {
+                  if (!leave()) e.preventDefault();
+                }}
+              >
+                服务端管理
+              </a>
+            )}
+            <a
+              href="/#change"
+              onClick={(e) => {
+                if (!leave()) e.preventDefault();
+              }}
+            >
+              修改密码
+            </a>
+            <button
+              onClick={() => {
+                if (leave()) logout();
+              }}
+            >
+              退出登录
+            </button>
+          </>
         }
         listActions={
           <button disabled={!vault} onClick={() => picker.current?.click()}>
@@ -559,7 +649,10 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         ) : view === "encrypted" ? (
           <EncryptedVaults io={encryptedIO} dirty={encryptedDirty} />
         ) : view === "插件" ? (
-          <Manager preferences={preferences} updatePluginSetting={updatePluginSetting} />
+          <Manager
+            preferences={preferences}
+            updatePluginSetting={updatePluginSetting}
+          />
         ) : ["搜索", "附件", "导出"].includes(view) ? (
           <LibraryResources
             key={vault + view}
@@ -711,9 +804,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   );
 }
 function App() {
+  const [action, setAction] = useState(accountAction);
   const [shared, setShared] = useState(readShareLocation);
   useEffect(() => {
     const navigate = () => {
+      setAction(accountAction());
       const route = readShareLocation();
       setShared((old) =>
         route && !route.secret && old?.id === route.id ? old : route,
@@ -738,6 +833,28 @@ function App() {
       }}
     />
   );
+  if (action)
+    return (
+      <AccountAction
+        key={action.name + action.secret}
+        action={action}
+        token={token}
+      />
+    );
+  if (location.pathname.startsWith("/gm"))
+    return token ? (
+      <Admin
+        token={token}
+        logout={() => {
+          void request(token, "/api/v1/auth/logout", "POST").catch(() => {});
+          sessionStorage.removeItem("wenote-renewal");
+          sessionStorage.removeItem("wenote-session");
+          setToken("");
+        }}
+      />
+    ) : (
+      auth
+    );
   if (shared)
     return (
       <PublicShare key={shared.id} entry={shared} token={token} login={auth} />

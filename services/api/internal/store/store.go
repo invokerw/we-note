@@ -28,6 +28,9 @@ type Repository struct {
 	db            *sqlite.Database
 	blobStore     blob.Store
 	publicBase    string
+	settingsKey   []byte
+	backupMu      sync.Mutex
+	mailBase      string
 	exportMu      sync.Mutex
 	exportRunning bool
 }
@@ -37,10 +40,24 @@ func NewRepository(db *sqlite.Database, blobStores ...blob.Store) *Repository {
 	if len(blobStores) > 0 {
 		blobStore = blobStores[0]
 	}
-	return &Repository{db: db, blobStore: blobStore, publicBase: "https://localhost:8443"}
+	key := make([]byte, 32)
+	_, _ = rand.Read(key)
+	return &Repository{db: db, blobStore: blobStore, publicBase: "https://localhost:8443", settingsKey: key}
+}
+
+func (r *Repository) SetSettingsKey(key []byte) error {
+	if len(key) != 32 {
+		return errors.New("settings key must be 32 bytes")
+	}
+	r.settingsKey = append([]byte(nil), key...)
+	return nil
 }
 
 func (r *Repository) CreateUser(ctx context.Context, email, passwordHash string) (model.User, error) {
+	return r.createUser(ctx, email, passwordHash, "user", "active", time.Now().UTC())
+}
+
+func (r *Repository) createUser(ctx context.Context, email, passwordHash, role, status string, verifiedAt time.Time) (model.User, error) {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 	if normalizedEmail == "" || passwordHash == "" {
 		return model.User{}, fmt.Errorf("email and password hash are required")
@@ -50,25 +67,38 @@ func (r *Repository) CreateUser(ctx context.Context, email, passwordHash string)
 		return model.User{}, err
 	}
 	createdAt := time.Now().UTC()
+	var verifiedValue any
+	if !verifiedAt.IsZero() {
+		verifiedValue = formatTime(verifiedAt)
+	}
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO users(id, email, password_hash, created_at)
-		VALUES (?, ?, ?, ?)`, id, normalizedEmail, passwordHash, formatTime(createdAt))
+		INSERT INTO users(id, email, password_hash, created_at, role, status, email_verified_at, password_changed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id, normalizedEmail, passwordHash, formatTime(createdAt), role, status, verifiedValue, formatTime(createdAt))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
 			return model.User{}, ErrConflict
 		}
 		return model.User{}, fmt.Errorf("create user: %w", err)
 	}
-	return model.User{ID: id, Email: normalizedEmail, CreatedAt: createdAt}, nil
+	user := model.User{ID: id, Email: normalizedEmail, Role: role, Status: status, CreatedAt: createdAt}
+	if !verifiedAt.IsZero() {
+		user.EmailVerifiedAt = &verifiedAt
+	}
+	return user, nil
+}
+
+func (r *Repository) CreatePendingUser(ctx context.Context, email, passwordHash string) (model.User, error) {
+	return r.createUser(ctx, email, passwordHash, "user", "active", time.Time{})
 }
 
 func (r *Repository) UserByEmail(ctx context.Context, email string) (model.User, string, error) {
 	var user model.User
 	var passwordHash, createdAt string
+	var verifiedAt, disabledAt sql.NullString
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, email, password_hash, created_at
+		SELECT id, email, password_hash, created_at, role, status, email_verified_at, disabled_at
 		FROM users WHERE email = ?`, strings.ToLower(strings.TrimSpace(email))).Scan(
-		&user.ID, &user.Email, &passwordHash, &createdAt,
+		&user.ID, &user.Email, &passwordHash, &createdAt, &user.Role, &user.Status, &verifiedAt, &disabledAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.User{}, "", ErrNotFound
@@ -80,14 +110,22 @@ func (r *Repository) UserByEmail(ctx context.Context, email string) (model.User,
 	if err != nil {
 		return model.User{}, "", err
 	}
+	if verifiedAt.Valid {
+		parsed, parseErr := parseTime(verifiedAt.String)
+		if parseErr != nil {
+			return model.User{}, "", parseErr
+		}
+		user.EmailVerifiedAt = &parsed
+	}
 	return user, passwordHash, nil
 }
 
 func (r *Repository) UserByID(ctx context.Context, userID string) (model.User, error) {
 	var user model.User
 	var createdAt string
-	err := r.db.QueryRowContext(ctx, `SELECT id, email, created_at FROM users WHERE id = ?`, userID).Scan(
-		&user.ID, &user.Email, &createdAt,
+	var verifiedAt sql.NullString
+	err := r.db.QueryRowContext(ctx, `SELECT id, email, created_at, role, status, email_verified_at FROM users WHERE id = ?`, userID).Scan(
+		&user.ID, &user.Email, &createdAt, &user.Role, &user.Status, &verifiedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.User{}, ErrNotFound
@@ -99,10 +137,24 @@ func (r *Repository) UserByID(ctx context.Context, userID string) (model.User, e
 	if err != nil {
 		return model.User{}, err
 	}
+	if verifiedAt.Valid {
+		parsed, parseErr := parseTime(verifiedAt.String)
+		if parseErr != nil {
+			return model.User{}, parseErr
+		}
+		user.EmailVerifiedAt = &parsed
+	}
 	return user, nil
 }
 
 func (r *Repository) CreateSession(ctx context.Context, userID string, lifetime time.Duration) (model.Session, error) {
+	hash, err := r.PasswordHashByID(ctx, userID)
+	if err != nil {
+		return model.Session{}, err
+	}
+	return r.CreateLoginSession(ctx, userID, hash, lifetime)
+}
+func (r *Repository) CreateLoginSession(ctx context.Context, userID, passwordHash string, lifetime time.Duration) (model.Session, error) {
 	user, err := r.UserByID(ctx, userID)
 	if err != nil {
 		return model.Session{}, err
@@ -128,7 +180,14 @@ func (r *Repository) CreateSession(ctx context.Context, userID string, lifetime 
 		return model.Session{}, err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO sessions(id,user_id,token_hash,created_at,expires_at) VALUES(?,?,?,?,?)`, sessionID, user.ID, hex.EncodeToString(tokenHash[:]), formatTime(now), formatTime(expiresAt))
+	res, err := tx.ExecContext(ctx, `INSERT INTO sessions(id,user_id,token_hash,created_at,expires_at) SELECT ?,id,?,?,? FROM users WHERE id=? AND password_hash=? AND status='active'`, sessionID, hex.EncodeToString(tokenHash[:]), formatTime(now), formatTime(expiresAt), user.ID, passwordHash)
+	if err == nil {
+		var n int64
+		n, err = res.RowsAffected()
+		if n == 0 && err == nil {
+			return model.Session{}, ErrUnauthorized
+		}
+	}
 	if err != nil {
 		return model.Session{}, err
 	}
@@ -146,12 +205,13 @@ func (r *Repository) UserByAccessToken(ctx context.Context, accessToken string) 
 	tokenHash := sha256.Sum256([]byte(accessToken))
 	var user model.User
 	var createdAt string
+	var verifiedAt sql.NullString
 	err := r.db.QueryRowContext(ctx, `
-		SELECT u.id, u.email, u.created_at
+		SELECT u.id, u.email, u.created_at, u.role, u.status, u.email_verified_at
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`,
-		hex.EncodeToString(tokenHash[:]), formatTime(time.Now().UTC())).Scan(&user.ID, &user.Email, &createdAt)
+		WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND u.status = 'active'`,
+		hex.EncodeToString(tokenHash[:]), formatTime(time.Now().UTC())).Scan(&user.ID, &user.Email, &createdAt, &user.Role, &user.Status, &verifiedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.User{}, ErrUnauthorized
 	}
@@ -161,6 +221,13 @@ func (r *Repository) UserByAccessToken(ctx context.Context, accessToken string) 
 	user.CreatedAt, err = parseTime(createdAt)
 	if err != nil {
 		return model.User{}, err
+	}
+	if verifiedAt.Valid {
+		parsed, parseErr := parseTime(verifiedAt.String)
+		if parseErr != nil {
+			return model.User{}, parseErr
+		}
+		user.EmailVerifiedAt = &parsed
 	}
 	return user, nil
 }
@@ -367,7 +434,8 @@ func (r *Repository) Refresh(ctx context.Context, secret string) (model.Session,
 	}
 	defer tx.Rollback()
 	var id, created string
-	err = tx.QueryRowContext(ctx, `SELECT s.id,u.id,u.email,u.created_at FROM refresh_sessions f JOIN sessions s ON s.id=f.session_id JOIN users u ON u.id=s.user_id WHERE f.token_hash=? AND f.expires_at>? AND s.revoked_at IS NULL`, fmt.Sprintf("%x", sha256.Sum256([]byte(secret))), formatTime(now)).Scan(&id, &out.User.ID, &out.User.Email, &created)
+	var verifiedAt sql.NullString
+	err = tx.QueryRowContext(ctx, `SELECT s.id,u.id,u.email,u.created_at,u.role,u.status,u.email_verified_at FROM refresh_sessions f JOIN sessions s ON s.id=f.session_id JOIN users u ON u.id=s.user_id WHERE f.token_hash=? AND f.expires_at>? AND s.revoked_at IS NULL AND u.status='active'`, fmt.Sprintf("%x", sha256.Sum256([]byte(secret))), formatTime(now)).Scan(&id, &out.User.ID, &out.User.Email, &created, &out.User.Role, &out.User.Status, &verifiedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, ErrUnauthorized
 	}
@@ -377,6 +445,13 @@ func (r *Repository) Refresh(ctx context.Context, secret string) (model.Session,
 	out.User.CreatedAt, err = parseTime(created)
 	if err != nil {
 		return out, err
+	}
+	if verifiedAt.Valid {
+		parsed, parseErr := parseTime(verifiedAt.String)
+		if parseErr != nil {
+			return out, parseErr
+		}
+		out.User.EmailVerifiedAt = &parsed
 	}
 	out.ExpiresAt = now.Add(30 * time.Minute)
 	out.AccessToken = access

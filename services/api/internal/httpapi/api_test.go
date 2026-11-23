@@ -116,7 +116,15 @@ func testMux(t *testing.T) http.Handler {
 	if err := database.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	enableOpenRegistration(t, database)
 	return NewMux(store.NewRepository(database))
+}
+
+func enableOpenRegistration(t *testing.T, database *sqlite.Database) {
+	t.Helper()
+	if _, err := database.Exec(`INSERT INTO system_settings(key,value,updated_at) VALUES('registration_mode','open',CURRENT_TIMESTAMP),('require_email_verification','false',CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func registerUser(t *testing.T, handler http.Handler, email, plainTextPassword string) model.User {

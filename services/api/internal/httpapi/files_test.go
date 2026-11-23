@@ -23,6 +23,7 @@ func TestFileReadEndpoints(t *testing.T) {
 	if err := database.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
+	enableOpenRegistration(t, database)
 	blobStore, err := blob.NewLocalStore(filepath.Join(t.TempDir(), "storage"))
 	if err != nil {
 		t.Fatal(err)

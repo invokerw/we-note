@@ -27,6 +27,7 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 		if err = db.Migrate(ctx); err != nil {
 			t.Fatal(err)
 		}
+		enableOpenRegistration(t, db)
 		b, err := blob.NewLocalStore(filepath.Join(dir, "blobs"))
 		if err != nil {
 			t.Fatal(err)

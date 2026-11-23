@@ -27,6 +27,7 @@ func TestLinkLifetimeScopeAndDownloadLimit(t *testing.T) {
 	if e = db.Migrate(ctx); e != nil {
 		t.Fatal(e)
 	}
+	enableOpenRegistration(t, db)
 	blobs, e := blob.NewLocalStore(t.TempDir())
 	if e != nil {
 		t.Fatal(e)
