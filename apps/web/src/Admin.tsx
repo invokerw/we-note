@@ -1,3 +1,4 @@
+import { AdminUsers, type AdminUser } from "./AdminUsers";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -40,24 +41,13 @@ import {
   Status,
 } from "./AdminUI";
 import { SettingsPanel, type Settings } from "./AdminSettings";
-import { Inventory, Logs } from "./AdminDetails";
+import { Inventory } from "./AdminInventory";
+import { Logs } from "./AdminDetails";
 import { request } from "./api";
 type Overview = {
   users: number;
   active_users: number;
   pending_invites: number;
-  vaults: number;
-  files: number;
-  assets: number;
-  storage_bytes: number;
-};
-type AdminUser = {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  email_verified_at?: string;
-  created_at: string;
   vaults: number;
   files: number;
   assets: number;
@@ -212,7 +202,7 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
     window.scrollTo(0, 0);
   }
   function action(path: string, success: string, body?: unknown) {
-    void run(async () => {
+    return run(async () => {
       const r = await request(token, "/api/v1/admin/" + path, "POST", body),
         result = r.status === 204 ? {} : await r.json();
       await refresh();
@@ -462,91 +452,12 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
             </>
           )}
           {tab === "users" && (
-            <Card>
-              <DataTable<AdminUser>
-                rowKey="id"
-                dataSource={users}
-                columns={[
-                  {
-                    title: "邮箱",
-                    dataIndex: "email",
-                    render: (v, u) => (
-                      <div className="gm-identity">
-                        {v}
-                        <small>{formatDate(u.created_at)}</small>
-                      </div>
-                    ),
-                  },
-                  {
-                    title: "状态",
-                    render: (_, u) =>
-                      u.status === "disabled" ? (
-                        <Status color="red">已禁用</Status>
-                      ) : u.role === "system_admin" ? (
-                        <Status color="purple">管理员</Status>
-                      ) : (
-                        <Status color="green">正常</Status>
-                      ),
-                  },
-                  {
-                    title: "邮箱验证",
-                    render: (_, u) =>
-                      u.email_verified_at ? "已验证" : "未验证",
-                  },
-                  { title: "笔记库", dataIndex: "vaults" },
-                  {
-                    title: "占用",
-                    dataIndex: "storage_bytes",
-                    render: formatBytes,
-                  },
-                  {
-                    title: "操作",
-                    render: (_, u) => (
-                      <Space size={0}>
-                        {u.role !== "system_admin" && (
-                          <Button
-                            type="link"
-                            danger={u.status !== "disabled"}
-                            onClick={() =>
-                              u.status === "disabled"
-                                ? action(`users/${u.id}/enable`, "账户已恢复")
-                                : action(
-                                    `users/${u.id}/disable`,
-                                    "账户已禁用",
-                                    { reason: "管理员操作" },
-                                  )
-                            }
-                          >
-                            {u.status === "disabled" ? "恢复" : "禁用"}
-                          </Button>
-                        )}
-                        <Button
-                          type="link"
-                          onClick={() =>
-                            action(
-                              `users/${u.id}/reset-password`,
-                              "已请求重置密码",
-                            )
-                          }
-                        >
-                          重置密码
-                        </Button>
-                        {u.role !== "system_admin" && (
-                          <Button
-                            type="link"
-                            onClick={() =>
-                              action(`users/${u.id}/logout`, "会话已撤销")
-                            }
-                          >
-                            撤销会话
-                          </Button>
-                        )}
-                      </Space>
-                    ),
-                  },
-                ]}
-              />
-            </Card>
+            <AdminUsers
+              users={users}
+              action={action}
+              busy={busy}
+              error={error}
+            />
           )}
           {tab === "invites" && (
             <Card
@@ -623,7 +534,13 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
             />
           )}
           {tab === "storage" && (
-            <Inventory key={revision} token={token} action={action} />
+            <Inventory
+              revision={revision}
+              token={token}
+              action={action}
+              busy={busy}
+              errorMessage={error}
+            />
           )}
           {tab === "logs" && <Logs key={revision} token={token} />}
           {tab === "backups" && (

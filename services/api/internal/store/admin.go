@@ -29,10 +29,14 @@ type AdminOverview struct {
 
 type AdminUser struct {
 	model.User
-	Vaults       int64 `json:"vaults"`
-	Files        int64 `json:"files"`
-	Assets       int64 `json:"assets"`
-	StorageBytes int64 `json:"storage_bytes"`
+	LastLoginAt    string `json:"last_login_at,omitempty"`
+	DisabledAt     string `json:"disabled_at,omitempty"`
+	DisabledReason string `json:"disabled_reason,omitempty"`
+	DeletedAt      string `json:"deleted_at,omitempty"`
+	Vaults         int64  `json:"vaults"`
+	Files          int64  `json:"files"`
+	Assets         int64  `json:"assets"`
+	StorageBytes   int64  `json:"storage_bytes"`
 }
 
 type Invitation struct {
@@ -308,7 +312,7 @@ func (r *Repository) AdminOverview(ctx context.Context) (AdminOverview, error) {
 		dest  *int64
 		query string
 	}{
-		{&out.Users, `SELECT count(*) FROM users`},
+		{&out.Users, `SELECT count(*) FROM users WHERE status!='deleted'`},
 		{&out.ActiveUsers, `SELECT count(*) FROM users WHERE status='active'`},
 		{&out.PendingInvites, `SELECT count(*) FROM invitations WHERE used_at IS NULL AND revoked_at IS NULL AND expires_at>?`},
 		{&out.Vaults, `SELECT count(*) FROM vaults`},
@@ -332,7 +336,7 @@ func (r *Repository) AdminOverview(ctx context.Context) (AdminOverview, error) {
 
 func (r *Repository) ListAdminUsers(ctx context.Context) ([]AdminUser, error) {
 	rows, err := r.db.QueryContext(ctx, `
-SELECT u.id,u.email,u.created_at,u.role,u.status,u.email_verified_at,
+SELECT u.id,u.email,u.created_at,u.role,u.status,u.email_verified_at,COALESCE(u.last_login_at,''),COALESCE(u.disabled_at,''),COALESCE(u.disabled_reason,''),COALESCE(u.deleted_at,''),
        (SELECT count(*) FROM vaults WHERE owner_user_id=u.id),
  (SELECT count(*) FROM files f JOIN vaults v ON v.id=f.vault_id WHERE v.owner_user_id=u.id AND f.is_deleted=0),
  (SELECT count(*) FROM assets a JOIN vaults v ON v.id=a.vault_id WHERE v.owner_user_id=u.id AND a.is_deleted=0),
@@ -347,7 +351,7 @@ SELECT u.id,u.email,u.created_at,u.role,u.status,u.email_verified_at,
 		var item AdminUser
 		var created string
 		var verified sql.NullString
-		if err := rows.Scan(&item.ID, &item.Email, &created, &item.Role, &item.Status, &verified, &item.Vaults, &item.Files, &item.Assets, &item.StorageBytes); err != nil {
+		if err := rows.Scan(&item.ID, &item.Email, &created, &item.Role, &item.Status, &verified, &item.LastLoginAt, &item.DisabledAt, &item.DisabledReason, &item.DeletedAt, &item.Vaults, &item.Files, &item.Assets, &item.StorageBytes); err != nil {
 			return nil, err
 		}
 		item.CreatedAt, err = parseTime(created)
@@ -366,34 +370,64 @@ SELECT u.id,u.email,u.created_at,u.role,u.status,u.email_verified_at,
 	return out, rows.Err()
 }
 
-func (r *Repository) SetUserStatus(ctx context.Context, userID, status, reason string) error {
-	if status != "active" && status != "disabled" {
-		return errors.New("invalid user status")
-	}
-	var disabledAt any
-	if status == "disabled" {
-		disabledAt = formatTime(time.Now().UTC())
-	}
+// ChangeUserStatus commits the state change, credential revocation and audit together.
+func (r *Repository) ChangeUserStatus(ctx context.Context, actor, id, action, reason, confirmEmail string) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `UPDATE users SET status=?,disabled_at=?,disabled_reason=? WHERE id=?`, status, disabledAt, reason, userID)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err == nil && n == 0 {
+	var role, status, email string
+	if err = tx.QueryRowContext(ctx, `SELECT role,status,email FROM users WHERE id=?`, id).Scan(&role, &status, &email); errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	if role == "system_admin" || actor == id {
+		return fileError(403, "PROTECTED_ACCOUNT", "管理员账户受保护")
+	}
+	now := formatTime(time.Now().UTC())
+	invalidState := fileError(409, "ACCOUNT_STATE_CONFLICT", "账户状态已变化，请刷新用户列表")
+	switch action {
+	case "disable":
+		if status != "active" {
+			return invalidState
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE users SET status='disabled',disabled_at=?,disabled_reason=? WHERE id=?`, now, reason, id)
+	case "enable":
+		if status != "disabled" {
+			return invalidState
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE users SET status='active',disabled_at=NULL,disabled_reason=NULL WHERE id=?`, id)
+	case "delete":
+		if !strings.EqualFold(strings.TrimSpace(confirmEmail), email) {
+			return fileError(400, "EMAIL_MISMATCH", "请填写该账户的完整邮箱")
+		}
+		if status == "deleted" {
+			return invalidState
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE users SET status='deleted',deleted_at=? WHERE id=?`, now, id)
+	case "restore":
+		if status != "deleted" {
+			return invalidState
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE users SET status=CASE WHEN disabled_at IS NULL THEN 'active' ELSE 'disabled' END,deleted_at=NULL WHERE id=?`, id)
+	default:
+		return fileError(400, "INVALID_REQUEST", "未知账户操作")
 	}
 	if err != nil {
 		return err
 	}
-	if status == "disabled" {
-		if _, err = tx.ExecContext(ctx, `UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL`, disabledAt, userID); err != nil {
+	if action == "disable" || action == "delete" {
+		if _, err = tx.ExecContext(ctx, `UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL`, now, id); err != nil {
 			return err
 		}
+		if _, err = tx.ExecContext(ctx, `UPDATE password_reset_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL`, now, id); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO admin_audit_events(actor_user_id,action,object_type,object_id,detail,created_at) VALUES(?,?,'user',?,?,?)`, actor, "user."+action, id, reason, now); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
@@ -647,7 +681,14 @@ func (r *Repository) CreatePasswordResetToken(ctx context.Context, userID string
 		return "", err
 	}
 	now := time.Now().UTC()
-	_, err = r.db.ExecContext(ctx, `INSERT INTO password_reset_tokens(id,user_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?)`, id, userID, tokenHash, formatTime(now.Add(lifetime)), formatTime(now))
+	res, err := r.db.ExecContext(ctx, `INSERT INTO password_reset_tokens(id,user_id,token_hash,expires_at,created_at) SELECT ?,id,?,?,? FROM users WHERE id=? AND status='active'`, id, tokenHash, formatTime(now.Add(lifetime)), formatTime(now), userID)
+	if err != nil {
+		return "", err
+	}
+	n, err := res.RowsAffected()
+	if err == nil && n == 0 {
+		return "", fileError(409, "ACCOUNT_INACTIVE", "请先恢复并启用该账户")
+	}
 	return token, err
 }
 
@@ -845,20 +886,47 @@ ORDER BY a.created_at DESC,a.id DESC`)
 	return out, rows.Err()
 }
 
-func (r *Repository) SetAdminAssetDeleted(ctx context.Context, assetID string, deleted bool) error {
-	value := 0
-	if deleted {
-		value = 1
+// A batch is one transaction, including the per-attachment audit events.
+func (r *Repository) ChangeAdminAssets(ctx context.Context, actor, operation string, ids []string, requireChange bool) error {
+	if operation != "delete" && operation != "restore" {
+		return fileError(400, "INVALID_OPERATION", "请选择移入回收站或恢复")
 	}
-	res, err := r.db.ExecContext(ctx, `UPDATE assets SET is_deleted=? WHERE id=?`, value, assetID)
+	if len(ids) == 0 || len(ids) > 200 {
+		return fileError(400, "INVALID_SELECTION", "每次请选择 1 至 200 个附件")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, err := res.RowsAffected()
-	if err == nil && n == 0 {
-		return ErrNotFound
+	defer tx.Rollback()
+	seen := make(map[string]bool, len(ids))
+	now := formatTime(time.Now().UTC())
+	deleted := operation == "delete"
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			return fileError(400, "INVALID_SELECTION", "附件标识重复或为空")
+		}
+		seen[id] = true
+		var current bool
+		if err = tx.QueryRowContext(ctx, `SELECT is_deleted FROM assets WHERE id=?`, id).Scan(&current); errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if current == deleted {
+			if requireChange {
+				return fileError(409, "ASSET_STATE_CONFLICT", "附件状态已变化，请刷新清单后重试")
+			}
+			continue
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE assets SET is_deleted=? WHERE id=?`, deleted, id); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO admin_audit_events(actor_user_id,action,object_type,object_id,created_at) VALUES(?,?,'asset',?,?)`, actor, "asset."+operation, id, now); err != nil {
+			return err
+		}
 	}
-	return err
+	return tx.Commit()
 }
 
 type EmailDelivery struct {

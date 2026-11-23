@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at TEXT,
     password_changed_at TEXT,
     disabled_at TEXT,
-    disabled_reason TEXT
+    disabled_reason TEXT,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS vaults (
@@ -346,6 +347,7 @@ func ensureCompatibilityColumns(ctx context.Context, db *Database) error {
 		{"users", "email_verified_at", `ALTER TABLE users ADD COLUMN email_verified_at TEXT`},
 		{"users", "last_login_at", `ALTER TABLE users ADD COLUMN last_login_at TEXT`},
 		{"users", "password_changed_at", `ALTER TABLE users ADD COLUMN password_changed_at TEXT`},
+		{"users", "deleted_at", `ALTER TABLE users ADD COLUMN deleted_at TEXT`},
 		{"users", "disabled_at", `ALTER TABLE users ADD COLUMN disabled_at TEXT`},
 		{"users", "disabled_reason", `ALTER TABLE users ADD COLUMN disabled_reason TEXT`},
 	}

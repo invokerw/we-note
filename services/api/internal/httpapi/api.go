@@ -136,6 +136,10 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "email or password is incorrect")
 		return
 	}
+	if user.Status == "deleted" {
+		writeError(w, 403, "ACCOUNT_DELETED", "账户已移入回收站，请联系管理员")
+		return
+	}
 	if user.Status == "disabled" {
 		writeError(w, http.StatusForbidden, "ACCOUNT_DISABLED", "account is disabled")
 		return

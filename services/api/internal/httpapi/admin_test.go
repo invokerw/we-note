@@ -343,3 +343,141 @@ func TestOptionalVerificationDoesNotCertifyEmail(t *testing.T) {
 		t.Fatalf("registration policy status %d", response.Code)
 	}
 }
+
+func TestAdminUserTrashLifecycle(t *testing.T) {
+	mux := testMux(t)
+	t.Setenv("WENOTE_SETUP_TOKEN", "lifecycle-test-token")
+	owner := requestJSON(t, mux, "POST", "/api/v1/admin/bootstrap", "", map[string]string{"setup_token": "lifecycle-test-token", "email": "owner@example.test", "password": "owner password"})
+	if owner.Code != 201 {
+		t.Fatal(owner.Code)
+	}
+	var admin struct{ ID string }
+	decodeResponse(t, owner, &admin)
+	adminToken := loginUser(t, mux, "owner@example.test", "owner password")
+	user := registerUser(t, mux, "member@example.test", "member password")
+	login := func() int {
+		return requestJSON(t, mux, "POST", "/api/v1/auth/login", "", map[string]string{"email": user.Email, "password": "member password"}).Code
+	}
+	var session struct {
+		Access  string `json:"access_token"`
+		Refresh string `json:"refresh_token"`
+	}
+	decodeResponse(t, requestJSON(t, mux, "POST", "/api/v1/auth/login", "", map[string]string{"email": user.Email, "password": "member password"}), &session)
+	token := "Bearer " + session.Access
+	change := func(actor, id, action string, input any, want int) {
+		t.Helper()
+		got := requestJSON(t, mux, "POST", "/api/v1/admin/users/"+id+"/"+action, actor, input)
+		if got.Code != want {
+			t.Fatalf("%s: got %d want %d", action, got.Code, want)
+		}
+	}
+	confirm := map[string]string{"confirm_email": user.Email}
+	change(token, user.ID, "delete", confirm, 403)
+	change(adminToken, user.ID, "delete", map[string]string{"confirm_email": "other@example.test"}, 400)
+	change(adminToken, admin.ID, "delete", map[string]string{"confirm_email": "owner@example.test"}, 403)
+	change(adminToken, user.ID, "delete", confirm, 204)
+	if login() != 403 {
+		t.Fatal("deleted account could log in")
+	}
+	if got := requestJSON(t, mux, "GET", "/api/v1/me", token, nil).Code; got != 401 {
+		t.Fatal("old session active after deletion")
+	}
+	change(adminToken, user.ID, "enable", nil, 409)
+	change(adminToken, user.ID, "reset-password", nil, 409)
+	change(adminToken, user.ID, "restore", nil, 204)
+	if got := requestJSON(t, mux, "POST", "/api/v1/auth/refresh", "", map[string]string{"refresh_token": session.Refresh}).Code; got != 401 {
+		t.Fatalf("restored account reused revoked refresh token: %d", got)
+	}
+	if login() != 200 {
+		t.Fatal("restore should reactivate formerly active account")
+	}
+	if got := requestJSON(t, mux, "GET", "/api/v1/me", token, nil).Code; got != 401 {
+		t.Fatal("restore revived old session")
+	}
+	change(adminToken, user.ID, "disable", map[string]string{"reason": "停用测试"}, 204)
+	change(adminToken, user.ID, "delete", confirm, 204)
+	change(adminToken, user.ID, "restore", nil, 204)
+	if login() != 403 {
+		t.Fatal("restore should preserve previous suspension")
+	}
+	users := requestJSON(t, mux, "GET", "/api/v1/admin/users", adminToken, nil)
+	if !strings.Contains(users.Body.String(), "停用测试") {
+		t.Fatal("missing suspension reason")
+	}
+	change(adminToken, user.ID, "enable", nil, 204)
+	if login() != 200 {
+		t.Fatal("enable did not restore access")
+	}
+	events := requestJSON(t, mux, "GET", "/api/v1/admin/audit", adminToken, nil)
+	for _, action := range []string{"user.delete", "user.restore", "user.disable", "user.enable"} {
+		if !strings.Contains(events.Body.String(), action) {
+			t.Fatal("missing audit event", action)
+		}
+	}
+}
+
+func TestAdminAssetBatchAtomic(t *testing.T) {
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	enableOpenRegistration(t, db)
+	repo := store.NewRepository(db)
+	mux := NewMux(repo)
+	t.Setenv("WENOTE_SETUP_TOKEN", "batch-test-token")
+	r := requestJSON(t, mux, "POST", "/api/v1/admin/bootstrap", "", map[string]string{"setup_token": "batch-test-token", "email": "admin@example.test", "password": "admin password"})
+	if r.Code != 201 {
+		t.Fatal(r.Code)
+	}
+	admin := loginUser(t, mux, "admin@example.test", "admin password")
+	member := registerUser(t, mux, "member@example.test", "user password")
+	user := loginUser(t, mux, member.Email, "user password")
+	v, err := repo.CreateVault(ctx, member.ID, "vault")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, name := range []string{"a.txt", "b.txt"} {
+		a, err := repo.CreateAsset(ctx, member.ID, v.ID, name, "text/plain", "sha256:"+strings.Repeat("0", 64), name, 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, a.ID)
+	}
+	batch := func(token, operation string, items []string, want int) {
+		t.Helper()
+		r := requestJSON(t, mux, "POST", "/api/v1/admin/assets/batch", token, map[string]any{"operation": operation, "asset_ids": items})
+		if r.Code != want {
+			t.Fatalf("%s: got %d want %d", operation, r.Code, want)
+		}
+	}
+	count := func(want int) {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM assets WHERE is_deleted=1`).Scan(&n); err != nil || n != want {
+			t.Fatalf("trashed %d want %d: %v", n, want, err)
+		}
+	}
+	batch(user, "delete", ids, 403)
+	batch(admin, "delete", nil, 400)
+	batch(admin, "purge", ids, 400)
+	batch(admin, "delete", []string{ids[0], ids[0]}, 400)
+	batch(admin, "delete", []string{ids[0], "missing"}, 404)
+	count(0)
+	batch(admin, "delete", ids, 204)
+	count(2)
+	batch(admin, "restore", []string{ids[0]}, 204)
+	batch(admin, "restore", []string{ids[1], ids[0]}, 409)
+	count(1)
+	batch(admin, "restore", []string{ids[1]}, 204)
+	count(0)
+	var events int
+	if err = db.QueryRow(`SELECT COUNT(*) FROM admin_audit_events WHERE action IN ('asset.delete','asset.restore')`).Scan(&events); err != nil || events != 4 {
+		t.Fatalf("expected four committed audit rows, got %d", events)
+	}
+}

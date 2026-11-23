@@ -114,7 +114,7 @@
 | --- | --- |
 | 启动命令 | `./scripts/local.py start --port 18080` |
 | 地址和端口 | `http://localhost:18080` |
-| PID | `76042`，以 `./scripts/local.py status` 为准 |
+| PID | `77794`，以 `./scripts/local.py status` 为准 |
 | 日志 | `dist/local/server.log` |
 | 数据目录 | `services/api/data`，由任务 worktree 管理 |
 | 测试账户或初始化步骤 | 打开 `/gm`，从 `services/api/data/setup.token` 复制初始化令牌，使用独立管理员邮箱创建账号 |
@@ -149,6 +149,25 @@
 | 2026-11-23 | `DELIVERED` | 服务端全量测试、Web 构建和隔离服务冒烟通过 | 交付用户验收 |
 | 2026-11-23 | `CHANGES_REQUESTED` | 用户要求重新设计 GM 界面并选用 UI 框架 | 在原分支改进 Web 页面 |
 | 2026-11-23 | `DELIVERED` | Ant Design 改版通过构建、浏览器回归和两种宽度的截图检查 | 用户在原地址验收 |
+| 2026-11-23 | `CHANGES_REQUESTED` | 用户反馈需要细化禁用、删除等用户管理操作 | 增加账户状态管理与回收站 |
+| 2026-11-23 | `DELIVERED` | 用户回收站和附件条件筛选、批量操作通过接口及浏览器回归 | 在原 GM 实例验收 |
+
+## 用户管理细化
+
+在原 GM 功能任务内补充邮箱搜索、状态筛选、用户详情、禁用原因、删除确认和回收站恢复。验收覆盖会话撤销、管理员保护、状态转换及笔记数据保留。
+
+## 附件清单细化
+
+支持组合筛选、排序、分页勾选、已选总大小、批量移入回收站及恢复。需验证管理员权限、整批回滚与操作审计。
+
+单次最多操作 200 项。可按名称、所属用户、笔记库、MIME 类型、上传状态及最小大小组合筛选，可切换在用附件和回收站。可按名称、大小或创建时间排序。勾选可跨页保留，更改筛选会清空选择。回收站保留原文件，批量操作按附件写入审计。
+
+| 2026-11-23 检查 | 命令与结果 |
+| --- | --- |
+| 失败用例 | 开发前分别执行 `go test ./internal/httpapi -run TestAdminUserTrashLifecycle -count=1` 和 `go test ./internal/httpapi -run TestAdminAssetBatchAtomic -count=1`。两者退出 1，对应路由尚未实现，返回 404 |
+| 服务端 | `go -C services/api test -count=1 ./...` 和 `go -C services/api vet ./...` 均通过，覆盖还原前状态、旧会话和刷新令牌失效、管理员保护、批次重复项、缺失项与冲突回滚 |
+| Web | `npm run build --prefix apps/web` 和 `node apps/web/tests/gm.mjs` 通过。使用 12 个临时附件验证跨页选择、文件名与类型筛选、10 MiB 大小阈值、批量回收与恢复。临时账户从回收站还原并启用后，能读回原笔记 |
+| 手动验收 | 在「用户」打开「更多操作 → 删除账户」，输入邮箱后在「回收站」还原。在「附件与存储」筛选、勾选附件，核对数量、总大小与文件名后批量操作 |
 
 ## 界面改版验收
 

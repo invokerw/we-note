@@ -223,7 +223,8 @@ try {
   await button(gm, "刷新").click();
   await button(gm, "用户").click();
   const row = gm.getByRole("row").filter({ hasText: email });
-  await row.getByRole("button", { name: "重置密码" }).click();
+  await button(row, "更多操作").click();
+  await gm.getByRole("menuitem", { name: "重置密码" }).click();
   await gm.getByText("邮件投递状态 sent", { exact: true }).waitFor();
   await user.goto(mailLink("reset", origin));
   await user.getByLabel("新密码").fill(last);
@@ -259,12 +260,75 @@ try {
       )
     ).ok,
   );
+  // A second file makes the batch path distinct from the row action.
+  await json(origin, base + "/assets/uploads", valid, "POST", {
+    name: "pending.pdf",
+    media_type: "application/pdf",
+    content_size: bytes.length,
+    content_hash: asset.content_hash,
+  });
   await button(gm, "附件与存储").click();
-  await gm.getByRole("cell", { name: "sample.txt" }).waitFor();
-  await button(gm, "移入回收站").click();
+  const assetRow = (name) => gm.getByRole("row").filter({ hasText: name });
+  const sample = assetRow("sample.txt");
+  await sample.getByRole("checkbox").check();
+  const search = gm.getByRole("textbox", { name: "搜索附件名称" });
+  await search.fill("pending");
+  await assetRow("pending.pdf").waitFor();
+  assert.equal(await sample.count(), 0);
+  assert.equal(await button(gm, "批量移入回收站").isDisabled(), true);
+  await search.fill("");
+  await gm.getByRole("combobox", { name: "附件类型筛选" }).click();
+  await gm.getByTitle("text/plain", { exact: true }).click();
+  assert.equal(await assetRow("pending.pdf").count(), 0);
+  await button(gm, "重置筛选").click();
+  await sample.getByRole("checkbox").check();
+  await assetRow("pending.pdf").getByRole("checkbox").check();
+  await button(gm, "批量移入回收站").click();
+  await gm
+    .getByRole("dialog")
+    .getByText(/2 个附件/)
+    .waitFor();
   await button(gm.getByRole("dialog"), "确认移入").click();
-  await button(gm, "恢复附件").click();
-  await button(gm, "移入回收站").waitFor();
+  await sample.waitFor({ state: "hidden" });
+  await gm.getByText("回收站", { exact: true }).click();
+  await sample.getByRole("checkbox").check();
+  await assetRow("pending.pdf").getByRole("checkbox").check();
+  await button(gm, "批量恢复").click();
+  await button(gm.getByRole("dialog"), "确认恢复").click();
+  await sample.waitFor({ state: "hidden" });
+  await gm
+    .locator(".ant-segmented")
+    .getByText("在用附件", { exact: true })
+    .click();
+  await sample.waitFor();
+  for (let index = 0; index < 10; index++) {
+    await json(origin, base + "/assets/uploads", valid, "POST", {
+      name: `page-${index}.bin`,
+      media_type: "application/octet-stream",
+      content_size: index === 0 ? 10 * 1024 * 1024 : 16,
+      content_hash: asset.content_hash,
+    });
+  }
+  await button(gm, "刷新").click();
+  await gm.getByText("共 12 个附件", { exact: true }).waitFor();
+  const tableRows = gm.locator("tbody tr[data-row-key]");
+  await tableRows.first().getByRole("checkbox").check();
+  await gm.locator(".ant-pagination-item-2").click();
+  await tableRows.first().getByRole("checkbox").check();
+  await button(gm, "批量移入回收站").click();
+  await gm
+    .getByRole("dialog")
+    .getByText(/2 个附件/)
+    .waitFor();
+  await gm
+    .getByRole("dialog")
+    .getByRole("button", { name: "取消", exact: true })
+    .click();
+  await gm.getByRole("combobox", { name: "最小文件大小" }).click();
+  await gm.getByTitle("至少 10 MiB", { exact: true }).click();
+  await assetRow("page-0.bin").waitFor();
+  assert.equal(await tableRows.count(), 1);
+  assert.equal(await button(gm, "批量移入回收站").isDisabled(), true);
   await button(gm, "操作记录").click();
   await gm.getByRole("cell", { name: "smtp_test", exact: true }).waitFor();
   await button(gm, "备份").click();
@@ -325,17 +389,41 @@ try {
     await gm.setViewportSize({ width: 1280, height: 840 });
     await button(gm, "用户").click();
   }
-  await row.getByRole("button", { name: "撤销会话" }).click();
+  await button(row, "更多操作").click();
+  await gm.getByRole("menuitem", { name: "撤销会话" }).click();
   await gm.getByText("会话已撤销", { exact: true }).waitFor();
   assert.equal((await api(origin, "me", valid)).status, 401);
   await row.getByRole("button", { name: "禁用", exact: true }).click();
-  await row.getByRole("button", { name: "恢复", exact: true }).waitFor();
+  await gm.getByRole("dialog").getByLabel("禁用原因").fill("测试停用");
+  await button(gm.getByRole("dialog"), "确认禁用").click();
+  await button(row, "启用").waitFor();
   assert.equal((await login(last)).status, 403);
-  await row.getByRole("button", { name: "恢复", exact: true }).click();
+  await gm.getByLabel("搜索用户邮箱").fill("member@");
+  await button(row, "更多操作").click();
+  await gm.getByRole("menuitem", { name: "删除账户" }).click();
+  const deletion = gm.getByRole("dialog", { name: "删除账户" });
+  assert.equal(await button(deletion, "确认删除").isDisabled(), true);
+  await deletion.getByLabel("输入完整邮箱确认").fill(email);
+  await button(deletion, "确认删除").click();
+  await row.waitFor({ state: "hidden" });
+  await gm.getByText("回收站", { exact: true }).click();
+  await button(row, "还原账户").click();
+  await row.waitFor({ state: "hidden" });
+  await gm.getByText("用户列表", { exact: true }).click();
+  await button(row, "启用").waitFor();
+  assert.equal((await login(last)).status, 403);
+  await button(row, "启用").click();
   await row.getByRole("button", { name: "禁用", exact: true }).waitFor();
-  assert.equal((await login(last)).status, 200);
+  const afterRestore = await (await login(last)).json();
+  assert.ok(afterRestore.access_token);
+  const originalNote = await api(
+    origin,
+    base + "/files/" + note.file_id + "/content",
+    afterRestore.access_token,
+  );
+  assert.equal(await originalNote.text(), content);
   console.log(
-    "GM browser acceptance passed: setup, SMTP, invitation, verification, permissions, passwords, user status, asset trash, audit and recovery of note and attachment.",
+    "GM browser acceptance passed: setup, SMTP, invitation, verification, permissions, passwords, user trash and suspension, filtered multi-page asset selection, batch trash/restore, audit and recovery of note and attachment.",
   );
 } finally {
   await chrome?.close();

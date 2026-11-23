@@ -32,10 +32,12 @@ func (a *API) adminRoutes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/admin/assets/{asset_id}/restore", a.adminDeleteAsset)
 	m.HandleFunc("POST /api/v1/admin/users/{user_id}/logout", a.adminLogoutUser)
 	m.HandleFunc("GET /api/v1/admin/storage", a.adminStorage)
+	m.HandleFunc("POST /api/v1/admin/assets/batch", a.adminBatchAssets)
 	m.HandleFunc("GET /api/v1/admin/assets", a.adminAssets)
 	m.HandleFunc("POST /api/v1/admin/assets/{asset_id}/delete", a.adminDeleteAsset)
-	m.HandleFunc("POST /api/v1/admin/users/{user_id}/disable", a.adminDisableUser)
-	m.HandleFunc("POST /api/v1/admin/users/{user_id}/enable", a.adminEnableUser)
+	for _, action := range []string{"disable", "enable", "delete", "restore"} {
+		m.HandleFunc("POST /api/v1/admin/users/{user_id}/"+action, a.adminChangeUserStatus(action))
+	}
 	m.HandleFunc("POST /api/v1/admin/users/{user_id}/reset-password", a.adminResetPassword)
 	m.HandleFunc("GET /api/v1/admin/invitations", a.adminInvitations)
 	m.HandleFunc("POST /api/v1/admin/invitations", a.adminCreateInvitation)
@@ -170,65 +172,63 @@ func (a *API) adminDeleteAsset(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := a.repository.SetAdminAssetDeleted(r.Context(), r.PathValue("asset_id"), r.Pattern != "POST /api/v1/admin/assets/{asset_id}/restore"); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "asset not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not delete asset")
+	operation := "delete"
+	if strings.HasSuffix(r.Pattern, "/restore") {
+		operation = "restore"
+	}
+	if err := a.repository.ChangeAdminAssets(r.Context(), admin.ID, operation, []string{r.PathValue("asset_id")}, false); err != nil {
+		resourceError(w, err)
 		return
 	}
-	_ = a.repository.RecordAdminAudit(r.Context(), admin.ID, r.Pattern, "asset", r.PathValue("asset_id"), "")
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(204)
 }
-
-func (a *API) adminDisableUser(w http.ResponseWriter, r *http.Request) {
+func (a *API) adminBatchAssets(w http.ResponseWriter, r *http.Request) {
 	admin, ok := a.adminUser(w, r)
 	if !ok {
-		return
-	}
-	id := r.PathValue("user_id")
-	if id == admin.ID {
-		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "administrator cannot disable the current account")
 		return
 	}
 	var input struct {
-		Reason string `json:"reason"`
+		Operation string   `json:"operation"`
+		IDs       []string `json:"asset_ids"`
 	}
-	if r.Body != nil && r.ContentLength != 0 {
-		if err := decodeJSON(w, r, &input); err != nil {
-			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
-			return
-		}
-	}
-	if err := a.repository.SetUserStatus(r.Context(), id, "disabled", input.Reason); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not disable user")
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, 400, "INVALID_REQUEST", err.Error())
 		return
 	}
-	_ = a.repository.RecordAdminAudit(r.Context(), admin.ID, "user.disable", "user", id, input.Reason)
-	w.WriteHeader(http.StatusNoContent)
+	if err := a.repository.ChangeAdminAssets(r.Context(), admin.ID, input.Operation, input.IDs, true); err != nil {
+		resourceError(w, err)
+		return
+	}
+	w.WriteHeader(204)
 }
 
-func (a *API) adminEnableUser(w http.ResponseWriter, r *http.Request) {
-	admin, ok := a.adminUser(w, r)
-	if !ok {
-		return
-	}
-	id := r.PathValue("user_id")
-	if err := a.repository.SetUserStatus(r.Context(), id, "active", ""); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "NOT_FOUND", "user not found")
+func (a *API) adminChangeUserStatus(action string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := a.adminUser(w, r)
+		if !ok {
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not enable user")
-		return
+		var input struct {
+			Reason       string `json:"reason"`
+			ConfirmEmail string `json:"confirm_email"`
+		}
+		if r.ContentLength != 0 {
+			if err := decodeJSON(w, r, &input); err != nil {
+				writeError(w, 400, "INVALID_REQUEST", err.Error())
+				return
+			}
+		}
+		reason := strings.TrimSpace(input.Reason)
+		if len([]rune(reason)) > 500 {
+			writeError(w, 400, "INVALID_REQUEST", "原因最多 500 字")
+			return
+		}
+		if err := a.repository.ChangeUserStatus(r.Context(), admin.ID, r.PathValue("user_id"), action, reason, input.ConfirmEmail); err != nil {
+			resourceError(w, err)
+			return
+		}
+		w.WriteHeader(204)
 	}
-	_ = a.repository.RecordAdminAudit(r.Context(), admin.ID, "user.enable", "user", id, "")
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +247,7 @@ func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	token, err := a.repository.CreatePasswordResetToken(r.Context(), user.ID, time.Hour)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not create password reset")
+		resourceError(w, err)
 		return
 	}
 	status := a.deliverEmail(r.Context(), "password_reset", user.Email, "重置你的 WeNote 密码", "请打开以下地址设置密码。\n\n"+a.repository.MailBase()+"/#reset="+token)
