@@ -106,6 +106,7 @@
 | --- | --- | --- | --- |
 | 2026-11-23 | `IN_PROGRESS` | 需求已登记，已创建独立 worktree 和任务分支 | 完成 TDD 开发和自我验收 |
 | 2026-11-23 | `DELIVERED` | Go 全量测试、Web 构建、Rust 同步核心测试和差异检查通过 | 等待用户验收 |
+| 2026-11-23 | `MERGED` | 用户确认验收完成，已合并到主分支并完成主分支验证 | 完成清理 |
 
 ## 用户验收
 
@@ -117,7 +118,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 合并提交 | 待填写 |
-| 合并后验证 | 待填写 |
-| worktree 清理时间 | 待填写 |
-| 分支清理时间 | 待填写 |
+| 合并提交 | `a608e65 Merge feature/date-hash asset URLs` |
+| 合并后验证 | `go test ./... -timeout 120s`、`cargo test --locked -p wenote-sync`、`npm run build --prefix apps/web` 均通过 |
+| worktree 清理时间 | 2026-11-23 |
+| 分支清理时间 | 2026-11-23 |
