@@ -27,6 +27,7 @@ import {
   loadLocalPreferences,
   loadNoteMode,
   markdownPreferences,
+  xmindPreferences,
   saveLocalPreferences,
   saveNoteMode,
   updatePluginPreferences,
@@ -742,6 +743,7 @@ function Workspace({
                     output={output}
                     dirty={setPluginDirty}
                     notify={notify}
+                    xmindTheme={xmindPreferences(preferences).theme}
                   />
                 ) : (
                   <>

@@ -76,10 +76,10 @@ try {
   await click("插件");
   await click("禁用 Markdown");
   await click("Markdown 设置");
-  async function setRule(label, value) {
+  async function setRule(label, value, pluginId = "com.wenote.md") {
     const [saved] = await Promise.all([
       page.waitForResponse((r) =>
-        r.url().endsWith("/me/plugin-settings/com.wenote.md") && r.request().method() === "PUT",
+        r.url().endsWith("/me/plugin-settings/" + pluginId) && r.request().method() === "PUT",
       ),
       page.getByRole("combobox", { name: label }).selectOption(value),
     ]);
@@ -105,6 +105,9 @@ try {
     assert.ok(contrast.every(ratio => ratio >= 4.5), `${theme}: ${contrast}`);
   }
   await setRule("默认打开模式", "split");
+  await click("XMind 设置");
+  await setRule("主题", "youdao", "com.wenote.xmind");
+  await page.locator('.mindmap-theme-preview[data-xmind-theme="youdao"] .mindmap-preview-root').waitFor();
   await click("启用 Markdown");
   await page.reload();
   await click("设置验收.md");
@@ -210,6 +213,34 @@ try {
     await page.getByRole("heading", { name, exact: true }).waitFor();
   };
   await upload("路线.xmind", raw);
+  await page.locator('.mindmap-stage[data-xmind-theme="youdao"]').waitFor();
+  const lineMarker = page.locator('.mindmap-stage[data-xmind-theme="youdao"] .mindmap-line-node-marker').first();
+  await lineMarker.waitFor({ state: "attached" });
+  const markerStyle = await lineMarker.evaluate((el) => getComputedStyle(el));
+  assert.notEqual(markerStyle.stroke, "none");
+  assert.equal(markerStyle.strokeWidth, "2px");
+  const mapLineWidths = await page
+    .locator(
+      '.mindmap-stage[data-xmind-theme="youdao"] .mindmap-edges path, .mindmap-stage[data-xmind-theme="youdao"] .mindmap-relationships path, .mindmap-stage[data-xmind-theme="youdao"] .mindmap-line-node-marker, .mindmap-stage[data-xmind-theme="youdao"] .mindmap-summary',
+    )
+    .evaluateAll((elements) =>
+      elements.map((element) => getComputedStyle(element).strokeWidth),
+    );
+  assert.ok(mapLineWidths.length > 0);
+  assert.equal(new Set(mapLineWidths).size, 1);
+  const childNode = lineMarker.locator("..");
+  await childNode.click({ force: true });
+  const childBoxStyle = await childNode
+    .locator("rect.mindmap-line-node")
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { stroke: style.stroke, opacity: style.strokeOpacity };
+    });
+  assert.ok(
+    childBoxStyle.opacity === "0" ||
+      childBoxStyle.stroke === "transparent" ||
+      childBoxStyle.stroke === "rgba(0, 0, 0, 0)",
+  );
   const rootNode = page.locator(".mindmap-node").first();
   async function editMapTitle(nodeLocator, title) {
     await nodeLocator.dblclick();

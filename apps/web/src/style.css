@@ -340,7 +340,8 @@ pre {
   border: 0;
   border-radius: 0;
   overflow: visible;
-  background: #fff;
+  background: var(--mindmap-bg, #fff);
+  color: var(--mindmap-node-text, #252c39);
 }
 .mindmap-canvas {
   display: block;
@@ -355,20 +356,20 @@ pre {
 }
 .mindmap-edges path {
   fill: none;
-  stroke: #9eabc0;
+  stroke: var(--mindmap-edge, #9eabc0);
   stroke-width: 2.5;
 }
 .mindmap-relationships path {
   fill: none;
-  stroke: #a16c9d;
+  stroke: var(--mindmap-relationship, #a16c9d);
   stroke-width: 2;
   stroke-dasharray: 7 5;
 }
 .mindmap-relationships text {
-  fill: #744c71;
+  fill: var(--mindmap-relationship-text, #744c71);
   font-size: 13px;
   paint-order: stroke;
-  stroke: #f8fafc;
+  stroke: var(--mindmap-relationship-outline, #f8fafc);
   stroke-width: 5px;
   stroke-linejoin: round;
 }
@@ -377,16 +378,39 @@ pre {
   outline: none;
 }
 .mindmap-node rect {
-  stroke: #bdc8d8;
+  stroke: var(--mindmap-node-stroke, #bdc8d8);
   stroke-width: 1.5;
   filter: drop-shadow(0 3px 5px #23395f18);
   transition: stroke 120ms ease, stroke-width 120ms ease;
 }
+.mindmap-node rect.mindmap-line-node {
+  fill: transparent;
+  stroke: transparent;
+  filter: none;
+}
 .mindmap-node:hover rect,
 .mindmap-node:focus rect,
 .mindmap-node rect.selected {
-  stroke: var(--accent);
+  stroke: var(--mindmap-selected, var(--accent));
   stroke-width: 3;
+}
+.mindmap-node:hover rect.mindmap-line-node,
+.mindmap-node:focus rect.mindmap-line-node,
+.mindmap-node rect.mindmap-line-node.selected {
+  stroke: var(--mindmap-selected, var(--accent));
+  stroke-width: 2;
+}
+.mindmap-line-node-marker {
+  pointer-events: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+.mindmap-node:hover .mindmap-line-node-marker,
+.mindmap-node:focus .mindmap-line-node-marker,
+.mindmap-node[aria-pressed="true"] .mindmap-line-node-marker {
+  stroke: var(--mindmap-selected, var(--accent));
+  stroke-width: 2.5;
 }
 .mindmap-node-title {
   font-size: 14px;
@@ -403,11 +427,11 @@ pre {
   width: 100%;
   height: 100%;
   padding: 0 0.25rem;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--mindmap-selected, var(--accent));
   border-radius: 7px;
   outline: none;
-  background: #fff;
-  color: #252c39;
+  background: var(--mindmap-bg, #fff);
+  color: var(--mindmap-node-text, #252c39);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -421,11 +445,11 @@ pre {
   gap: 0.4rem;
   width: min(17rem, calc(100% - 1rem));
   padding: 0.55rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--mindmap-node-stroke, var(--line));
   border-radius: 8px;
-  background: #fff;
+  background: var(--mindmap-bg, #fff);
   box-shadow: 0 8px 20px #21335126;
-  color: var(--ink);
+  color: var(--mindmap-node-text, var(--ink));
 }
 .mindmap-edit-popover label {
   display: grid;
@@ -461,8 +485,32 @@ pre {
 }
 .mindmap-summary {
   fill: none;
-  stroke: #bf8b4e;
+  stroke: var(--mindmap-summary, #bf8b4e);
   stroke-width: 2.5;
+}
+.mindmap-stage[data-xmind-theme="youdao"] .mindmap-edges path,
+.mindmap-stage[data-xmind-theme="youdao"] .mindmap-relationships path,
+.mindmap-stage[data-xmind-theme="youdao"] .mindmap-line-node-marker,
+.mindmap-stage[data-xmind-theme="youdao"] .mindmap-summary {
+  stroke-width: 2;
+}
+.mindmap-stage[data-xmind-theme="youdao"] .mindmap-node rect.mindmap-line-node,
+.mindmap-stage[data-xmind-theme="youdao"]
+  .mindmap-node:hover rect.mindmap-line-node,
+.mindmap-stage[data-xmind-theme="youdao"]
+  .mindmap-node:focus rect.mindmap-line-node,
+.mindmap-stage[data-xmind-theme="youdao"]
+  .mindmap-node rect.mindmap-line-node.selected {
+  stroke: transparent;
+  stroke-width: 0;
+}
+.mindmap-stage[data-xmind-theme="youdao"]
+  .mindmap-node:hover .mindmap-line-node-marker,
+.mindmap-stage[data-xmind-theme="youdao"]
+  .mindmap-node:focus .mindmap-line-node-marker,
+.mindmap-stage[data-xmind-theme="youdao"]
+  .mindmap-node[aria-pressed="true"] .mindmap-line-node-marker {
+  stroke-width: 2;
 }
 .mindmap-context-menu {
   position: absolute;
@@ -471,9 +519,9 @@ pre {
   min-width: 12rem;
   gap: 0.1rem;
   padding: 0.3rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--mindmap-node-stroke, var(--line));
   border-radius: 8px;
-  background: #fff;
+  background: var(--mindmap-bg, #fff);
   box-shadow: 0 8px 24px #2133512b;
 }
 .mindmap-context-menu button {
@@ -1970,6 +2018,67 @@ pre {
   margin: 0;
 }
 
+.mindmap-theme-preview {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--xmind-preview-bg);
+}
+.mindmap-theme-preview figcaption {
+  display: grid;
+  gap: 2px;
+  padding: 8px 14px;
+  color: var(--xmind-preview-node-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--xmind-preview-stroke) 75%, transparent);
+  font-size: 13px;
+}
+.mindmap-theme-preview svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 10px;
+  box-sizing: border-box;
+}
+.mindmap-preview-edges path {
+  fill: none;
+  stroke: var(--xmind-preview-edge);
+  stroke-width: 3;
+}
+.mindmap-preview-root,
+.mindmap-preview-node {
+  stroke: var(--xmind-preview-stroke);
+  stroke-width: 1.5;
+}
+.mindmap-preview-root {
+  fill: var(--xmind-preview-root);
+}
+.mindmap-preview-node {
+  fill: var(--xmind-preview-node);
+}
+.mindmap-theme-preview[data-xmind-node-style="lines"] .mindmap-preview-node {
+  fill: transparent;
+  stroke: transparent;
+}
+.mindmap-preview-node-line {
+  display: none;
+}
+.mindmap-theme-preview[data-xmind-node-style="lines"] .mindmap-preview-node-line {
+  display: block;
+  stroke: var(--xmind-preview-edge);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.mindmap-preview-root-text,
+.mindmap-preview-node-text {
+  font: 600 13px Inter, system-ui, sans-serif;
+}
+.mindmap-preview-root-text {
+  fill: var(--xmind-preview-root-text);
+}
+.mindmap-preview-node-text {
+  fill: var(--xmind-preview-node-text);
+}
 .theme-preview {
   margin: 0;
   border: 1px solid var(--md-line);
@@ -1989,15 +2098,15 @@ pre {
   margin-bottom: 0;
 }
 .document-mode[data-markdown-theme="clean"] {
-  --md-bg: #fbfcfe;
+  --md-bg: var(--paper);
   --md-ink: #293446;
   --md-heading: #1d2e45;
   --md-accent: #3a6cb4;
-  --md-line: #dce4ef;
+  --md-line: var(--line);
   --md-code-bg: #f1f4f7;
   --md-code-ink: #31435d;
   --md-quote-bg: #f6f8fb;
-  --md-inline-code-bg: #edf2f7;
+  --md-inline-code-bg: #f1f4f7;
   --md-inline-ink: #28436c;
   --md-keyword: #6b338a;
   --md-string: #145c39;
@@ -2007,15 +2116,15 @@ pre {
   --md-cursor: #172033;
 }
 .document-mode[data-markdown-theme="paper"] {
-  --md-bg: #fbf7ee;
+  --md-bg: var(--paper);
   --md-ink: #4a4038;
   --md-heading: #47372c;
   --md-accent: #9a5b38;
-  --md-line: #e2d5c4;
-  --md-code-bg: #efe6d9;
+  --md-line: var(--line);
+  --md-code-bg: #f1f4f7;
   --md-code-ink: #594c40;
-  --md-quote-bg: #f5ecdd;
-  --md-inline-code-bg: #eee2d2;
+  --md-quote-bg: #f6f8fb;
+  --md-inline-code-bg: #f1f4f7;
   --md-inline-ink: #614223;
   --md-keyword: #74304b;
   --md-string: #3e5327;
@@ -2025,21 +2134,21 @@ pre {
   --md-cursor: #35251d;
 }
 .document-mode[data-markdown-theme="developer"] {
-  --md-bg: #f5f7fb;
+  --md-bg: var(--paper);
   --md-ink: #24324a;
   --md-heading: #223b73;
   --md-accent: #7457c7;
-  --md-line: #ced8ec;
-  --md-code-bg: #1f2937;
-  --md-code-ink: #e5eefc;
-  --md-quote-bg: #eaf0ff;
-  --md-inline-code-bg: #e5e9f4;
+  --md-line: var(--line);
+  --md-code-bg: #f1f4f7;
+  --md-code-ink: #31435d;
+  --md-quote-bg: #f6f8fb;
+  --md-inline-code-bg: #f1f4f7;
   --md-inline-ink: #363263;
-  --md-keyword: #e4b8ff;
-  --md-string: #a2e4ae;
-  --md-literal: #ffcb92;
-  --md-name: #a5d4ff;
-  --md-comment: #afbfce;
+  --md-keyword: #6b338a;
+  --md-string: #145c39;
+  --md-literal: #8b3d12;
+  --md-name: #1d5488;
+  --md-comment: #495d70;
   --md-cursor: #172033;
 }
 .document-mode[data-markdown-theme] {
@@ -2129,7 +2238,7 @@ pre {
   margin-left: -1px;
 }
 .document-mode.mode-live[data-markdown-theme="developer"] .cm-editor.live-code-caret {
-  --md-cursor: #ffffff;
+  --md-cursor: #172033;
 }
 .document-mode.mode-live[data-markdown-theme] .cm-line.live-fence {
   color: var(--md-code-ink);

@@ -192,12 +192,12 @@ try {
     .getByRole("heading", { name: "我的文件夹", exact: true })
     .waitFor();
   await tap(button("新建"));
-  await tap(item("文件夹"));
-  await dialog.getByLabel("名称").fill("手机目录");
-  await dialog.getByRole("button", { name: "创建", exact: true }).click();
-  await page.getByRole("heading", { name: "手机目录" }).waitFor();
+  await item("Markdown").waitFor();
+  await item("思维导图").waitFor();
+  await item("上传文件").waitFor();
+  await item("上传文件夹").waitFor();
   systemBack();
-  await tap(button("手机目录 0 篇笔记"));
+  await tap(button("资料 6 篇笔记"));
   await tap(button("上一级目录"));
   await tap(button("笔记"));
   await tap(button("原稿.md 的操作"));

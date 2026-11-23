@@ -13,6 +13,7 @@ import { base64, Note, request, uploadAsset, Version } from "./api";
 import {
   loadNoteMode,
   markdownPreferences,
+  xmindPreferences,
   saveNoteMode,
   type UserPreferences,
 } from "./preferences";
@@ -442,6 +443,7 @@ export default function Editor({
               output={browserExport}
               dirty={dirty}
               notify={notify}
+              xmindTheme={xmindPreferences(preferences).theme}
             />
           </div>
         )}

@@ -4,6 +4,7 @@ import { decodeText, utf8, type ExportFile } from "./archive";
 import { handler, invoke } from "./registry";
 import { JsonEditor, jsonTree } from "./JsonEditor";
 import { MapEditor } from "./MapEditor";
+import type { XMindTheme } from "./xmindThemes";
 import {
   asMarkdown,
   fromMarkdown,
@@ -46,6 +47,7 @@ export function PluginEditor({
   output,
   dirty,
   notify,
+  xmindTheme = "classic",
 }: {
   path: string;
   bytes: Uint8Array;
@@ -53,6 +55,7 @@ export function PluginEditor({
   output: ExportFile;
   dirty: (v: boolean) => void;
   notify: (msg: string) => void;
+  xmindTheme?: XMindTheme;
 }) {
   const [plugin] = useState(() => handler(path));
   const caps = plugin?.manifest.capabilities || [],
@@ -202,6 +205,7 @@ export function PluginEditor({
                 setBook(b);
                 mark(true);
               }}
+              theme={xmindTheme}
             />
           ) : id === "com.wenote.json" ? (
             <JsonEditor text={text} edit={edit} />

@@ -1,3 +1,4 @@
+import { normalizeXMindTheme, type XMindTheme } from "./plugins/xmindThemes";
 export type MarkdownTheme = "clean" | "paper" | "developer";
 export type MarkdownMode = "read" | "split" | "edit" | "live" | "map";
 export type MarkdownFontSize = "small" | "medium" | "large";
@@ -12,7 +13,7 @@ export type MarkdownPreferences = {
 };
 
 export type XMindPreferences = {
-  theme: "classic";
+  theme: XMindTheme;
 };
 
 export type UserPreferences = {
@@ -78,7 +79,9 @@ function markdown(value: unknown): MarkdownPreferences {
 }
 
 function xmind(value: unknown): XMindPreferences {
-  return { theme: "classic" };
+  return {
+    theme: normalizeXMindTheme(object(value).theme),
+  };
 }
 
 export function normalizePreferences(value: unknown): UserPreferences {

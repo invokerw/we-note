@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   setTopicNote,
   topic,
@@ -8,6 +8,7 @@ import {
   type Topic,
   type Workbook,
 } from "./xmind";
+import { xmindThemes, type XMindTheme } from "./xmindThemes";
 
 type Branch = "left" | "right";
 type TopicEntry = {
@@ -38,6 +39,8 @@ const NODE_GAP_Y = 20;
 const BOARD_PADDING = 60;
 const TITLE_CHAR_WIDTH = 14;
 const NOTE_CHAR_WIDTH = 10;
+const NODE_LINE_INSET = 12;
+const NODE_LINE_Y_INSET = 2;
 
 function graphChildren(node: Topic) {
   return Object.entries(node.children ?? {}).flatMap(([bucket, children]) =>
@@ -236,11 +239,21 @@ function makeLayout(sheet: Sheet): MapLayout {
   };
 }
 
-function nodePath(from: PositionedTopic, to: PositionedTopic) {
-  const fromX = from.x + (to.x >= from.x ? from.width / 2 : -from.width / 2);
-  const toX = to.x + (to.x >= from.x ? -to.width / 2 : to.width / 2);
-  const bend = Math.max(34, Math.abs(toX - fromX) * 0.42);
-  return `M ${fromX} ${from.y} C ${fromX + (to.x >= from.x ? bend : -bend)} ${from.y}, ${toX - (to.x >= from.x ? bend : -bend)} ${to.y}, ${toX} ${to.y}`;
+function nodeAnchor(node: PositionedTopic, other: PositionedTopic, lineNodes: boolean) {
+  const direction = other.x >= node.x ? 1 : -1;
+  const lineNode = lineNodes && node.depth > 0;
+  return {
+    x: node.x + direction * (node.width / 2 - (lineNode ? NODE_LINE_INSET : 0)),
+    y: lineNode ? node.y + node.height / 2 - NODE_LINE_Y_INSET : node.y,
+  };
+}
+
+function nodePath(from: PositionedTopic, to: PositionedTopic, lineNodes = false) {
+  const fromAnchor = nodeAnchor(from, to, lineNodes);
+  const toAnchor = nodeAnchor(to, from, lineNodes);
+  const direction = to.x >= from.x ? 1 : -1;
+  const bend = Math.max(34, Math.abs(toAnchor.x - fromAnchor.x) * 0.42);
+  return `M ${fromAnchor.x} ${fromAnchor.y} C ${fromAnchor.x + direction * bend} ${fromAnchor.y}, ${toAnchor.x - direction * bend} ${toAnchor.y}, ${toAnchor.x} ${toAnchor.y}`;
 }
 
 function topicPath(root: Topic) {
@@ -284,14 +297,30 @@ function MapCanvas({
   select,
   action,
   editTopic,
+  theme,
 }: {
   sheet: Sheet;
   selected: string;
   select: (id: string) => void;
   action: (action: MapAction, id: string) => void;
   editTopic: (id: string, fn: (topic: Topic) => void) => void;
+  theme: XMindTheme;
 }) {
   const layout = useMemo(() => makeLayout(sheet), [sheet]);
+  const colors = xmindThemes[theme];
+  const lineNodes = colors.nodeStyle === "lines";
+  const themeStyle = {
+    "--mindmap-bg": colors.background,
+    "--mindmap-edge": colors.edge,
+    "--mindmap-relationship": colors.relationship,
+    "--mindmap-relationship-text": colors.relationshipText,
+    "--mindmap-relationship-outline": colors.relationshipOutline,
+    "--mindmap-node-stroke": colors.nodeStroke,
+    "--mindmap-selected": colors.selected,
+    "--mindmap-summary": colors.summary,
+    "--mindmap-node": colors.node,
+    "--mindmap-node-text": colors.nodeText,
+  } as CSSProperties;
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState<ContextMenu>();
@@ -423,6 +452,8 @@ function MapCanvas({
     <section
       ref={stage}
       className="mindmap-stage"
+      data-xmind-theme={theme}
+      style={themeStyle}
       aria-label="XMind 脑图画布"
       tabIndex={0}
       onKeyDown={keyDown}
@@ -447,7 +478,7 @@ function MapCanvas({
               const child = byId.get(entry.node.id);
               const parent = entry.parent && byId.get(entry.parent.id);
               return child && parent && entry.bucket !== "detached" && entry.bucket !== "summary" ? (
-                <path key={entry.node.id} d={nodePath(parent, child)} />
+                <path key={entry.node.id} d={nodePath(parent, child, lineNodes)} stroke={colors.edge} />
               ) : null;
             })}
           </g>
@@ -460,9 +491,15 @@ function MapCanvas({
               const middleY = (from.y + to.y) / 2;
               return (
                 <g key={relationship.id}>
-                  <path d={nodePath(from, to)} />
+                  <path d={nodePath(from, to, lineNodes)} stroke={colors.relationship} />
                   {relationship.title && (
-                    <text x={middleX} y={middleY - 8} textAnchor="middle">
+                    <text
+                      x={middleX}
+                      y={middleY - 8}
+                      textAnchor="middle"
+                      fill={colors.relationshipText}
+                      stroke={colors.relationshipOutline}
+                    >
                       {relationship.title}
                     </text>
                   )}
@@ -472,11 +509,17 @@ function MapCanvas({
           </g>
           {nodes.map((position) => {
             const active = position.node.id === selected;
-            const fill = topicColor(position.node) || (position.node.id === root.id ? "#314e85" : "#edf2fa");
+            const customColor = topicColor(position.node);
+            const card = position.node.id === root.id || colors.nodeStyle === "cards";
+            const fill = customColor || (position.node.id === root.id ? colors.root : card ? colors.node : "transparent");
             const text = nodeTextLayout(position.node);
             const lines = text.titleLines;
             const notes = text.noteLines;
-            const white = position.node.id === root.id && !topicColor(position.node);
+            const titleColor = customColor
+              ? colors.nodeText
+              : position.node.id === root.id
+                ? colors.rootText
+                : colors.nodeText;
             return (
               <g
                 key={position.node.id}
@@ -499,9 +542,10 @@ function MapCanvas({
                 <rect
                   width={position.width}
                   height={position.height}
-                  rx="12"
+                  rx={colors.nodeRadius}
                   fill={fill}
-                  className={active ? "selected" : ""}
+                  className={`${active ? "selected " : ""}${card ? "" : "mindmap-line-node"}`}
+                  stroke={active ? colors.selected : colors.nodeStroke}
                 />
                 {inlineTitle?.id === position.node.id ? (
                   <foreignObject
@@ -533,7 +577,7 @@ function MapCanvas({
                     />
                   </foreignObject>
                 ) : (
-                  <text className="mindmap-node-title" x={position.width / 2} y={24} textAnchor="middle" fill={white ? "#fff" : "#252c39"}>
+                  <text className="mindmap-node-title" x={position.width / 2} y={24} textAnchor="middle" fill={titleColor}>
                     {lines.map((line, index) => (
                       <tspan key={index} x={position.width / 2} dy={index ? 19 : 0}>
                         {line}
@@ -547,7 +591,7 @@ function MapCanvas({
                     x={position.width / 2}
                     y={24 + lines.length * 19 + 4}
                     textAnchor="middle"
-                    fill={white ? "#dbe7ff" : "#6d7787"}
+                    fill={colors.note}
                   >
                     {notes.map((line, index) => (
                       <tspan key={index} x={position.width / 2} dy={index ? 13 : 0}>
@@ -555,6 +599,16 @@ function MapCanvas({
                       </tspan>
                     ))}
                   </text>
+                )}
+                {!card && (
+                  <line
+                    className="mindmap-line-node-marker"
+                    x1={NODE_LINE_INSET}
+                    x2={position.width - NODE_LINE_INSET}
+                    y1={position.height - NODE_LINE_Y_INSET}
+                    y2={position.height - NODE_LINE_Y_INSET}
+                    stroke={active ? colors.selected : colors.edge}
+                  />
                 )}
               </g>
             );
@@ -710,11 +764,13 @@ export function MapEditor({
   book,
   index,
   edit,
+  theme = "classic",
 }: {
   book: Workbook;
   index: number;
   switchSheet?: (i: number) => void;
   edit: (book: Workbook) => void;
+  theme?: XMindTheme;
 }) {
   const [selected, select] = useState("");
   const sheet = book.sheets[index];
@@ -824,6 +880,7 @@ export function MapEditor({
             }}
             action={perform}
             editTopic={(id, fn) => change(fn, id)}
+            theme={theme}
           />
         </div>
       </div>

@@ -7,12 +7,9 @@ import {
   entryName,
   formats,
   isFolder,
-  marker,
   newContent,
   parentFolder,
   printableText,
-  templates,
-  wordText,
   type EntryIO,
   type Format,
 } from "./libraryEntries";
@@ -22,7 +19,7 @@ export type EntryCommand = {
   source: string;
   expected: Record<string, string>;
 };
-const uploads = ["上传文件", "上传文件夹", "Word转笔记"];
+const uploads = ["上传文件", "上传文件夹"];
 function copyName(path: string) {
   const name = entryName(path);
   const ext = isFolder(path) ? -1 : name.lastIndexOf(".");
@@ -47,8 +44,7 @@ export function EntryDialog({
     folder = isFolder(source),
     container = folder ? source : parentFolder(source),
     format = Object.hasOwn(formats, label) ? (label as Format) : null;
-  const newFolder = format === "文件夹",
-    destination = label === "移动到" || label === "复制",
+  const destination = label === "移动到" || label === "复制",
     upload = uploads.includes(label),
     pdf = label === "导出为PDF";
   const [name, setName] = useState(
@@ -58,8 +54,7 @@ export function EntryDialog({
           ? copyName(source)
           : entryName(source),
     ),
-    [dir, setDir] = useState(parentFolder(source)),
-    [template, setTemplate] = useState<keyof typeof templates>("会议记录");
+    [dir, setDir] = useState(parentFolder(source));
   const [error, setError] = useState(""),
     [working, setWorking] = useState(false),
     [preview, setPreview] = useState<string | null>(null),
@@ -142,17 +137,9 @@ export function EntryDialog({
         if (!files.length) throw Error("请先选择文件");
         const plans = files.map((file) => {
           const relative = file.webkitRelativePath || file.name;
-          const path =
-            container +
-            (label === "Word转笔记"
-              ? relative.replace(/\.docx$/i, ".md")
-              : relative);
+          const path = container + relative;
           if (file.size > noteLimit) throw Error(file.name + " 超过 16 MiB");
-          if (
-            label === "Word转笔记"
-              ? !/\.docx$/i.test(file.name)
-              : !/\.(md|txt|json|xmind)$/i.test(path)
-          )
+          if (!/\.(md|txt|json|xmind)$/i.test(path))
             throw Error("不支持的文件格式：" + file.name);
           checkFree(path);
           return { file, path };
@@ -161,10 +148,7 @@ export function EntryDialog({
         try {
           for (const { file, path } of plans) {
             const bytes = new Uint8Array(await file.arrayBuffer());
-            await io.write(
-              path,
-              label === "Word转笔记" ? wordText(bytes) : bytes,
-            );
+            await io.write(path, bytes);
             written.add(file);
           }
         } finally {
@@ -175,18 +159,13 @@ export function EntryDialog({
       } else if (format) {
         checkName(name);
         let path = container + name.trim();
-        const ext = newFolder
-          ? ""
-          : formats[format].slice(formats[format].lastIndexOf("."));
+        const ext = formats[format].slice(formats[format].lastIndexOf("."));
         if (ext && !path.toLowerCase().endsWith(ext)) path += ext;
         checkFree(path);
-        await io.write(
-          newFolder ? path + "/" + marker : path,
-          newContent(format, path, template),
-        );
+        await io.write(path, newContent(path));
         await io.refresh();
-        onChange("", newFolder ? path + "/" : container);
-        if (!newFolder) await io.openCreated(path);
+        onChange("", container);
+        await io.openCreated(path);
       } else {
         const op =
           label === "删除" ? "delete" : label === "复制" ? "copy" : "move";
@@ -233,9 +212,7 @@ export function EntryDialog({
         }}
       >
         <h2 id="entry-dialog-title">
-          {format
-            ? "新建" + (format === "从模板新建" ? "模板笔记" : format)
-            : label}
+          {format ? "新建" + format : label}
         </h2>
         <p className="entry-location">
           {format || upload
@@ -270,23 +247,6 @@ export function EntryDialog({
             </select>
           </label>
         )}
-        {format === "从模板新建" && (
-          <label>
-            模板
-            <select
-              value={template}
-              onChange={(e) => {
-                const v = e.target.value as keyof typeof templates;
-                setTemplate(v);
-                setName(v + ".md");
-              }}
-            >
-              {Object.keys(templates).map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </label>
-        )}
         {(format || destination || label === "重命名") && (
           <label>
             名称
@@ -308,10 +268,8 @@ export function EntryDialog({
                 if (el && label === "上传文件夹")
                   el.setAttribute("webkitdirectory", "");
               }}
-              multiple={label !== "Word转笔记"}
-              accept={
-                label === "Word转笔记" ? ".docx" : ".md,.txt,.json,.xmind"
-              }
+              multiple
+              accept=".md,.txt,.json,.xmind"
               onChange={(e) =>
                 setFiles(Array.from(e.currentTarget.files || []))
               }

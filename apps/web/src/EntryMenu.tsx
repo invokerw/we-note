@@ -10,11 +10,9 @@ import {
 import { createPortal } from "react-dom";
 import {
   entryName,
-  formats,
   isFolder,
   containsEntry,
   type EntryIO,
-  type Format,
 } from "./libraryEntries";
 import { EntryDialog, type EntryCommand } from "./EntryDialog";
 
@@ -25,6 +23,12 @@ type Menu = {
   trigger: HTMLElement;
   background: boolean;
 };
+const creationItems = [
+  "Markdown",
+  "思维导图",
+  "上传文件",
+  "上传文件夹",
+] as const;
 function MenuPanel({
   label,
   anchor,
@@ -228,12 +232,7 @@ export function EntryMenus({
   }
   const subItems =
     sub?.label === "新建"
-      ? [
-          ...(Object.keys(formats) as Format[]),
-          "Word转笔记",
-          "上传文件",
-          "上传文件夹",
-        ]
+      ? [...creationItems]
       : ["项目信息", ...(menu?.path ? ["复制路径"] : [])];
   return (
     <div

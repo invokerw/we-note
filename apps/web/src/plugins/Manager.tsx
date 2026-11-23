@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import MarkdownSettings from "../markdown/Settings";
-import { markdownPreferences, type UserPreferences } from "../preferences";
+import MapSettings from "./MapSettings";
+import { markdownPreferences, xmindPreferences, type UserPreferences } from "../preferences";
 import {
   inspectPackage,
   install,
@@ -22,11 +23,18 @@ export default function Manager({
     [expanded, setExpanded] = useState<string | null>(null),
     [error, notify] = useState("");
   const markdown = markdownPreferences(preferences);
+  const xmind = xmindPreferences(preferences);
   const panels: Partial<Record<string, ReactNode>> = {
     "com.wenote.md": (
       <MarkdownSettings
         value={markdown}
         onChange={(patch) => updatePluginSetting("com.wenote.md", { ...markdown, ...patch })}
+      />
+    ),
+    "com.wenote.xmind": (
+      <MapSettings
+        value={xmind}
+        onChange={(patch) => updatePluginSetting("com.wenote.xmind", { ...xmind, ...patch })}
       />
     ),
   };

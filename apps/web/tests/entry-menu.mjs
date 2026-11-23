@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { zipSync, strToU8 } from "fflate";
 import { chromium } from "playwright-core";
 const origin = process.env.WENOTE_TEST_ORIGIN;
 if (!origin) throw Error("set WENOTE_TEST_ORIGIN to a disposable test server");
@@ -46,6 +45,10 @@ try {
   await write("资料/说明.md", "# 导出目标");
   await write("资料/内部/示例.txt", "原文");
   await write("存档/其他.txt", "归档");
+  await write(
+    "资料/旧白板.md",
+    "```wenote-whiteboard\n[\"20,20 100,100\"]\n```\n",
+  );
   await page.goto(origin);
   await page.getByLabel("邮箱").fill(credentials.email);
   await page.getByLabel("密码").fill(credentials.password);
@@ -101,13 +104,7 @@ try {
   await item("删除").click();
   await done("确认删除");
   assert.equal(await page.getByLabel("笔记源码").innerText(), "待保存草稿");
-  await context("参考/", "nav");
-  await item("新建").hover();
-  await item("文件夹").click();
-  await dialog.getByLabel("名称").fill("空目录");
-  await done("创建");
-  await page.getByText("此处还没有笔记").waitFor();
-  await context("参考/空目录/", "nav");
+  await context("参考/内部/", "nav");
   await item("新建").click();
   await item("Markdown").click();
   await dialog.getByLabel("名称").fill("嵌套");
@@ -119,23 +116,25 @@ try {
   await done("确认删除");
   const entries = (await api(base + "/files")).files.map((f) => f.path);
   assert(entries.includes("参考/内部/示例.txt"));
-  assert(entries.includes("参考/空目录/嵌套.md"));
+  assert(entries.includes("参考/内部/嵌套.md"));
   assert(!entries.some((p) => p.startsWith("存档/资料 副本/")));
   // Creating from another folder must preserve the active draft, even after a batch import.
   await context("参考/", "nav");
   await item("新建").hover();
-  await item("Word转笔记").click();
-  const doc = zipSync({
-    "word/document.xml": strToU8(
-      '<w:document xmlns:w="urn:word"><w:body><w:p><w:r><w:t>导入正文</w:t></w:r></w:p></w:body></w:document>',
-    ),
-  });
+  assert.deepEqual(
+    await page
+      .getByRole("menu", { name: "新建", exact: true })
+      .getByRole("menuitem")
+      .allTextContents(),
+    ["Markdown", "思维导图", "上传文件", "上传文件夹"],
+  );
+  await item("上传文件").click();
   await dialog
     .locator("input[type=file]")
     .setInputFiles({
-      name: "文稿.docx",
-      mimeType: "application/octet-stream",
-      buffer: Buffer.from(doc),
+      name: "文稿.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from("导入正文"),
     });
   await done("导入");
   await button("文稿.md").waitFor();
@@ -153,10 +152,9 @@ try {
   );
   await button("保存").click();
   await page.getByText("已保存新版本").waitFor();
-  await context("参考/", "nav");
-  await item("新建").hover();
-  await item("白板").click();
-  await done("创建");
+  await button("旧白板.md").click();
+  await button("编辑模式").click();
+  await button("预览模式").click();
   await button("编辑白板").click();
   const board = await page.getByLabel("白板画布").boundingBox();
   await page.mouse.move(board.x + 20, board.y + 20);
@@ -166,8 +164,8 @@ try {
   await button("保存").click();
   await page.getByText("已保存新版本").waitFor();
   await button("文稿.md").click();
-  await button("白板.md").click();
-  await page.locator(".whiteboard polyline").waitFor();
+  await button("旧白板.md").click();
+  await page.locator(".whiteboard polyline").first().waitFor();
   // A new member invalidates the whole folder operation. No sibling may be deleted.
   const before = (await api(base + "/files")).files;
   const expected = Object.fromEntries(
