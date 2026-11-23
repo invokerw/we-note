@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLocalStorePutIsAtomicAndContentAddressed(t *testing.T) {
@@ -21,11 +22,12 @@ func TestLocalStorePutIsAtomicAndContentAddressed(t *testing.T) {
 	digest := sha256.Sum256(content)
 	hash := "sha256:" + hex.EncodeToString(digest[:])
 
-	key, err := store.Put(context.Background(), "vault_1", hash, int64(len(content)), strings.NewReader(string(content)))
+	createdAt := time.Date(2026, 11, 23, 1, 2, 3, 0, time.UTC)
+	key, err := store.PutAt(context.Background(), "vault_1", hash, int64(len(content)), createdAt, strings.NewReader(string(content)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if key != filepath.Join("blobs", "vault_1", hash[len("sha256:"):][:2], hash[len("sha256:"):]) {
+	if key != filepath.Join("blobs", "vault_1", "2026", "11", "23", hash[len("sha256:"):]) {
 		t.Fatalf("storage key = %q", key)
 	}
 
@@ -42,7 +44,7 @@ func TestLocalStorePutIsAtomicAndContentAddressed(t *testing.T) {
 		t.Fatalf("content = %q, want %q", got, content)
 	}
 
-	entries, err := os.ReadDir(filepath.Join(root, "blobs", "vault_1", hash[len("sha256:"):][:2]))
+	entries, err := os.ReadDir(filepath.Join(root, "blobs", "vault_1", "2026", "11", "23"))
 	if err != nil {
 		t.Fatal(err)
 	}

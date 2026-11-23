@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS note_index (
 CREATE TABLE IF NOT EXISTS export_jobs (
  id TEXT PRIMARY KEY, vault_id TEXT NOT NULL REFERENCES vaults(id), user_id TEXT NOT NULL REFERENCES users(id),
  operation_key TEXT, scope TEXT NOT NULL, created_at TEXT NOT NULL, snapshot TEXT NOT NULL,
- status TEXT NOT NULL DEFAULT 'pending', hash TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL DEFAULT 0,
+ status TEXT NOT NULL DEFAULT 'pending', hash TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL DEFAULT 0, storage_key TEXT,
  UNIQUE(user_id,vault_id,operation_key)
 );
 

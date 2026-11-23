@@ -13,16 +13,18 @@ import (
 const activeFileQuery = `
 	SELECT f.id, f.vault_id, f.path, f.format, f.current_version_id,
 		COALESCE(v.content_hash, f.current_content_hash), COALESCE(v.content_size, f.current_content_size),
-		COALESCE(v.blob_id, f.current_blob_id), f.is_deleted, f.created_at, f.updated_at
+		COALESCE(v.blob_id, f.current_blob_id), COALESCE(b.storage_key, ''), f.is_deleted, f.created_at, f.updated_at
 	FROM files f
 	LEFT JOIN file_versions v ON v.id = f.current_version_id AND v.file_id = f.id AND v.vault_id = f.vault_id
+	LEFT JOIN blobs b ON b.id = COALESCE(v.blob_id, f.current_blob_id) AND b.vault_id = f.vault_id
 	WHERE f.vault_id = ? AND f.is_deleted = 0`
 
 const fileVersionQuery = `
-	SELECT v.id, v.vault_id, v.file_id, v.blob_id, v.content_hash, v.content_size, v.parent_version_id,
+	SELECT v.id, v.vault_id, v.file_id, v.blob_id, COALESCE(b.storage_key, ''), v.content_hash, v.content_size, v.parent_version_id,
 		v.created_by_device_id, COALESCE(NULLIF(v.metadata_format, ''), f.format), v.metadata_line_ending,
 		v.vault_revision, v.created_at
 	FROM file_versions v JOIN files f ON f.id = v.file_id AND f.vault_id = v.vault_id
+	LEFT JOIN blobs b ON b.id = v.blob_id AND b.vault_id = v.vault_id
 	WHERE f.vault_id = ? AND f.id = ? AND f.is_deleted = 0`
 
 func (r *Repository) ListFiles(ctx context.Context, vaultID string) ([]model.File, error) {
@@ -83,7 +85,7 @@ func (r *Repository) OpenFileContent(ctx context.Context, vaultID, fileID string
 	if r.blobStore == nil {
 		return model.FileVersion{}, nil, errors.New("blob store is not configured")
 	}
-	reader, err := r.blobStore.OpenContext(ctx, vaultID, version.ContentHash)
+	reader, err := r.blobStore.OpenContext(ctx, vaultID, version.ContentHash, version.StorageKey)
 	if err != nil {
 		return model.FileVersion{}, nil, fmt.Errorf("open file content: %w", err)
 	}
@@ -97,7 +99,7 @@ func scanFile(row scanner) (model.File, error) {
 	var createdAt, updatedAt string
 	if err := row.Scan(
 		&file.ID, &file.VaultID, &file.Path, &file.Format, &currentVersionID,
-		&file.CurrentContentHash, &file.CurrentContentSize, &file.CurrentBlobID, &isDeleted,
+		&file.CurrentContentHash, &file.CurrentContentSize, &file.CurrentBlobID, &file.CurrentStorageKey, &isDeleted,
 		&createdAt, &updatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -126,7 +128,7 @@ func scanFileVersion(row scanner) (model.FileVersion, error) {
 	var parentVersionID, lineEnding sql.NullString
 	var createdAt string
 	if err := row.Scan(
-		&version.ID, &version.VaultID, &version.FileID, &version.BlobID, &version.ContentHash,
+		&version.ID, &version.VaultID, &version.FileID, &version.BlobID, &version.StorageKey, &version.ContentHash,
 		&version.ContentSize, &parentVersionID, &version.CreatedByDeviceID,
 		&version.Metadata.Format, &lineEnding, &version.VaultRevision, &createdAt,
 	); err != nil {
@@ -157,6 +159,6 @@ func (r *Repository) OpenVersion(ctx context.Context, vault, file, version strin
 	if r.blobStore == nil {
 		return v, nil, errors.New("blob store not configured")
 	}
-	body, err := r.blobStore.OpenContext(ctx, vault, v.ContentHash)
+	body, err := r.blobStore.OpenContext(ctx, vault, v.ContentHash, v.StorageKey)
 	return v, body, err
 }

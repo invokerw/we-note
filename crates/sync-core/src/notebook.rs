@@ -283,9 +283,11 @@ impl Notebook {
                 .as_str()
                 .context("missing public URL")?
         );
-        let id = url.strip_prefix(&prefix).context("external image")?;
-        identifier(id)?;
-        let (media, bytes) = api.asset_bytes(&self.vault, id)?;
+        let route = url.strip_prefix(&prefix).context("external image")?;
+        if route.split('/').count() != 4 {
+            identifier(route)?;
+        }
+        let (media, bytes) = api.asset_bytes(&self.vault, route)?;
         self.remember_asset(url, &media, &bytes)?;
         Ok(json!({"type":media,"data":STANDARD.encode(bytes)}))
     }

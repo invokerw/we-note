@@ -167,7 +167,7 @@ func (r *Repository) CopyDiff(ctx context.Context, user, id, file string) (CopyD
 		if err != nil {
 			return d, err
 		}
-		data, err := r.readNoteBlob(ctx, v.vault, hash, size)
+		data, err := r.readNoteBlobWithQuery(ctx, tx, v.vault, hash, size)
 		if err != nil {
 			return d, err
 		}
@@ -196,32 +196,36 @@ func (r *Repository) UpdateCopy(ctx context.Context, user, id, file string, q Up
 	if c.Deleted || c.SourceVersion == "" || q.SourceVersion != c.SourceVersion || q.LocalVersion != c.LocalVersion || c.BaseSource == c.SourceVersion {
 		return result, fileError(409, "COPY_CHANGED", "版本已变化，请重新对比")
 	}
-	data, err := r.readNoteBlob(ctx, c.source, c.latest.Hash, c.latest.Size)
+	data, err := r.readNoteBlobWithQuery(ctx, tx, c.source, c.latest.Hash, c.latest.Size)
 	if err != nil {
 		return result, err
 	}
 	if strings.HasSuffix(strings.ToLower(c.latest.Path), ".md") {
-		refs := map[string]bool{}
-		for _, asset := range r.assetReferences(data) {
-			refs[asset] = true
+		refs := map[string]string{}
+		for _, ref := range r.assetReferences(data) {
+			asset, lookup := r.assetForReference(ctx, tx, "", c.source, ref)
+			if lookup == nil {
+				refs[asset.ID] = ref
+			}
 		}
 		for _, a := range c.assets {
-			if !refs[a.ID] {
+			ref, ok := refs[a.ID]
+			if !ok {
 				continue
 			}
 			var dest string
-			err = tx.QueryRowContext(ctx, `SELECT c.target_url FROM share_asset_copies c JOIN assets a ON c.target_url=(? || '/assets/' || a.id) AND a.vault_id=? AND a.is_deleted=0 WHERE c.share_id=? AND c.source_url=?`, r.publicBase, c.target, id, a.URL).Scan(&dest)
+			err = tx.QueryRowContext(ctx, `SELECT target_url FROM share_asset_copies WHERE share_id=? AND source_url=?`, id, ref).Scan(&dest)
 			if errors.Is(err, sql.ErrNoRows) {
 				dest, err = r.copyAsset(ctx, tx, c.target, a)
 				if err != nil {
 					return result, err
 				}
-				_, err = tx.ExecContext(ctx, `INSERT OR REPLACE INTO share_asset_copies VALUES(?,?,?)`, id, a.URL, dest)
+				_, err = tx.ExecContext(ctx, `INSERT OR REPLACE INTO share_asset_copies VALUES(?,?,?)`, id, ref, dest)
 			}
 			if err != nil {
 				return result, err
 			}
-			data = bytes.ReplaceAll(data, []byte(a.URL), []byte(dest))
+			data = bytes.ReplaceAll(data, []byte(ref), []byte(dest))
 		}
 	}
 	ref, err := r.putBytes(ctx, c.target, data)

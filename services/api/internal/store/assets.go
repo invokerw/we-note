@@ -13,6 +13,12 @@ import (
 	"time"
 )
 
+const assetDateLayout = "2006/01/02"
+
+func canonicalAssetURL(publicBase string, createdAt time.Time, contentHash string) string {
+	return strings.TrimRight(publicBase, "/") + "/assets/" + createdAt.UTC().Format(assetDateLayout) + "/" + strings.TrimPrefix(contentHash, "sha256:")
+}
+
 func (r *Repository) SetPublicBase(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "" {
@@ -32,18 +38,37 @@ type Asset struct {
 	Hash   string `json:"content_hash"`
 	Size   int64  `json:"content_size"`
 	Upload string `json:"-"`
+
+	CreatedAt     time.Time `json:"-"`
+	StorageKey    string    `json:"-"`
+	LegacyURL     string    `json:"-"`
+	ReferenceURLs []string  `json:"-"`
 }
 
-const assetSelect = `SELECT a.id,a.vault_id,a.name,a.media_type,u.status,u.content_hash,u.content_size,u.id FROM assets a JOIN upload_sessions u ON u.id=a.upload_id AND u.vault_id=a.vault_id `
+const assetSelect = `SELECT a.id,a.vault_id,a.name,a.media_type,u.status,u.content_hash,u.content_size,u.id,a.created_at,u.storage_key FROM assets a JOIN upload_sessions u ON u.id=a.upload_id AND u.vault_id=a.vault_id `
 
 func (r *Repository) scanAsset(row scanner) (Asset, error) {
 	var a Asset
-	err := row.Scan(&a.ID, &a.Vault, &a.Name, &a.Type, &a.Status, &a.Hash, &a.Size, &a.Upload)
+	var createdAt string
+	var storageKey sql.NullString
+	err := row.Scan(&a.ID, &a.Vault, &a.Name, &a.Type, &a.Status, &a.Hash, &a.Size, &a.Upload, &createdAt, &storageKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
+	if err != nil {
+		return a, err
+	}
+	a.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return a, err
+	}
+	if storageKey.Valid {
+		a.StorageKey = storageKey.String
+	}
 	a.URL = r.publicBase + "/assets/" + a.ID
-	return a, err
+	a.LegacyURL = a.URL
+	a.URL = canonicalAssetURL(r.publicBase, a.CreatedAt, a.Hash)
+	return a, nil
 }
 func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaType, hash, key string, size int64) (Asset, error) {
 	var a Asset
@@ -108,7 +133,53 @@ func (r *Repository) OpenAsset(ctx context.Context, a Asset) (io.ReadCloser, err
 	if a.Status != "completed" {
 		return nil, ErrNotFound
 	}
-	return r.blobStore.OpenContext(ctx, a.Vault, a.Hash)
+	storageKey := a.StorageKey
+	if storageKey == "" {
+		_ = r.db.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, a.Vault, a.Hash).Scan(&storageKey)
+	}
+	return r.blobStore.OpenContext(ctx, a.Vault, a.Hash, storageKey)
+}
+
+func (r *Repository) AssetForPublicPath(ctx context.Context, user, year, month, day, digest string) (Asset, error) {
+	date := strings.Join([]string{year, month, day}, "/")
+	if _, err := time.Parse(assetDateLayout, date); err != nil || !syncHashPattern.MatchString("sha256:"+digest) {
+		return Asset{}, ErrNotFound
+	}
+	return r.assetForReference(ctx, r.db, user, "", r.publicBase+"/assets/"+date+"/"+digest)
+}
+
+func (r *Repository) assetForReference(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, user, vault, reference string) (Asset, error) {
+	assetPath := strings.TrimPrefix(reference, r.publicBase+"/assets/")
+	if assetPath == reference {
+		return Asset{}, ErrNotFound
+	}
+	where := `a.is_deleted=0 AND u.status='completed'`
+	args := []any{}
+	if strings.HasPrefix(assetPath, "asset_") {
+		where += ` AND a.id=?`
+		args = append(args, assetPath)
+	} else {
+		parts := strings.Split(assetPath, "/")
+		if len(parts) != 4 || len(parts[0]) != 4 || len(parts[1]) != 2 || len(parts[2]) != 2 || !syncHashPattern.MatchString("sha256:"+parts[3]) {
+			return Asset{}, ErrNotFound
+		}
+		if _, err := time.Parse(assetDateLayout, strings.Join(parts[:3], "/")); err != nil {
+			return Asset{}, ErrNotFound
+		}
+		where += ` AND substr(a.created_at,1,10)=? AND u.content_hash=?`
+		args = append(args, strings.Join(parts[:3], "-"), "sha256:"+parts[3])
+	}
+	if vault != "" {
+		where += ` AND a.vault_id=?`
+		args = append(args, vault)
+	}
+	if user != "" {
+		where += ` AND EXISTS(SELECT 1 FROM workspace_members m WHERE m.vault_id=a.vault_id AND m.user_id=?)`
+		args = append(args, user)
+	}
+	return r.scanAsset(queryer.QueryRowContext(ctx, assetSelect+` WHERE `+where, args...))
 }
 func (r *Repository) DeleteAsset(ctx context.Context, user, vault, id string) error {
 	res, err := r.db.ExecContext(ctx, `UPDATE assets SET is_deleted=1 WHERE vault_id=? AND id=? AND EXISTS(SELECT 1 FROM workspace_members WHERE vault_id=? AND user_id=? AND role IN ('owner','editor'))`, vault, id, vault, user)
@@ -124,28 +195,24 @@ func (r *Repository) DeleteAsset(ctx context.Context, user, vault, id string) er
 
 // Only canonical links on this instance form dependencies. External links survive imports verbatim.
 func (r *Repository) assetReferences(content []byte) []string {
-	pattern := regexp.MustCompile(regexp.QuoteMeta(r.publicBase+"/assets/") + `(asset_[a-zA-Z0-9_-]+)`)
+	pattern := regexp.MustCompile(regexp.QuoteMeta(r.publicBase+"/assets/") + `(asset_[a-zA-Z0-9_-]+|[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9a-f]{64})`)
 	seen := map[string]bool{}
-	ids := []string{}
+	refs := []string{}
 	for _, match := range pattern.FindAllSubmatch(content, -1) {
-		id := string(match[1])
-		if !seen[id] {
-			ids = append(ids, id)
-			seen[id] = true
+		ref := r.publicBase + "/assets/" + string(match[1])
+		if !seen[ref] {
+			refs = append(refs, ref)
+			seen[ref] = true
 		}
 	}
-	return ids
+	return refs
 }
 func (r *Repository) validateAssetReferences(ctx context.Context, tx *sql.Tx, vault string, content []byte) error {
 	if !bytes.Contains(content, []byte("/assets/")) {
 		return nil
 	}
-	for _, id := range r.assetReferences(content) {
-		var ready bool
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM assets a JOIN upload_sessions u ON u.id=a.upload_id WHERE a.id=? AND a.vault_id=? AND a.is_deleted=0 AND u.status='completed')`, id, vault).Scan(&ready); err != nil {
-			return err
-		}
-		if !ready {
+	for _, ref := range r.assetReferences(content) {
+		if _, err := r.assetForReference(ctx, tx, "", vault, ref); err != nil {
 			return fileError(409, "ASSET_NOT_READY", "referenced asset is unavailable")
 		}
 	}
