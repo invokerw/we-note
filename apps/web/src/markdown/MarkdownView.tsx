@@ -6,6 +6,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { highlightTree } from "@lezer/highlight";
+import { fenceLanguage, codeTokens } from "./codeHighlight";
 import Markdown, { type Components } from "react-markdown";
 import type { Root } from "hast";
 import { visit } from "unist-util-visit";
@@ -69,7 +71,28 @@ const RenderContext = createContext<{
   io: MarkdownIO;
   toggle?: (pos: number) => void;
 }>({ io: {} });
+function Code({ className, children }: { className?: string; children?: ReactNode }) {
+  const language = className?.match(/(?:^|\s)language-([^\s]+)/)?.[1];
+  const content = useMemo(() => {
+    const parser = language && fenceLanguage(language)?.parser;
+    if (!parser || typeof children !== "string" || children.length > 100_000) return children;
+    const parts: ReactNode[] = [];
+    let cursor = 0;
+    highlightTree(parser.parse(children), codeTokens, (from, to, style) => {
+      if (from > cursor) parts.push(children.slice(cursor, from));
+      parts.push(<span key={from} className={style}>{children.slice(from, to)}</span>);
+      cursor = to;
+    });
+    parts.push(children.slice(cursor));
+    return parts;
+  }, [language, children]);
+  if (language === "mermaid") return <Diagram source={String(children).trimEnd()} />;
+  return <code className={className} data-language={language}>{content}</code>;
+}
 const components: Components = {
+  pre: ({ node, ...props }) => (
+    <pre {...props} className="markdown-code-block" />
+  ),
   img: function Image({ src, alt }) {
     const { io } = useContext(RenderContext);
     if (typeof src !== "string") return null;
@@ -91,12 +114,7 @@ const components: Components = {
       </a>
     );
   },
-  code: ({ className, children }) =>
-    className === "language-mermaid" ? (
-      <Diagram source={String(children).trimEnd()} />
-    ) : (
-      <code className={className}>{children}</code>
-    ),
+  code: Code,
   li: function Item({ node, children, ...props }) {
     const { toggle } = useContext(RenderContext);
     return (

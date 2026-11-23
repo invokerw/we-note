@@ -10,6 +10,12 @@ import { Document, type Mode } from "./markdown/Markdown";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { download, type Hit } from "./Resources";
 import { base64, Note, request, uploadAsset, Version } from "./api";
+import {
+  loadNoteMode,
+  markdownPreferences,
+  saveNoteMode,
+  type UserPreferences,
+} from "./preferences";
 
 type Props = {
   actions: ReactNode;
@@ -25,6 +31,8 @@ type Props = {
   changed: () => Promise<void>;
   dirty: (flag: boolean) => void;
   notify: (msg: string) => void;
+  preferences: UserPreferences;
+  updatePluginSetting: (pluginId: string, settings: unknown) => void;
 };
 export function AssetImage({
   src,
@@ -129,11 +137,21 @@ export default function Editor({
   changed,
   dirty,
   notify,
+  preferences,
+  updatePluginSetting,
 }: Props) {
   const path = `/api/v1/vaults/${vault}/files/${note.file_id}`;
+  const markdownSettings = markdownPreferences(preferences);
   const [text, setText] = useState(""),
     [base, setBase] = useState(""),
-    [mode, setMode] = useState("read"),
+    [mode, setMode] = useState<Mode | "history">(() => {
+      if (note.format !== "md") return "read";
+      return (
+        (markdownSettings.rememberNoteMode
+          ? loadNoteMode(vault, note.file_id)
+          : undefined) || markdownSettings.defaultMode
+      );
+    }),
     [versions, setVersions] = useState<Version[]>([]),
     [history, setHistory] = useState(""),
     [busy, setBusy] = useState(false);
@@ -179,6 +197,16 @@ export default function Editor({
     source.current.edit(value);
     setText(value);
     dirty(value !== saved.current);
+  }
+  function changeMode(next: Mode) {
+    setMode(next);
+    if (note.format === "md" && markdownSettings.rememberNoteMode)
+      saveNoteMode(vault, note.file_id, next);
+  }
+  function changeMarkdownSettings(
+    patch: Partial<typeof markdownSettings>,
+  ) {
+    updatePluginSetting("com.wenote.md", { ...markdownSettings, ...patch });
   }
   async function run(f: () => Promise<void>) {
     const writing = editor.current?.hasFocus ? editor.current : null;
@@ -297,7 +325,7 @@ export default function Editor({
       <NoteHeading
         path={note.path}
         mode={mode}
-        change={special ? undefined : setMode}
+        change={special ? undefined : changeMode}
         markdown={note.format === "md"}
         busy={busy}
         endAction={
@@ -464,8 +492,12 @@ export default function Editor({
               text={text}
               edit={edit}
               mode={mode as Mode}
-              setMode={setMode}
+              setMode={changeMode}
               editor={editor}
+              preferences={note.format === "md" ? markdownSettings : undefined}
+              onPreferencesChange={
+                note.format === "md" ? changeMarkdownSettings : undefined
+              }
               io={{
                 image: (src, alt) => (
                   <AssetImage

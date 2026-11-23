@@ -7,7 +7,7 @@ The Go API serves the Phase 1 desktop and web clients.
 - `internal/model` defines the protocol-shaped core objects and sync request fields.
 - `internal/password` stores passwords as salted PBKDF2-HMAC-SHA256 records and compares them in constant time.
 - `internal/store` persists users, sessions, Vault ownership, devices, upload sessions, file versions, changes, and sync idempotency records with user-scoped queries.
-- `internal/httpapi` exposes health, registration, login, current-user, Vault, device, file, upload-session, and sync endpoints.
+- `internal/httpapi` exposes health, registration, login, current-user, plugin settings, Vault, device, file, upload-session, and sync endpoints.
 
 The API exposes the following routes.
 
@@ -18,6 +18,8 @@ POST   /api/v1/auth/refresh
 POST   /api/v1/auth/logout
 GET    /api/v1/config
 GET    /api/v1/me
+GET    /api/v1/me/plugin-settings
+PUT    /api/v1/me/plugin-settings/{plugin_id}
 GET    /api/v1/vaults
 POST   /api/v1/vaults
 GET    /api/v1/vaults/{vault_id}

@@ -23,6 +23,15 @@ import {
 } from "./libraryEntries";
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
 import { PhoneIcon, useAndroidPhone, useAndroidBack } from "./PhoneUI";
+import {
+  loadLocalPreferences,
+  loadNoteMode,
+  markdownPreferences,
+  saveLocalPreferences,
+  saveNoteMode,
+  updatePluginPreferences,
+  type UserPreferences,
+} from "./preferences";
 import "./style.css";
 import "./phone.css";
 
@@ -124,12 +133,36 @@ function Workspace({
     [links, setLinks] = useState<Hit[]>([]);
   const [pluginBytes, setPluginBytes] = useState<Uint8Array | null>(null),
     [pluginDirty, setPluginDirty] = useState(false);
+  const [preferences, setPreferences] = useState<UserPreferences>(
+    loadLocalPreferences,
+  );
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
   const source = useRef(new TextFile("")),
     editor = useRef<EditorView | null>(null),
     picker = useRef<HTMLInputElement>(null);
   const vault = binding.vault,
     dirty = pluginDirty || text !== saved,
     editing = mode === "live" || mode === "edit" || mode === "split";
+  const markdownSettings = markdownPreferences(preferences);
+  function updatePluginSetting(pluginId: string, settings: unknown) {
+    const next = updatePluginPreferences(
+      preferencesRef.current,
+      pluginId,
+      settings,
+    );
+    preferencesRef.current = next;
+    setPreferences(next);
+    saveLocalPreferences(next);
+  }
+  function changeMode(next: Mode) {
+    setMode(next);
+    if (
+      /\.md$/i.test(path) &&
+      markdownPreferences(preferencesRef.current).rememberNoteMode
+    )
+      saveNoteMode(vault, path, next);
+  }
   const leave = () => !dirty || confirm("放弃尚未保存的编辑？");
   function back() {
     if (busy) return;
@@ -251,7 +284,22 @@ function Workspace({
     panes.setPane("doc");
     setView("笔记");
     setLinks([]);
-    setMode(writing && !special ? writingMode(p, source.current.text) : "read");
+    const md = /\.md$/i.test(p);
+    const settings = markdownPreferences(preferencesRef.current);
+    const remembered = md && settings.rememberNoteMode
+      ? loadNoteMode(vault, p)
+      : undefined;
+    const nextMode = special
+      ? "read"
+      : remembered ||
+        (writing
+          ? md
+            ? writingMode(p, source.current.text)
+            : "edit"
+          : md
+            ? settings.defaultMode
+            : "read");
+    setMode(nextMode);
     notify("");
   }
   const output: ExportFile = async (name, bytes) => {
@@ -407,7 +455,7 @@ function Workspace({
     const value = "\n" + links.join("\n") + "\n";
     if (file === source.current && !insertHere?.(value)) {
       edit(file.text + value);
-      setMode("edit");
+      changeMode("edit");
     }
   }
   return (
@@ -560,7 +608,7 @@ function Workspace({
                   data: base64(initialBytes(newPath)),
                 });
                 await open(newPath, true);
-                setMode("edit");
+                changeMode("edit");
                 setNewPath(null);
                 await load();
               });
@@ -587,7 +635,7 @@ function Workspace({
           </p>
         )}
         {view === "插件" ? (
-          <Manager />
+          <Manager preferences={preferences} updatePluginSetting={updatePluginSetting} />
         ) : view !== "笔记" ? (
           <Resources
             key={view}
@@ -616,18 +664,18 @@ function Workspace({
                       ? {
                           back,
                           dirty,
-                          edit: () => setMode(writingMode(path, text)),
+                          edit: () => changeMode(writingMode(path, text)),
                           finish: () =>
                             run(async () => {
                               if (text !== saved) await save();
-                              setMode("read");
+                              changeMode("read");
                             }),
                         }
                       : undefined
                   }
                   path={path}
                   mode={mode}
-                  change={pluginBytes ? undefined : setMode}
+                  change={pluginBytes ? undefined : changeMode}
                   markdown={/\.md$/i.test(path)}
                   busy={busy}
                   share={
@@ -716,8 +764,20 @@ function Workspace({
                         text={text}
                         edit={edit}
                         mode={mode}
-                        setMode={setMode}
+                        setMode={changeMode}
                         editor={editor}
+                        preferences={
+                          /\.md$/i.test(path) ? markdownSettings : undefined
+                        }
+                        onPreferencesChange={
+                          /\.md$/i.test(path)
+                            ? (patch) =>
+                                updatePluginSetting("com.wenote.md", {
+                                  ...markdownSettings,
+                                  ...patch,
+                                })
+                            : undefined
+                        }
                         io={{
                           image: (src, alt) => (
                             <LocalImage binding={binding} src={src} alt={alt} />

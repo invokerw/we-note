@@ -67,6 +67,14 @@ CREATE TABLE IF NOT EXISTS encrypted_vaults (
  id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES users(id), revision INTEGER NOT NULL,
  ciphertext BLOB NOT NULL, iv BLOB NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS user_plugin_settings (
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ plugin_id TEXT NOT NULL,
+ settings_json TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ PRIMARY KEY(user_id, plugin_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_plugin_settings_user ON user_plugin_settings(user_id);
 CREATE TABLE IF NOT EXISTS audit_events (
  id INTEGER PRIMARY KEY, owner TEXT NOT NULL REFERENCES users(id), action TEXT NOT NULL, object_id TEXT NOT NULL,
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))

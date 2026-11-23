@@ -93,14 +93,22 @@ class Preview extends WidgetType {
         const start = view.posAtDOM(host, 0);
         let offset = 0;
         if (node && host.contains(node) && node.nodeType === Node.TEXT_NODE) {
+          const code = node.parentElement?.closest("pre > code");
+          const withinNode = point?.offset ?? range?.startOffset ?? 0;
           const base = leaf
             ? Number(leaf.dataset.textStart)
-            : this.source.indexOf((node.textContent ?? "").trimEnd());
-          if (base >= 0)
-            offset = Math.min(
-              this.source.length,
-              base + (point?.offset ?? range?.startOffset ?? 0),
-            );
+            : this.source.indexOf(((code ?? node).textContent ?? "").trimEnd());
+          if (base >= 0) {
+            let within = withinNode;
+            if (code) {
+              // Highlighted code spans can contain identical tokens on different lines.
+              const prefix = document.createRange();
+              prefix.selectNodeContents(code);
+              prefix.setEnd(node, withinNode);
+              within = prefix.toString().length;
+            }
+            offset = Math.min(this.source.length, base + within);
+          }
         }
         const head = start + offset;
         view.dispatch({

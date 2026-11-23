@@ -1,4 +1,5 @@
 import { frontmatterEnd } from "./livePreview";
+import type { SyntaxNode } from "@lezer/common";
 import { syntaxTree } from "@codemirror/language";
 import {
   Decoration,
@@ -49,6 +50,19 @@ const delimiters = new Set([
 ]);
 const hidden = Decoration.replace({}),
   marker = Decoration.mark({ class: "live-marker" });
+
+function cursorInCode(state: EditorView["state"]) {
+  let node: SyntaxNode | null = syntaxTree(state).resolveInner(state.selection.main.head, -1);
+  while (node) {
+    if (node.name === "FencedCode" || node.name === "CodeBlock") return true;
+    node = node.parent;
+  }
+  return false;
+}
+
+function updateCursorClass(view: EditorView) {
+  view.dom.classList.toggle("live-code-caret", cursorInCode(view.state));
+}
 
 function decorate(view: EditorView) {
   const { state } = view,
@@ -151,8 +165,11 @@ export const liveStyle = ViewPlugin.fromClass(
     decorations;
     constructor(view: EditorView) {
       this.decorations = decorate(view);
+      updateCursorClass(view);
     }
     update(u: ViewUpdate) {
+      if (u.selectionSet || u.docChanged || u.viewportChanged || syntaxTree(u.startState) !== syntaxTree(u.state))
+        updateCursorClass(u.view);
       if (
         u.docChanged ||
         u.selectionSet ||

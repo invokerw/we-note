@@ -72,6 +72,101 @@ try {
     return readFile(await (await event).path());
   }
   await click("登录");
+  await create("设置验收.md", '# 设置验收\n\n`answer`\n\n```python\nanswer = "ok" if True else 0\n```');
+  await click("插件");
+  await click("禁用 Markdown");
+  await click("Markdown 设置");
+  async function setRule(label, value) {
+    const [saved] = await Promise.all([
+      page.waitForResponse((r) =>
+        r.url().endsWith("/me/plugin-settings/com.wenote.md") && r.request().method() === "PUT",
+      ),
+      page.getByRole("combobox", { name: label }).selectOption(value),
+    ]);
+    assert.equal(saved.status(), 204);
+  }
+  for (const theme of ["clean", "developer", "paper"]) {
+    if (theme !== "clean") await setRule("主题", theme);
+    const preview = page.locator(`.theme-preview[data-markdown-theme="${theme}"]`);
+    await preview.locator(".md-keyword").waitFor();
+    const contrast = await preview.evaluate((el) => {
+      function luminance(color) {
+        const rgb = color.match(/\d+/g).slice(0, 3).map(n => Number(n) / 255)
+          .map(n => n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4);
+        return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+      }
+      const inline = el.querySelector("p code");
+      return [inline, ...el.querySelectorAll("pre code span")].map(token => {
+        const ink = luminance(getComputedStyle(token).color);
+        const bg = luminance(getComputedStyle(token.closest("pre") || inline).backgroundColor);
+        return (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05);
+      });
+    });
+    assert.ok(contrast.every(ratio => ratio >= 4.5), `${theme}: ${contrast}`);
+  }
+  await setRule("默认打开模式", "split");
+  await click("启用 Markdown");
+  await page.reload();
+  await click("设置验收.md");
+  await page.locator('.document-mode.mode-split[data-markdown-theme="paper"]').waitFor();
+  await page.locator('.split-preview [data-language="python"] .md-keyword').first().waitFor();
+  await Promise.all([
+    page.waitForResponse(r => r.url().endsWith("/me/plugin-settings/com.wenote.md") && r.status() === 204),
+    click("同步滚动"),
+  ]);
+  const stored = await (await api("/api/v1/me/plugin-settings")).json();
+  assert.equal(stored.plugins["com.wenote.md"].syncScroll, false);
+  await click("编辑模式");
+  await click("所见所得");
+  // Sample painted pixels: the caret is in a separate blinking layer above the text.
+  await page.addStyleTag({ content: ".cm-cursorLayer { animation: none !important }" });
+  async function caretContrast() {
+    await page.keyboard.press("End");
+    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+    const cursor = await page.locator(".mode-live .cm-focused .cm-cursor-primary").boundingBox();
+    assert.ok(cursor && cursor.height > 0);
+    const strip = await page.screenshot({ clip: {
+      x: Math.floor(cursor.x), y: Math.floor(cursor.y + cursor.height / 2), width: 6, height: 1,
+    }, scale: "css", caret: "initial" });
+    return page.evaluate(async (png) => {
+      const img = new Image();
+      img.src = "data:image/png;base64," + png;
+      await img.decode();
+      const ctx = document.createElement("canvas").getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const { data } = ctx.getImageData(0, 0, 6, 1);
+      function luminance(x) {
+        const [r, g, b] = Array.from(data.slice(x * 4, x * 4 + 3), v => v / 255)
+          .map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+      const bg = luminance(5);
+      return Math.max(...[0, 1, 2].map(x => {
+        const ink = luminance(x);
+        return (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05);
+      }));
+    }, strip.toString("base64"));
+  }
+  const carets = [];
+  for (const theme of ["clean", "developer", "paper"]) {
+    await click("插件");
+    await click("Markdown 设置");
+    await setRule("主题", theme);
+    await click("设置验收.md");
+    const live = page.locator(`.mode-live[data-markdown-theme="${theme}"]`);
+    await live.locator(".cm-line.live-h1").click();
+    const prose = await caretContrast();
+    await live.locator('.live-preview [data-language="python"] .md-keyword').first().click();
+    await live.locator('.live-fence .md-string').first().click();
+    carets.push({ theme, prose, code: await caretContrast() });
+  }
+  console.log("Caret contrast:", carets);
+  assert.ok(carets.every(({ prose, code }) => prose >= 4.5 && code >= 4.5), JSON.stringify(carets));
+  assert.equal(await button("Markdown 设置").count(), 0);
+  await click("插件");
+  await click("Markdown 设置");
+  assert.equal(await page.getByRole("combobox", { name: "主题" }).inputValue(), "paper");
+  assert.equal(await page.getByLabel("分屏编辑同步滚动").isChecked(), false);
   await click("values.json");
   await click("格式化");
   await page.getByLabel("JSON Pointer", { exact: true }).fill("/a~1b/~0key");
@@ -124,7 +219,20 @@ try {
   await editMapTitle(rootNode, "实施");
   await rootNode.click({ button: "right" });
   await page.getByRole("menuitem", { name: "插入下级主题", exact: true }).click();
-  await editMapTitle(page.locator(".mindmap-node").last(), "校验");
+  const addedNode = page.locator(".mindmap-node").last();
+  await editMapTitle(addedNode, "校验");
+  const addedBox = await addedNode.boundingBox();
+  assert.ok(addedBox);
+  await page.mouse.move(
+    addedBox.x + addedBox.width / 2,
+    addedBox.y + addedBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    addedBox.x + addedBox.width / 2 + 120,
+    addedBox.y + addedBox.height / 2 + 60,
+  );
+  await page.mouse.up();
   await page.locator(".mindmap-stage").focus();
   await page.keyboard.press("Control+s");
   await page.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();
@@ -134,7 +242,11 @@ try {
   const saved = unzipSync(await content(mapId)),
     sheets = JSON.parse(strFromU8(saved["content.json"]));
   assert.equal(sheets[0].rootTopic.title, "实施");
-  assert.ok(sheets[0].rootTopic.children.attached.some((n) => n.title === "校验"));
+  const addedTopic = sheets[0].rootTopic.children.attached.find(
+    (n) => n.title === "校验",
+  );
+  assert.ok(addedTopic);
+  assert.equal(addedTopic.position, undefined);
   assert.deepEqual(sheets[0].relationships, original[0].relationships);
   assert.deepEqual(
     sheets[0].rootTopic.children.attached[0],

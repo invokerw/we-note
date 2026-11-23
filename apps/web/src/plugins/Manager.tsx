@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import MarkdownSettings from "../markdown/Settings";
+import { markdownPreferences, type UserPreferences } from "../preferences";
 import {
   inspectPackage,
   install,
@@ -8,10 +10,26 @@ import {
   uninstall,
   type Plugin,
 } from "./registry";
-export default function Manager() {
+export default function Manager({
+  preferences,
+  updatePluginSetting,
+}: {
+  preferences: UserPreferences;
+  updatePluginSetting: (pluginId: string, settings: unknown) => void;
+}) {
   const [items, list] = useState(plugins),
     [pending, setPending] = useState<Plugin | null>(null),
+    [expanded, setExpanded] = useState<string | null>(null),
     [error, notify] = useState("");
+  const markdown = markdownPreferences(preferences);
+  const panels: Partial<Record<string, ReactNode>> = {
+    "com.wenote.md": (
+      <MarkdownSettings
+        value={markdown}
+        onChange={(patch) => updatePluginSetting("com.wenote.md", { ...markdown, ...patch })}
+      />
+    ),
+  };
   const selection = useRef(0);
   function change(fn: () => void) {
     try {
@@ -83,7 +101,7 @@ export default function Manager() {
           </p>
           <p>{permissions(p)}</p>
           {p.hash && <code>SHA-256 {p.hash}</code>}
-          <div>
+          <div className="plugin-actions">
             <button
               aria-label={(p.enabled ? "禁用 " : "启用 ") + p.manifest.name}
               onClick={() =>
@@ -92,12 +110,27 @@ export default function Manager() {
             >
               {p.enabled ? "禁用" : "启用"}
             </button>
+            {panels[p.manifest.id] && (
+              <button
+                aria-label={`${p.manifest.name} 设置`}
+                aria-expanded={expanded === p.manifest.id}
+                aria-controls={`settings-${p.manifest.id}`}
+                onClick={() => setExpanded(expanded === p.manifest.id ? null : p.manifest.id)}
+              >
+                设置
+              </button>
+            )}
             {p.wasm && (
               <button onClick={() => change(() => uninstall(p.manifest.id))}>
                 卸载 {p.manifest.name}
               </button>
             )}
           </div>
+          {panels[p.manifest.id] && (
+            <div id={`settings-${p.manifest.id}`} hidden={expanded !== p.manifest.id}>
+              {panels[p.manifest.id]}
+            </div>
+          )}
         </section>
       ))}
     </article>

@@ -22,6 +22,13 @@ import Editor, { AssetImage } from "./Editor";
 import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Share, Vault } from "./api";
 import { Cover, LibraryPanes, usePanes } from "./LibraryUI";
+import {
+  loadLocalPreferences,
+  mergeRemotePreferences,
+  saveLocalPreferences,
+  updatePluginPreferences,
+  type UserPreferences,
+} from "./preferences";
 import "./style.css";
 function Auth({ login }: { login: (s: string) => void }) {
   const [register, setRegister] = useState(false),
@@ -96,7 +103,12 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [trash, setTrash] = useState<Note[]>([]),
     [shares, setShares] = useState<Share[]>([]),
     [message, msg] = useState(""),
-    [origin, setOrigin] = useState(location.origin);
+    [origin, setOrigin] = useState(location.origin),
+    [preferences, setPreferences] = useState<UserPreferences>(
+      loadLocalPreferences,
+    );
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
   const panes = usePanes();
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
@@ -150,7 +162,37 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       .then((r) => r.json())
       .then((x) => setOrigin(x.public_url))
       .catch(() => {});
+    let live = true;
+    request(token, "/api/v1/me/plugin-settings")
+      .then((r) => r.json())
+      .then((remote) => {
+        if (!live) return;
+        const next = mergeRemotePreferences(preferencesRef.current, remote);
+        preferencesRef.current = next;
+        setPreferences(next);
+        saveLocalPreferences(next);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [token]);
+  function updatePluginSetting(pluginId: string, settings: unknown) {
+    const next = updatePluginPreferences(
+      preferencesRef.current,
+      pluginId,
+      settings,
+    );
+    preferencesRef.current = next;
+    setPreferences(next);
+    saveLocalPreferences(next);
+    void request(
+      token,
+      "/api/v1/me/plugin-settings/" + encodeURIComponent(pluginId),
+      "PUT",
+      settings,
+    ).catch((e) => msg(String(e)));
+  }
   useEffect(() => {
     let live = true;
     panes.browse(null);
@@ -486,6 +528,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 token,
                 vault,
                 origin,
+                preferences,
+                updatePluginSetting,
                 changed: list,
                 dirty: (b) => {
                   dirty.current = b;
@@ -515,7 +559,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         ) : view === "encrypted" ? (
           <EncryptedVaults io={encryptedIO} dirty={encryptedDirty} />
         ) : view === "插件" ? (
-          <Manager />
+          <Manager preferences={preferences} updatePluginSetting={updatePluginSetting} />
         ) : ["搜索", "附件", "导出"].includes(view) ? (
           <LibraryResources
             key={vault + view}

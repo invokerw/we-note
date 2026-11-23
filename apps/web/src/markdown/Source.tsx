@@ -9,8 +9,14 @@ import {
 import { json } from "@codemirror/lang-json";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { basicSetup } from "codemirror";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+} from "@codemirror/commands";
 import { Compartment, Prec } from "@codemirror/state";
+import { fenceLanguage, liveCodeHighlight } from "./codeHighlight";
 import { liveStyle } from "./liveStyle";
 import { liveKeys } from "./liveCommands";
 import { livePreview } from "./livePreview";
@@ -83,10 +89,11 @@ export default function Source({
       live
         ? [
             history(),
-            keymap.of([...defaultKeymap, ...historyKeymap]),
+            keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
             drawSelection(),
             highlightSpecialChars(),
             liveStyle,
+            liveCodeHighlight,
             livePreview({
               get image() {
                 return props.current.io?.image;
@@ -98,7 +105,7 @@ export default function Source({
             Prec.highest(liveKeys),
             placeholder("开始写作…"),
           ]
-        : basicSetup,
+        : [basicSetup, Prec.highest(keymap.of([indentWithTab]))],
       EditorView.contentAttributes.of({
         "aria-label": label,
         role: "textbox",
@@ -113,7 +120,7 @@ export default function Source({
       doc: text,
       extensions: [
         compartment.of(setup),
-        language === "json" ? json() : markdown({ base: markdownLanguage }),
+        language === "json" ? json() : markdown({ base: markdownLanguage, codeLanguages: fenceLanguage }),
         EditorView.lineWrapping,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {

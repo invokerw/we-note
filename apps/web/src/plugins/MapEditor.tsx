@@ -27,8 +27,6 @@ type PositionedTopic = TopicEntry & {
 type MapLayout = {
   width: number;
   height: number;
-  offsetX: number;
-  offsetY: number;
   nodes: PositionedTopic[];
   byId: Map<string, PositionedTopic>;
 };
@@ -134,7 +132,8 @@ function makeLayout(sheet: Sheet): MapLayout {
     const direction = `${node.branch || ""} ${node.structureClass || ""}`.toLowerCase();
     if (direction.includes("left")) return "left";
     if (direction.includes("right")) return "right";
-    if (typeof node.position?.x === "number") return node.position.x < 0 ? "left" : "right";
+    if (!node.position?.manual && typeof node.position?.x === "number")
+      return node.position.x < 0 ? "left" : "right";
     return fallback;
   };
   const rootChildren = graphChildren(root);
@@ -213,11 +212,6 @@ function makeLayout(sheet: Sheet): MapLayout {
       cursor += subtreeHeight(entry.child) + NODE_GAP_Y;
     });
   }
-  for (const position of positions) {
-    const explicit = position.node.position;
-    if (explicit?.manual && typeof explicit.x === "number") position.x = explicit.x;
-    if (explicit?.manual && typeof explicit.y === "number") position.y = explicit.y;
-  }
   const minX = Math.min(...positions.map((position) => position.x - position.width / 2));
   const maxX = Math.max(...positions.map((position) => position.x + position.width / 2));
   const minY = Math.min(...positions.map((position) => position.y - position.height / 2));
@@ -237,8 +231,6 @@ function makeLayout(sheet: Sheet): MapLayout {
   return {
     width,
     height,
-    offsetX: shiftX,
-    offsetY: shiftY,
     nodes: positions,
     byId,
   };
@@ -285,72 +277,38 @@ type InlineTitleEditor = {
   id: string;
   value: string;
 };
-type NodeDrag = {
-  id: string;
-  startX: number;
-  startY: number;
-  previewX: number;
-  previewY: number;
-  moved: boolean;
-};
 
 function MapCanvas({
   sheet,
   selected,
   select,
-  moveTopic,
   action,
   editTopic,
 }: {
   sheet: Sheet;
   selected: string;
   select: (id: string) => void;
-  moveTopic: (id: string, position: { x: number; y: number }) => void;
   action: (action: MapAction, id: string) => void;
   editTopic: (id: string, fn: (topic: Topic) => void) => void;
 }) {
   const layout = useMemo(() => makeLayout(sheet), [sheet]);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [preview, setPreview] = useState<
-    { id: string; x: number; y: number } | undefined
-  >();
   const [contextMenu, setContextMenu] = useState<ContextMenu>();
   const canvas = useRef<SVGSVGElement>(null);
   const stage = useRef<HTMLElement>(null);
   const canvasDrag = useRef<
     { x: number; y: number; panX: number; panY: number } | undefined
   >(undefined);
-  const nodeDrag = useRef<NodeDrag | undefined>(undefined);
   const editorField = useRef<HTMLTextAreaElement>(null);
   const [editor, setEditor] = useState<EditPopover>();
   const [inlineTitle, setInlineTitle] = useState<InlineTitleEditor>();
   const root = sheet.rootTopic;
   const entries = topicPath(root);
   const relationships = sheet.relationships ?? [];
-  const nodes = useMemo(() => {
-    if (!preview) return layout.nodes;
-    return layout.nodes.map((position) =>
-      position.node.id === preview.id
-        ? { ...position, x: preview.x, y: preview.y }
-        : position,
-    );
-  }, [layout.nodes, preview]);
-  const byId = useMemo(
-    () => new Map(nodes.map((position) => [position.node.id, position])),
-    [nodes],
-  );
+  const nodes = layout.nodes;
+  const byId = layout.byId;
 
-  function pointerToCanvas(clientX: number, clientY: number) {
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0 };
-    const x = ((clientX - rect.left) * layout.width) / rect.width;
-    const y = ((clientY - rect.top) * layout.height) / rect.height;
-    return {
-      x: (x - pan.x) / zoom,
-      y: (y - pan.y) / zoom,
-    };
-  }
   function openContextMenu(e: React.MouseEvent, nodeId?: string) {
     e.preventDefault();
     e.stopPropagation();
@@ -376,16 +334,6 @@ function MapCanvas({
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function pointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    if (nodeDrag.current) {
-      const point = pointerToCanvas(e.clientX, e.clientY);
-      const drag = nodeDrag.current;
-      if (Math.abs(e.clientX - drag.startX) + Math.abs(e.clientY - drag.startY) > 4)
-        drag.moved = true;
-      drag.previewX = point.x;
-      drag.previewY = point.y;
-      setPreview({ id: drag.id, x: point.x, y: point.y });
-      return;
-    }
     if (!canvasDrag.current) return;
     setPan({
       x: canvasDrag.current.panX + e.clientX - canvasDrag.current.x,
@@ -393,17 +341,6 @@ function MapCanvas({
     });
   }
   function pointerUp(e: React.PointerEvent<SVGSVGElement>) {
-    if (nodeDrag.current) {
-      const drag = nodeDrag.current;
-      nodeDrag.current = undefined;
-      if (drag.moved) {
-        moveTopic(drag.id, {
-          x: drag.previewX - layout.offsetX,
-          y: drag.previewY - layout.offsetY,
-        });
-      }
-      setPreview(undefined);
-    }
     canvasDrag.current = undefined;
     if (canvas.current?.hasPointerCapture(e.pointerId))
       canvas.current.releasePointerCapture(e.pointerId);
@@ -447,28 +384,6 @@ function MapCanvas({
     if (!draft) return;
     if (save) editTopic(draft.id, (current) => { current.title = draft.value; });
     setInlineTitle(undefined);
-  }
-  function nodePointerDown(
-    e: React.PointerEvent<SVGGElement>,
-    position: PositionedTopic,
-  ) {
-    if ((e.target as Element).closest(".mindmap-edit-popover")) {
-      e.stopPropagation();
-      return;
-    }
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    select(position.node.id);
-    const point = pointerToCanvas(e.clientX, e.clientY);
-    nodeDrag.current = {
-      id: position.node.id,
-      startX: e.clientX,
-      startY: e.clientY,
-      previewX: point.x,
-      previewY: point.y,
-      moved: false,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
   }
   function keyDown(e: React.KeyboardEvent<HTMLElement>) {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)
@@ -571,7 +486,6 @@ function MapCanvas({
                 aria-label="主题节点"
                 aria-pressed={active}
                 transform={`translate(${position.x - position.width / 2} ${position.y - position.height / 2})`}
-                onPointerDown={(e) => nodePointerDown(e, position)}
                 onClick={() => select(position.node.id)}
                 onDoubleClick={() => startInlineTitle(position.node.id)}
                 onContextMenu={(e) => openContextMenu(e, position.node.id)}
@@ -824,12 +738,6 @@ export function MapEditor({
       if (selectedTopic) fn(selectedTopic, next);
     });
   }
-  function moveTopicPosition(id: string, position: { x: number; y: number }) {
-    change((current, next) => {
-      current.position = { ...position, manual: true };
-      next.topicPositioning = "fixed";
-    }, id);
-  }
   function addChild(id = node.id) {
     const child = topic("新主题");
     change((current) => {
@@ -914,7 +822,6 @@ export function MapEditor({
             select={(id) => {
               select(id);
             }}
-            moveTopic={moveTopicPosition}
             action={perform}
             editTopic={(id, fn) => change(fn, id)}
           />

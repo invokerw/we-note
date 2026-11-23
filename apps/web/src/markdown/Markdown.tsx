@@ -8,6 +8,10 @@ import Source from "./Source";
 import { formatSelection } from "./format";
 import { EditorView } from "@codemirror/view";
 import { MarkdownView, type MarkdownIO } from "./MarkdownView";
+import {
+  defaultMarkdownPreferences,
+  type MarkdownPreferences,
+} from "../preferences";
 export { MarkdownView, type MarkdownIO } from "./MarkdownView";
 
 function Branches({
@@ -66,6 +70,8 @@ export function Document({
   focusSource = false,
   metadataHost,
   attach,
+  preferences = defaultMarkdownPreferences,
+  onPreferencesChange,
 }: {
   text: string;
   edit: (s: string) => void;
@@ -77,6 +83,8 @@ export function Document({
   focusSource?: boolean;
   metadataHost?: HTMLElement | null;
   attach?: () => void;
+  preferences?: MarkdownPreferences;
+  onPreferencesChange?: (patch: Partial<MarkdownPreferences>) => void;
 }) {
   const metadataText =
     markdown && (mode === "map" || metadataHost !== null) ? text : "";
@@ -161,6 +169,8 @@ export function Document({
     <div
       ref={root}
       className={"document-mode mode-" + mode}
+      data-markdown-theme={markdown ? preferences.theme : undefined}
+      data-markdown-font-size={markdown ? preferences.fontSize : undefined}
       onKeyDownCapture={(e) => {
         if (
           !markdown ||
@@ -211,6 +221,18 @@ export function Document({
           editor={editor}
           source={sourcePane}
           label={mode === "live" ? "正文编辑区" : "源码栏"}
+          ratio={markdown ? preferences.splitRatio : undefined}
+          linked={markdown ? preferences.syncScroll : undefined}
+          onRatioChange={
+            markdown
+              ? (splitRatio) => onPreferencesChange?.({ splitRatio })
+              : undefined
+          }
+          onLinkedChange={
+            markdown
+              ? (syncScroll) => onPreferencesChange?.({ syncScroll })
+              : undefined
+          }
         >
           {mode === "split" && (
             <MarkdownView text={text} io={io} toggle={toggle} />

@@ -30,6 +30,8 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/auth/refresh", api.refresh)
 	mux.HandleFunc("POST /api/v1/auth/logout", api.logout)
 	mux.HandleFunc("GET /api/v1/me", api.me)
+	mux.HandleFunc("GET /api/v1/me/plugin-settings", api.pluginSettings)
+	mux.HandleFunc("PUT /api/v1/me/plugin-settings/{plugin_id}", api.updatePluginSettings)
 	mux.HandleFunc("GET /api/v1/vaults", api.listVaults)
 	mux.HandleFunc("POST /api/v1/vaults", api.createVault)
 	mux.HandleFunc("GET /api/v1/vaults/{vault_id}", api.getVault)
@@ -127,6 +129,41 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, user)
+}
+
+func (a *API) pluginSettings(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	settings, err := a.repository.PluginSettings(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not load plugin settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plugins": settings})
+}
+
+func (a *API) updatePluginSettings(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	var settings json.RawMessage
+	if err := decodeJSONLimit(w, r, &settings, 64<<10); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if err := a.repository.SetPluginSettings(
+		r.Context(),
+		user.ID,
+		r.PathValue("plugin_id"),
+		settings,
+	); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) listVaults(w http.ResponseWriter, r *http.Request) {

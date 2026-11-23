@@ -589,14 +589,14 @@ pre {
   padding: 1rem 0;
   border-bottom: 1px solid var(--line);
 }
-.plugin-entry h2 {
+.plugin-entry > h2 {
   margin: 0;
   font-size: 1.1rem;
 }
 .plugin-entry small {
   font-weight: normal;
 }
-.plugin-entry code {
+.plugin-entry > code {
   display: block;
   overflow-wrap: anywhere;
   margin-bottom: 0.65rem;
@@ -1378,7 +1378,6 @@ pre {
   min-height: 100%;
   margin-inline: auto;
   padding: clamp(20px, 4vw, 48px) clamp(18px, 4vw, 54px) 5rem;
-  caret-color: var(--accent);
 }
 .mode-live .cm-line {
   padding: 0;
@@ -1933,4 +1932,247 @@ pre {
 .whiteboard svg[data-editable="true"] {
   touch-action: none;
   cursor: crosshair;
+}
+
+.plugin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.plugin-entry .settings-panel {
+  display: grid;
+  gap: 12px;
+  max-width: 28rem;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.settings-panel label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+}
+.settings-panel select {
+  width: 100%;
+  padding: 5px 7px;
+  font-size: inherit;
+}
+.settings-panel .settings-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+}
+.settings-panel .settings-check input {
+  margin: 0;
+}
+
+.theme-preview {
+  margin: 0;
+  border: 1px solid var(--md-line);
+  border-radius: 6px;
+}
+.theme-preview figcaption {
+  display: grid;
+  padding: 8px 14px;
+  color: var(--md-ink);
+  border-bottom: 1px solid var(--md-line);
+  font-size: 13px;
+}
+.theme-preview.document-mode > .reading {
+  padding: 14px;
+}
+.theme-preview .reading > :last-child {
+  margin-bottom: 0;
+}
+.document-mode[data-markdown-theme="clean"] {
+  --md-bg: #fbfcfe;
+  --md-ink: #293446;
+  --md-heading: #1d2e45;
+  --md-accent: #3a6cb4;
+  --md-line: #dce4ef;
+  --md-code-bg: #f1f4f7;
+  --md-code-ink: #31435d;
+  --md-quote-bg: #f6f8fb;
+  --md-inline-code-bg: #edf2f7;
+  --md-inline-ink: #28436c;
+  --md-keyword: #6b338a;
+  --md-string: #145c39;
+  --md-literal: #8b3d12;
+  --md-name: #1d5488;
+  --md-comment: #495d70;
+  --md-cursor: #172033;
+}
+.document-mode[data-markdown-theme="paper"] {
+  --md-bg: #fbf7ee;
+  --md-ink: #4a4038;
+  --md-heading: #47372c;
+  --md-accent: #9a5b38;
+  --md-line: #e2d5c4;
+  --md-code-bg: #efe6d9;
+  --md-code-ink: #594c40;
+  --md-quote-bg: #f5ecdd;
+  --md-inline-code-bg: #eee2d2;
+  --md-inline-ink: #614223;
+  --md-keyword: #74304b;
+  --md-string: #3e5327;
+  --md-literal: #753918;
+  --md-name: #614578;
+  --md-comment: #5b5147;
+  --md-cursor: #35251d;
+}
+.document-mode[data-markdown-theme="developer"] {
+  --md-bg: #f5f7fb;
+  --md-ink: #24324a;
+  --md-heading: #223b73;
+  --md-accent: #7457c7;
+  --md-line: #ced8ec;
+  --md-code-bg: #1f2937;
+  --md-code-ink: #e5eefc;
+  --md-quote-bg: #eaf0ff;
+  --md-inline-code-bg: #e5e9f4;
+  --md-inline-ink: #363263;
+  --md-keyword: #e4b8ff;
+  --md-string: #a2e4ae;
+  --md-literal: #ffcb92;
+  --md-name: #a5d4ff;
+  --md-comment: #afbfce;
+  --md-cursor: #172033;
+}
+.document-mode[data-markdown-theme] {
+  background: var(--md-bg);
+}
+.document-mode[data-markdown-theme] .reading,
+.document-mode[data-markdown-theme] .source .cm-editor {
+  color: var(--md-ink);
+}
+.document-mode[data-markdown-theme] .reading :is(h1, h2, h3, h4, h5, h6),
+.document-mode.mode-live[data-markdown-theme] .cm-line[class*="live-h"] {
+  color: var(--md-heading);
+}
+.document-mode[data-markdown-theme] .reading h1 {
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--md-line);
+}
+.document-mode[data-markdown-theme] .reading :is(h2, h3) {
+  padding-inline-start: 0.65em;
+  border-inline-start: 3px solid var(--md-accent);
+}
+.document-mode[data-markdown-theme] .reading a,
+.document-mode[data-markdown-theme] .live-link {
+  color: var(--md-accent);
+}
+.document-mode[data-markdown-theme] .reading blockquote,
+.document-mode.mode-live[data-markdown-theme] .cm-line.live-quote {
+  border-inline-start-color: var(--md-accent);
+  color: color-mix(in srgb, var(--md-ink) 72%, transparent);
+  background: var(--md-quote-bg);
+}
+.document-mode[data-markdown-theme] .reading th {
+  background: color-mix(in srgb, var(--md-line) 55%, var(--md-bg));
+}
+.document-mode[data-markdown-theme] .reading tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--md-line) 23%, var(--md-bg));
+}
+.document-mode[data-markdown-theme] .reading :not(pre) > code,
+.document-mode[data-markdown-theme] .live-code {
+  color: var(--md-inline-ink);
+  background: var(--md-inline-code-bg);
+}
+.document-mode[data-markdown-theme] .reading pre.markdown-code-block {
+  margin-block: 1.15em;
+  padding: 1rem;
+  color: var(--md-code-ink);
+  background: var(--md-code-bg);
+  border: 1px solid var(--md-line);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--md-ink) 8%, transparent);
+}
+.document-mode[data-markdown-theme] .reading pre.markdown-code-block > code {
+  display: block;
+  min-width: max-content;
+}
+.document-mode[data-markdown-theme]
+  .reading
+  pre.markdown-code-block
+  > code[data-language] {
+  position: relative;
+  padding-top: 1.35rem;
+}
+.document-mode[data-markdown-theme]
+  .reading
+  pre.markdown-code-block
+  > code[data-language]::before {
+  content: attr(data-language);
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  color: color-mix(in srgb, var(--md-code-ink) 65%, transparent);
+  font: 600 0.72rem/1.2 Inter, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.document-mode[data-markdown-theme] .reading pre.markdown-code-block:has(.diagram) {
+  color: var(--md-ink);
+  background: var(--md-bg);
+}
+/* CodeMirror draws the caret in a layer shared by prose and fenced code. */
+.document-mode.mode-live[data-markdown-theme] .cm-scroller {
+  background-color: var(--md-bg);
+}
+.document-mode.mode-live[data-markdown-theme] .cm-cursor,
+.document-mode.mode-live[data-markdown-theme] .cm-dropCursor {
+  border-left: 2px solid var(--md-cursor);
+  margin-left: -1px;
+}
+.document-mode.mode-live[data-markdown-theme="developer"] .cm-editor.live-code-caret {
+  --md-cursor: #ffffff;
+}
+.document-mode.mode-live[data-markdown-theme] .cm-line.live-fence {
+  color: var(--md-code-ink);
+  background: var(--md-code-bg);
+}
+.document-mode[data-markdown-theme="paper"] .reading,
+.document-mode.mode-live[data-markdown-theme="paper"] .source .cm-editor {
+  font-family: var(--serif);
+}
+.document-mode[data-markdown-font-size="small"] .reading,
+.document-mode.mode-live[data-markdown-font-size="small"] .source .cm-editor {
+  font-size: 15px;
+}
+.document-mode[data-markdown-font-size="large"] .reading,
+.document-mode.mode-live[data-markdown-font-size="large"] .source .cm-editor {
+  font-size: 18px;
+}
+.document-mode.mode-live[data-markdown-theme] .cm-line.live-h1 {
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--md-line);
+}
+.document-mode.mode-live[data-markdown-theme] .cm-line.live-h2,
+.document-mode.mode-live[data-markdown-theme] .cm-line.live-h3 {
+  padding-inline-start: 0.65em;
+  border-inline-start: 3px solid var(--md-accent);
+}
+
+/* Rendered fences and the active fence in the live editor use the same palette. */
+.document-mode[data-markdown-theme] .md-keyword {
+  color: var(--md-keyword);
+}
+.document-mode[data-markdown-theme] .md-string {
+  color: var(--md-string);
+}
+.document-mode[data-markdown-theme] .md-literal {
+  color: var(--md-literal);
+}
+.document-mode[data-markdown-theme] .md-name {
+  color: var(--md-name);
+}
+.document-mode[data-markdown-theme] .md-comment {
+  color: var(--md-comment);
+}
+.document-mode.mode-live[data-markdown-theme] .live-fence .live-marker {
+  color: var(--md-comment);
 }

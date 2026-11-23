@@ -65,18 +65,32 @@ export default function SplitEditor({
   source,
   label,
   children,
+  ratio: initialRatio = 50,
+  linked: initialLinked = true,
+  onRatioChange,
+  onLinkedChange,
 }: {
   editor: RefObject<EditorView | null>;
   source: ReactNode;
   label: string;
   children: ReactNode;
+  ratio?: number;
+  linked?: boolean;
+  onRatioChange?: (ratio: number) => void;
+  onLinkedChange?: (linked: boolean) => void;
 }) {
   const split = Boolean(children);
   const container = useRef<HTMLDivElement>(null),
-    preview = useRef<HTMLDivElement>(null);
-  const [linked, setLinked] = useState(true),
-    [ratio, setRatio] = useState(50);
+    preview = useRef<HTMLDivElement>(null),
+    ratioRef = useRef(initialRatio);
+  const [linked, setLinked] = useState(initialLinked),
+    [ratio, setRatio] = useState(initialRatio);
   const [stacked, setStacked] = useState(false);
+  useEffect(() => setLinked(initialLinked), [initialLinked]);
+  useEffect(() => {
+    ratioRef.current = initialRatio;
+    setRatio(initialRatio);
+  }, [initialRatio]);
   useEffect(() => {
     if (!split) return;
     const el = container.current!;
@@ -106,8 +120,15 @@ export default function SplitEditor({
       paper.removeEventListener("scroll", right);
     };
   }, [split, linked, editor]);
-  const resize = (value: number) =>
-    setRatio(Math.round(Math.max(25, Math.min(75, value))));
+  const resize = (value: number) => {
+    const next = Math.round(Math.max(25, Math.min(75, value)));
+    ratioRef.current = next;
+    setRatio(next);
+  };
+  const updateLinked = (value: boolean) => {
+    setLinked(value);
+    onLinkedChange?.(value);
+  };
   return (
     <div
       className={split ? "split-editor" : "source-editor"}
@@ -129,7 +150,10 @@ export default function SplitEditor({
         aria-valuemin={25}
         aria-valuemax={75}
         aria-valuenow={ratio}
-        onDoubleClick={() => resize(50)}
+        onDoubleClick={() => {
+          resize(50);
+          onRatioChange?.(50);
+        }}
         onPointerDown={(e) => {
           e.preventDefault();
           e.currentTarget.focus();
@@ -145,24 +169,34 @@ export default function SplitEditor({
                 : (e.clientX - box.left) / box.width),
           );
         }}
+        onPointerUp={() => onRatioChange?.(ratioRef.current)}
         onKeyDown={(e) => {
           const step = stacked
             ? ["ArrowUp", "ArrowDown"]
             : ["ArrowLeft", "ArrowRight"];
           if (step.includes(e.key)) {
             e.preventDefault();
-            resize(ratio + (e.key === step[0] ? -5 : 5));
+            const next = Math.round(
+              Math.max(25, Math.min(75, ratio + (e.key === step[0] ? -5 : 5))),
+            );
+            resize(next);
+            onRatioChange?.(next);
           }
           if (e.key === "Home" || e.key === "End") {
             e.preventDefault();
-            resize(e.key === "Home" ? 25 : 75);
+            const next = e.key === "Home" ? 25 : 75;
+            resize(next);
+            onRatioChange?.(next);
           }
         }}
       />
       <section hidden={!split} className="split-pane" aria-label="预览栏">
         <header>
           实时预览
-          <button aria-pressed={linked} onClick={() => setLinked(!linked)}>
+          <button
+            aria-pressed={linked}
+            onClick={() => updateLinked(!linked)}
+          >
             同步滚动
           </button>
         </header>

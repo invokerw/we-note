@@ -32,6 +32,10 @@ try {
     await api("/api/v1/auth/login", "POST", { email, password })
   ).json();
   token = session.access_token;
+  await api("/api/v1/me/plugin-settings/com.wenote.md", "PUT", {
+    defaultMode: "read",
+    rememberNoteMode: false,
+  });
   const { id } = await (
     await api("/api/v1/vaults", "POST", { name: "阶段二" })
   ).json();
@@ -186,6 +190,15 @@ try {
   assert.equal(await sourceScroll.evaluate(top), 0);
   await button("同步滚动").click();
   assert.equal(await previewScroll.evaluate(top), 0);
+  await split.getByLabel("笔记源码").fill("父项\n子项");
+  await split.getByLabel("笔记源码").press("ControlOrMeta+End");
+  await split.getByLabel("笔记源码").press("Tab");
+  assert.equal(
+    (await split.getByLabel("笔记源码").locator(".cm-line").allTextContents()).join(
+      "\n",
+    ),
+    "父项\n  子项",
+  );
   await split.getByLabel("笔记源码").fill("分屏草稿");
   await split.getByLabel("笔记源码").press("ControlOrMeta+a");
   await button("加粗").click();
@@ -235,6 +248,11 @@ try {
     await writing.evaluate((el) => el === document.activeElement),
     true,
   );
+  await writeDraft("父项\n子项");
+  await writing.press("ControlOrMeta+End");
+  await keys.press("Tab");
+  await checkSource("父项\n  子项");
+  await writeDraft("**分屏草稿**");
   await clickTextAt(writing, "分屏草稿", 2);
   const ime = await page.context().newCDPSession(page);
   for (const text of ["z", "zhong"])
