@@ -15,34 +15,35 @@ import katex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { boardStrokes, Whiteboard } from "./Whiteboard";
 import { extensions, noteSyntax } from "./document";
+import { useColorScheme } from "../appearance";
 
 let diagramEngine: Promise<(typeof import("mermaid"))["default"]> | undefined;
 function Diagram({ source }: { source: string }) {
   const [result, set] = useState({ url: "", error: "" });
+  const [scheme] = useColorScheme();
   useEffect(() => {
     let active = true,
       url = "";
     set({ url: "", error: "" });
     async function render() {
-      diagramEngine ??= import("mermaid").then(({ default: m }) => {
-        m.initialize({
-          startOnLoad: false,
-          securityLevel: "strict",
-          htmlLabels: false,
-          suppressErrorRendering: true,
-          secure: [
-            "securityLevel",
-            "startOnLoad",
-            "htmlLabels",
-            "maxTextSize",
-            "maxEdges",
-            "dompurifyConfig",
-            "suppressErrorRendering",
-          ],
-        });
-        return m;
-      });
+      diagramEngine ??= import("mermaid").then(({ default: m }) => m);
       const m = await diagramEngine;
+      m.initialize({
+        startOnLoad: false,
+        theme: scheme === "dark" ? "dark" : "default",
+        securityLevel: "strict",
+        htmlLabels: false,
+        suppressErrorRendering: true,
+        secure: [
+          "securityLevel",
+          "startOnLoad",
+          "htmlLabels",
+          "maxTextSize",
+          "maxEdges",
+          "dompurifyConfig",
+          "suppressErrorRendering",
+        ],
+      });
       const { svg } = await m.render("diagram-" + crypto.randomUUID(), source);
       if (active) {
         url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
@@ -56,7 +57,7 @@ function Diagram({ source }: { source: string }) {
       active = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [source]);
+  }, [source, scheme]);
   return result.url ? (
     <img className="diagram" alt="Mermaid 图表" src={result.url} />
   ) : (

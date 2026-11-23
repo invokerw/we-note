@@ -1,8 +1,6 @@
 export type XMindTheme = "classic" | "ocean" | "forest" | "midnight" | "youdao";
 
-type XMindThemeDefinition = {
-  name: string;
-  description: string;
+export type XMindThemePalette = {
   background: string;
   nodeStyle: "cards" | "lines";
   nodeRadius: number;
@@ -18,6 +16,11 @@ type XMindThemeDefinition = {
   nodeStroke: string;
   selected: string;
   summary: string;
+};
+
+type XMindThemeDefinition = XMindThemePalette & {
+  name: string;
+  description: string;
 };
 
 export const xmindThemes = {
@@ -117,6 +120,103 @@ export const xmindThemes = {
     summary: "#ba7b42",
   },
 } satisfies Record<XMindTheme, XMindThemeDefinition>;
+
+const darkXMindThemes: Record<XMindTheme, XMindThemePalette> = {
+  classic: {
+    background: "#141b26",
+    nodeStyle: "cards",
+    nodeRadius: 8,
+    edge: "#8fb3e8",
+    relationship: "#d593c7",
+    relationshipText: "#f0c1e4",
+    relationshipOutline: "#141b26",
+    root: "#4d91f2",
+    rootText: "#ffffff",
+    node: "#232f3e",
+    nodeText: "#e5edf8",
+    note: "#aab6c7",
+    nodeStroke: "#5a769a",
+    selected: "#8ab4ff",
+    summary: "#e1b46d",
+  },
+  ocean: {
+    background: "#10202c",
+    nodeStyle: "cards",
+    nodeRadius: 8,
+    edge: "#ff756c",
+    relationship: "#e7a3b5",
+    relationshipText: "#ffd0db",
+    relationshipOutline: "#10202c",
+    root: "#5a9fff",
+    rootText: "#ffffff",
+    node: "#203746",
+    nodeText: "#e6f4fa",
+    note: "#b3cbd4",
+    nodeStroke: "#7b9faa",
+    selected: "#a7d8ff",
+    summary: "#dfb074",
+  },
+  forest: {
+    background: "#14251d",
+    nodeStyle: "cards",
+    nodeRadius: 8,
+    edge: "#7bd38d",
+    relationship: "#d59ac8",
+    relationshipText: "#f4c9ec",
+    relationshipOutline: "#14251d",
+    root: "#55b878",
+    rootText: "#ffffff",
+    node: "#24392b",
+    nodeText: "#e2f2e5",
+    note: "#b3d0b9",
+    nodeStroke: "#638a6d",
+    selected: "#9be3ad",
+    summary: "#dbb676",
+  },
+  midnight: {
+    background: "#171527",
+    nodeStyle: "cards",
+    nodeRadius: 8,
+    edge: "#a39aff",
+    relationship: "#e3a5dc",
+    relationshipText: "#f6c8ef",
+    relationshipOutline: "#171527",
+    root: "#7868e3",
+    rootText: "#ffffff",
+    node: "#282343",
+    nodeText: "#eeeaff",
+    note: "#bab2d6",
+    nodeStroke: "#7770a8",
+    selected: "#b2aaff",
+    summary: "#e9c883",
+  },
+  youdao: {
+    background: "#141b26",
+    nodeStyle: "lines",
+    nodeRadius: 0,
+    edge: "#ff756c",
+    relationship: "#e7a3b5",
+    relationshipText: "#ffd0db",
+    relationshipOutline: "#141b26",
+    root: "#5a9fff",
+    rootText: "#ffffff",
+    node: "transparent",
+    nodeText: "#e6edf7",
+    note: "#afbccb",
+    nodeStroke: "transparent",
+    selected: "#a7d8ff",
+    summary: "#dfb074",
+  },
+};
+
+export function xmindColors(
+  theme: XMindTheme,
+  scheme: "light" | "dark" = "light",
+): XMindThemeDefinition {
+  return scheme === "dark"
+    ? { ...xmindThemes[theme], ...darkXMindThemes[theme] }
+    : xmindThemes[theme];
+}
 
 export function normalizeXMindTheme(value: unknown): XMindTheme {
   return value === "ocean" || value === "forest" || value === "midnight" || value === "youdao"

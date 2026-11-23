@@ -19,6 +19,8 @@ import {
 } from "./libraryEntries";
 import { initialBytes } from "./plugins/xmind";
 import Editor, { AssetImage } from "./Editor";
+import AppearanceToggle from "./AppearanceToggle";
+import { useColorScheme } from "./appearance";
 import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Share, Vault } from "./api";
 import { Cover, LibraryPanes, usePanes } from "./LibraryUI";
@@ -106,7 +108,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [origin, setOrigin] = useState(location.origin),
     [preferences, setPreferences] = useState<UserPreferences>(
       loadLocalPreferences,
-    );
+    ),
+    [colorScheme, setColorScheme] = useColorScheme();
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const panes = usePanes();
@@ -424,13 +427,16 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           </>
         }
         account={
-          <button
-            onClick={() => {
-              if (leave()) logout();
-            }}
-          >
-            退出登录
-          </button>
+          <div className="account-actions">
+            <AppearanceToggle scheme={colorScheme} onChange={setColorScheme} />
+            <button
+              onClick={() => {
+                if (leave()) logout();
+              }}
+            >
+              退出登录
+            </button>
+          </div>
         }
         listActions={
           <button disabled={!vault} onClick={() => picker.current?.click()}>

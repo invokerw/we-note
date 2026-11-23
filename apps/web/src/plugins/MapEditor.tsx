@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useColorScheme, type ColorScheme } from "../appearance";
 import {
   setTopicNote,
   topic,
@@ -8,7 +9,7 @@ import {
   type Topic,
   type Workbook,
 } from "./xmind";
-import { xmindThemes, type XMindTheme } from "./xmindThemes";
+import { xmindColors, type XMindTheme } from "./xmindThemes";
 
 type Branch = "left" | "right";
 type TopicEntry = {
@@ -298,6 +299,7 @@ function MapCanvas({
   action,
   editTopic,
   theme,
+  scheme,
 }: {
   sheet: Sheet;
   selected: string;
@@ -305,9 +307,10 @@ function MapCanvas({
   action: (action: MapAction, id: string) => void;
   editTopic: (id: string, fn: (topic: Topic) => void) => void;
   theme: XMindTheme;
+  scheme: ColorScheme;
 }) {
   const layout = useMemo(() => makeLayout(sheet), [sheet]);
-  const colors = xmindThemes[theme];
+  const colors = xmindColors(theme, scheme);
   const lineNodes = colors.nodeStyle === "lines";
   const themeStyle = {
     "--mindmap-bg": colors.background,
@@ -773,6 +776,7 @@ export function MapEditor({
   theme?: XMindTheme;
 }) {
   const [selected, select] = useState("");
+  const [scheme] = useColorScheme();
   const sheet = book.sheets[index];
   const entries = topicPath(sheet.rootTopic);
   const node = entries.find((entry) => entry.node.id === selected)?.node || sheet.rootTopic;
@@ -881,6 +885,7 @@ export function MapEditor({
             action={perform}
             editTopic={(id, fn) => change(fn, id)}
             theme={theme}
+            scheme={scheme}
           />
         </div>
       </div>
