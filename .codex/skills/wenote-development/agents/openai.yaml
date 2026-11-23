@@ -1,0 +1,4 @@
+interface:
+  display_name: "WeNote 开发流程"
+  short_description: "按账本、TDD 与 worktree 交付开发任务"
+  default_prompt: "使用 $wenote-development 执行这个 WeNote 开发任务并按流程交付。"

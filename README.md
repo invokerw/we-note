@@ -99,6 +99,12 @@ APK 位于 `apps/client/src-tauri/gen/android/app/build/outputs/apk/`。登录 H
 
 指定 `-s3-bucket` 即可使用 S3。`-s3-region` 选择区域，`-s3-prefix` 指定对象前缀。MinIO 等兼容服务可通过 `-s3-endpoint` 配置地址。凭据由 AWS SDK 的默认凭据链提供。应将 SQLite 数据库与对应的 Blob 存储一同备份。
 
+## 开发协作
+
+开发任务按功能开发、Bug 修复、重构、测试、文档和工程维护分类，登记在 [开发账本](docs/开发账本.md)，详细执行方式见 [开发工作流](docs/开发工作流.md)。具体实现使用独立 Git worktree 和 `codex/` 分支，按 TDD 先写失败测试，再实现和回归验证。服务端任务使用独立端口和运行目录，客户端任务从任务 worktree 构建。
+
+自我验收通过后交付用户验收，用户明确确认后才合回主分支并清理 worktree 与任务分支。Codex 需要执行仓库流程时读取 [WeNote 开发流程 skill](.codex/skills/wenote-development/SKILL.md)。
+
 ## 运行验收
 
 先构建网页和桌面前端，再从仓库根目录执行以下命令。浏览器验收使用 Chrome，`CHROME_PATH` 可指定其他 Chrome 安装路径。脚本创建临时数据库，启动回环地址服务并在测试结束时清理。
@@ -106,7 +112,7 @@ APK 位于 `apps/client/src-tauri/gen/android/app/build/outputs/apk/`。登录 H
 ```sh
 (cd services/api && go test -race ./... && go vet ./... && go build -o /tmp/wenote-api ./cmd/wenote-api)
 WENOTE_API=/tmp/wenote-api node tests/e2e/desktop.mjs --browser
-node --test tests/protocol/*.test.mjs scripts/*.test.mjs
+node --test tests/protocol/*.test.mjs
 node tests/protocol/mutation-check.mjs
 ```
 

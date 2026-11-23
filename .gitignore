@@ -1,6 +1,5 @@
-# Local orchestration logs and task worktrees
-/.ai-workflow/
-/scripts/node_modules/
+# Local task worktrees
+/.worktrees/
 /apps/web/node_modules/
 /apps/web/dist/
 /target/
