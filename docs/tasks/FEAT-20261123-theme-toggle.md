@@ -115,7 +115,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 合并提交 | 待生成 |
-| 合并后验证 | 待执行 |
+| 合并提交 | `bb0c57c` (`Merge feature/theme-toggle`) |
+| 合并后验证 | `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`git diff --check` 均通过，2026-11-23 |
 | worktree 清理时间 | 待执行 |
 | 分支清理时间 | 待执行 |
