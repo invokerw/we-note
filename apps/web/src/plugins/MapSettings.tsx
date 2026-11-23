@@ -1,6 +1,7 @@
+import { useColorScheme } from "../appearance";
 import type { CSSProperties } from "react";
 import type { XMindPreferences } from "../preferences";
-import { xmindThemes, type XMindTheme } from "./xmindThemes";
+import { xmindColors, xmindThemes, type XMindTheme } from "./xmindThemes";
 
 const previewNodes = [
   { x: 210, y: 74, width: 104, height: 36, title: "项目规划", root: true },
@@ -11,7 +12,8 @@ const previewNodes = [
 ];
 
 function ThemePreview({ theme }: { theme: XMindTheme }) {
-  const colors = xmindThemes[theme];
+  const [scheme] = useColorScheme();
+  const colors = xmindColors(theme, scheme);
   const previewEdges = colors.nodeStyle === "lines"
     ? [
         "M 158 74 C 142 74 138 44 111 44",

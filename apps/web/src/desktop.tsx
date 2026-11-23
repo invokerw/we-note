@@ -23,6 +23,8 @@ import {
   type EntryIO,
 } from "./libraryEntries";
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
+import AppearanceToggle from "./AppearanceToggle";
+import { useColorScheme } from "./appearance";
 import { PhoneIcon, useAndroidPhone, useAndroidBack } from "./PhoneUI";
 import {
   loadLocalPreferences,
@@ -138,6 +140,7 @@ function Workspace({
   const [preferences, setPreferences] = useState<UserPreferences>(
     loadLocalPreferences,
   );
+  const [colorScheme, setColorScheme] = useColorScheme();
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const source = useRef(new TextFile("")),
@@ -559,14 +562,17 @@ function Workspace({
           </>
         }
         account={
-          <button
-            disabled={busy}
-            onClick={() => {
-              if (leave()) close();
-            }}
-          >
-            返回同步
-          </button>
+          <div className="account-actions">
+            <AppearanceToggle scheme={colorScheme} onChange={setColorScheme} />
+            <button
+              disabled={busy}
+              onClick={() => {
+                if (leave()) close();
+              }}
+            >
+              返回同步
+            </button>
+          </div>
         }
         listActions={
           <>
