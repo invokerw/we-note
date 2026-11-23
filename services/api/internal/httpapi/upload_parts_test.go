@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/weifei/we-note/services/api/internal/blob"
@@ -101,6 +102,22 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 	w := requestJSON(t, mux, http.MethodGet, "/assets/"+asset.ID, token, nil)
 	if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), data) {
 		t.Fatal("wrong assembled bytes", w.Code)
+	}
+	wantURL := "https://localhost:8443/assets/" + asset.CreatedAt.UTC().Format("2006/01/02") + "/" + strings.TrimPrefix(asset.Hash, "sha256:")
+	if asset.URL != wantURL {
+		t.Fatalf("asset URL = %q, want %q", asset.URL, wantURL)
+	}
+	newURL := strings.TrimPrefix(asset.URL, "https://localhost:8443")
+	if w = requestJSON(t, mux, http.MethodGet, newURL, token, nil); w.Code != 200 || !bytes.Equal(w.Body.Bytes(), data) {
+		t.Fatalf("wrong date-hash URL bytes: %d %q", w.Code, w.Body.Bytes())
+	}
+	var storageKey string
+	if err := db.QueryRow(`SELECT storage_key FROM upload_sessions WHERE id=?`, asset.Upload).Scan(&storageKey); err != nil {
+		t.Fatal(err)
+	}
+	wantKey := filepath.Join("blobs", v.ID, asset.CreatedAt.UTC().Format("2006/01/02"), strings.TrimPrefix(asset.Hash, "sha256:"))
+	if storageKey != wantKey {
+		t.Fatalf("storage key = %q, want %q", storageKey, wantKey)
 	}
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM upload_parts`).Scan(&n); err != nil || n != 0 {

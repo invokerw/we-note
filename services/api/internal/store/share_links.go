@@ -278,7 +278,7 @@ func (r *Repository) WriteLinkArchive(ctx context.Context, w io.Writer, s LinkSn
 		if !PortablePath(name) {
 			name = "attachment"
 		}
-		if err := r.writeExportEntry(ctx, z, s.Vault, exportEntry{Path: "assets/" + a.ID + "/" + name, Hash: a.Hash, Size: a.Size}); err != nil {
+		if err := r.writeExportEntry(ctx, z, s.Vault, exportEntry{Path: "assets/" + a.ID + "/" + name, Hash: a.Hash, Size: a.Size, StorageKey: a.StorageKey}); err != nil {
 			return err
 		}
 	}

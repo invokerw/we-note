@@ -99,7 +99,7 @@ func (r *Repository) putBytes(ctx context.Context, vault string, data []byte) (s
 	}
 	ref := storedContent{Hash: fmt.Sprintf("sha256:%x", sha256.Sum256(data)), Size: int64(len(data))}
 	var err error
-	ref.Key, err = r.blobStore.Put(ctx, vault, ref.Hash, ref.Size, bytes.NewReader(data))
+	ref.Key, err = r.blobStore.PutAt(ctx, vault, ref.Hash, ref.Size, time.Now().UTC(), bytes.NewReader(data))
 	return ref, err
 }
 

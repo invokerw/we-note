@@ -22,13 +22,14 @@ type ExportOptions struct {
 }
 
 type Export struct {
-	ID      string `json:"job_id"`
-	Mode    string `json:"mode"`
-	Scope   string `json:"scope"`
-	Created string `json:"created_at"`
-	Status  string `json:"status"`
-	Hash    string `json:"content_hash,omitempty"`
-	Size    int64  `json:"content_size"`
+	ID         string `json:"job_id"`
+	Mode       string `json:"mode"`
+	Scope      string `json:"scope"`
+	Created    string `json:"created_at"`
+	Status     string `json:"status"`
+	Hash       string `json:"content_hash,omitempty"`
+	Size       int64  `json:"content_size"`
+	StorageKey string `json:"-"`
 }
 type exportEntry struct {
 	Path       string `json:"path"`
@@ -39,6 +40,7 @@ type exportEntry struct {
 	SourceHash string `json:"source_content_hash,omitempty"`
 	Name       string `json:"original_name,omitempty"`
 	URL        string `json:"canonical_url,omitempty"`
+	StorageKey string `json:"-"`
 }
 type exportSnapshot struct {
 	Mode    string        `json:"mode"`
@@ -49,11 +51,15 @@ type exportSnapshot struct {
 	Assets  []exportEntry `json:"assets"`
 }
 
-const exportColumns = `SELECT id,scope,created_at,status,hash,size,coalesce(json_extract(snapshot,'$.mode'),'online') FROM export_jobs `
+const exportColumns = `SELECT id,scope,created_at,status,hash,size,storage_key,coalesce(json_extract(snapshot,'$.mode'),'online') FROM export_jobs `
 
 func scanExport(row scanner) (Export, error) {
 	var j Export
-	err := row.Scan(&j.ID, &j.Scope, &j.Created, &j.Status, &j.Hash, &j.Size, &j.Mode)
+	var storageKey sql.NullString
+	err := row.Scan(&j.ID, &j.Scope, &j.Created, &j.Status, &j.Hash, &j.Size, &storageKey, &j.Mode)
+	if storageKey.Valid {
+		j.StorageKey = storageKey.String
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -135,7 +141,7 @@ func (r *Repository) CreateExport(ctx context.Context, user, vault, key string, 
 			if f.CurrentVersionID == nil || !PortablePath(f.Path) {
 				return j, errors.New("invalid file in export")
 			}
-			snap.Files = append(snap.Files, exportEntry{Path: "notes/" + f.Path, ID: f.ID, Version: *f.CurrentVersionID, Hash: f.CurrentContentHash, Size: f.CurrentContentSize})
+			snap.Files = append(snap.Files, exportEntry{Path: "notes/" + f.Path, ID: f.ID, Version: *f.CurrentVersionID, Hash: f.CurrentContentHash, Size: f.CurrentContentSize, StorageKey: f.CurrentStorageKey})
 		}
 		if e = rows.Err(); e != nil {
 			return j, e
@@ -157,7 +163,7 @@ func (r *Repository) CreateExport(ctx context.Context, user, vault, key string, 
 			if !PortablePath(name) {
 				name = "attachment"
 			}
-			snap.Assets = append(snap.Assets, exportEntry{Path: "assets/" + a.ID + "/" + name, ID: a.ID, Hash: a.Hash, Size: a.Size, Name: a.Name, URL: a.URL})
+			snap.Assets = append(snap.Assets, exportEntry{Path: "assets/" + a.ID + "/" + name, ID: a.ID, Hash: a.Hash, Size: a.Size, Name: a.Name, URL: a.URL, StorageKey: a.StorageKey})
 		}
 		if e = rows.Err(); e != nil {
 			return j, e
@@ -208,13 +214,13 @@ func (r *Repository) processExports() {
 			return
 		}
 		r.exportMu.Unlock()
-		hash, size, err := r.buildArchive(ctx, vault, raw)
+		hash, size, storageKey, err := r.buildArchive(ctx, vault, raw)
 		status := "completed"
 		if err != nil {
 			log.Printf("export %s: %v", id, err)
 			status = "failed"
 		}
-		if _, err = r.db.ExecContext(ctx, `UPDATE export_jobs SET status=?,hash=?,size=? WHERE id=?`, status, hash, size, id); err != nil {
+		if _, err = r.db.ExecContext(ctx, `UPDATE export_jobs SET status=?,hash=?,size=?,storage_key=? WHERE id=?`, status, hash, size, storageKey, id); err != nil {
 			log.Printf("record export: %v", err)
 			r.exportMu.Lock()
 			r.exportRunning = false
@@ -223,38 +229,42 @@ func (r *Repository) processExports() {
 		}
 	}
 }
-func (r *Repository) buildArchive(ctx context.Context, vault string, raw []byte) (string, int64, error) {
+func (r *Repository) buildArchive(ctx context.Context, vault string, raw []byte) (string, int64, string, error) {
 	var snap exportSnapshot
 	if e := json.Unmarshal(raw, &snap); e != nil {
-		return "", 0, e
+		return "", 0, "", e
 	}
 	tmp, e := os.CreateTemp("", "wenote-export-*.zip")
 	if e != nil {
-		return "", 0, e
+		return "", 0, "", e
 	}
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
 	hash := sha256.New()
 	z := zip.NewWriter(io.MultiWriter(tmp, hash))
 	if e = r.writeExportSnapshot(ctx, z, vault, &snap); e != nil {
-		return "", 0, e
+		return "", 0, "", e
 	}
 	if e = z.Close(); e != nil {
-		return "", 0, e
+		return "", 0, "", e
 	}
 	size, e := tmp.Seek(0, io.SeekCurrent)
 	if e != nil {
-		return "", 0, e
+		return "", 0, "", e
 	}
 	if _, e = tmp.Seek(0, io.SeekStart); e != nil {
-		return "", 0, e
+		return "", 0, "", e
 	}
 	digest := fmt.Sprintf("sha256:%x", hash.Sum(nil))
-	_, e = r.blobStore.Put(ctx, vault, digest, size, tmp)
-	return digest, size, e
+	storageKey, e := r.blobStore.PutAt(ctx, vault, digest, size, time.Now().UTC(), tmp)
+	return digest, size, storageKey, e
 }
 func (r *Repository) writeExportEntry(ctx context.Context, z *zip.Writer, vault string, f exportEntry) error {
-	src, e := r.blobStore.OpenContext(ctx, vault, f.Hash)
+	storageKey := f.StorageKey
+	if storageKey == "" {
+		_ = r.db.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, vault, f.Hash).Scan(&storageKey)
+	}
+	src, e := r.blobStore.OpenContext(ctx, vault, f.Hash, storageKey)
 	if e != nil {
 		return e
 	}
@@ -277,7 +287,7 @@ func (r *Repository) OpenExport(ctx context.Context, user, vault string, j Expor
 	if j.Status != "completed" {
 		return nil, fileError(409, "EXPORT_NOT_READY", "archive is not ready")
 	}
-	body, err := r.blobStore.OpenContext(ctx, vault, j.Hash)
+	body, err := r.blobStore.OpenContext(ctx, vault, j.Hash, j.StorageKey)
 	if err != nil {
 		return nil, err
 	}

@@ -195,16 +195,50 @@ impl Api {
 }
 
 impl Api {
-    pub(crate) fn asset_bytes(&self, vault: &str, id: &str) -> Result<(String, Vec<u8>)> {
+    pub(crate) fn asset_bytes(&self, vault: &str, route: &str) -> Result<(String, Vec<u8>)> {
+        if route.split('/').count() == 4 {
+            let parts: Vec<&str> = route.split('/').collect();
+            if parts[0].len() != 4
+                || parts[1].len() != 2
+                || parts[2].len() != 2
+                || parts[3].len() != 64
+                || !parts[0].bytes().all(|b| b.is_ascii_digit())
+                || !parts[1].bytes().all(|b| b.is_ascii_digit())
+                || !parts[2].bytes().all(|b| b.is_ascii_digit())
+                || !parts[3].bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                bail!("invalid asset URL")
+            }
+            let response = checked(
+                self.client
+                    .get(format!("{}/assets/{route}", self.origin))
+                    .bearer_auth(&self.token)
+                    .send()?,
+            )?;
+            let media = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.split(';').next())
+                .filter(|value| !value.is_empty())
+                .unwrap_or("application/octet-stream")
+                .to_owned();
+            let bytes = response.bytes()?.to_vec();
+            if super::digest(&bytes) != format!("sha256:{}", parts[3]) {
+                bail!("附件校验失败")
+            }
+            return Ok((media, bytes));
+        }
+        super::identifier(route)?;
         let meta = self.json(
             Method::GET,
-            &format!("/api/v1/vaults/{vault}/assets/{id}"),
+            &format!("/api/v1/vaults/{vault}/assets/{route}"),
             None,
             None,
         )?;
         let response = checked(
             self.client
-                .get(format!("{}/assets/{id}", self.origin))
+                .get(format!("{}/assets/{route}", self.origin))
                 .bearer_auth(&self.token)
                 .send()?,
         )?;

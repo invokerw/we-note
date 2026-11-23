@@ -14,10 +14,11 @@ import (
 )
 
 type SnapshotFile struct {
-	Path    string `json:"path"`
-	Version string `json:"version_id"`
-	Hash    string `json:"content_hash"`
-	Size    int64  `json:"content_size"`
+	Path       string `json:"path"`
+	Version    string `json:"version_id"`
+	Hash       string `json:"content_hash"`
+	Size       int64  `json:"content_size"`
+	StorageKey string `json:"-"`
 }
 type Snapshot struct {
 	Files  []SnapshotFile `json:"files"`
@@ -54,10 +55,20 @@ func scanShare(row scanner) (Share, error) {
 	return s, err
 }
 func (r *Repository) readNoteBlob(ctx context.Context, vault, hash string, size int64) ([]byte, error) {
+	return r.readNoteBlobWithQuery(ctx, r.db, vault, hash, size)
+}
+
+func (r *Repository) readNoteBlobWithQuery(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, vault, hash string, size int64) ([]byte, error) {
 	if size > maxNoteBytes {
 		return nil, fileError(413, "NOTE_TOO_LARGE", "note exceeds 16 MiB")
 	}
-	reader, err := r.blobStore.OpenContext(ctx, vault, hash)
+	var storageKey string
+	if err := queryer.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, vault, hash).Scan(&storageKey); err != nil {
+		return nil, err
+	}
+	reader, err := r.blobStore.OpenContext(ctx, vault, hash, storageKey)
 	if err != nil {
 		return nil, err
 	}
@@ -168,16 +179,22 @@ func (r *Repository) CloseShare(ctx context.Context, user, id string, revoke boo
 	return err
 }
 func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a Asset) (string, error) {
-	body, err := r.blobStore.OpenContext(ctx, a.Vault, a.Hash)
+	storageKey := a.StorageKey
+	if storageKey == "" {
+		if err := tx.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, a.Vault, a.Hash).Scan(&storageKey); err != nil {
+			return "", err
+		}
+	}
+	body, err := r.blobStore.OpenContext(ctx, a.Vault, a.Hash, storageKey)
 	if err != nil {
 		return "", err
 	}
 	defer body.Close()
-	key, err := r.blobStore.Put(ctx, target, a.Hash, a.Size, body)
+	now := time.Now().UTC()
+	key, err := r.blobStore.PutAt(ctx, target, a.Hash, a.Size, now, body)
 	if err != nil {
 		return "", err
 	}
-	now := time.Now().UTC()
 	blobID := blobIDForHash(a.Hash)
 	if err = ensureBlobTx(ctx, tx, target, blobID, a.Hash, a.Size, key, now); err != nil {
 		return "", err
@@ -195,7 +212,7 @@ func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a
 		return "", err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO assets(id,vault_id,name,media_type,upload_id,created_at) VALUES(?,?,?,?,?,?)`, id, target, a.Name, a.Type, upload, formatTime(now))
-	return r.publicBase + "/assets/" + id, err
+	return canonicalAssetURL(r.publicBase, now, a.Hash), err
 }
 func (r *Repository) AcceptShare(ctx context.Context, user, id, target, folder string) ([]FileResult, error) {
 	if folder != "" && !PortablePath(folder) {
@@ -277,7 +294,7 @@ func (r *Repository) selectSnapshot(ctx context.Context, tx *sql.Tx, vault strin
 			}
 		}
 		if selected && f.CurrentVersionID != nil {
-			snap.Files = append(snap.Files, SnapshotFile{f.Path, *f.CurrentVersionID, f.CurrentContentHash, f.CurrentContentSize})
+			snap.Files = append(snap.Files, SnapshotFile{Path: f.Path, Version: *f.CurrentVersionID, Hash: f.CurrentContentHash, Size: f.CurrentContentSize, StorageKey: f.CurrentStorageKey})
 		}
 	}
 	if err = rows.Err(); err != nil {
@@ -295,28 +312,32 @@ func (r *Repository) selectSnapshot(ctx context.Context, tx *sql.Tx, vault strin
 
 func (r *Repository) snapshotAssets(ctx context.Context, tx *sql.Tx, vault string, files []SnapshotFile, assetIDs []string) ([]Asset, error) {
 	assets := []Asset{}
-	ids := append([]string(nil), assetIDs...)
+	refs := make([]string, 0, len(assetIDs))
+	for _, id := range assetIDs {
+		refs = append(refs, r.publicBase+"/assets/"+id)
+	}
 	for _, f := range files {
 		if f.Version == "" || !strings.HasSuffix(strings.ToLower(f.Path), ".md") {
 			continue
 		}
-		data, err := r.readNoteBlob(ctx, vault, f.Hash, f.Size)
+		data, err := r.readNoteBlobWithQuery(ctx, tx, vault, f.Hash, f.Size)
 		if err != nil {
 			return nil, err
 		}
-		ids = append(ids, r.assetReferences(data)...)
+		refs = append(refs, r.assetReferences(data)...)
 	}
 	seen := map[string]bool{}
-	for _, id := range ids {
-		if seen[id] {
+	for _, ref := range refs {
+		if seen[ref] {
 			continue
 		}
-		a, err := r.scanAsset(tx.QueryRowContext(ctx, assetSelect+`WHERE a.id=? AND a.vault_id=? AND a.is_deleted=0 AND u.status='completed'`, id, vault))
+		a, err := r.assetForReference(ctx, tx, "", vault, ref)
 		if err != nil {
 			return nil, err
 		}
+		a.ReferenceURLs = append(a.ReferenceURLs, ref)
 		assets = append(assets, a)
-		seen[id] = true
+		seen[ref] = true
 	}
 
 	return assets, nil
@@ -331,13 +352,20 @@ func (r *Repository) importSnapshot(ctx context.Context, tx *sql.Tx, source, tar
 			return nil, nil, err
 		}
 		links[a.URL] = dest
+		links[r.publicBase+"/assets/"+a.ID] = dest
+		if a.LegacyURL != "" {
+			links[a.LegacyURL] = dest
+		}
+		for _, ref := range a.ReferenceURLs {
+			links[ref] = dest
+		}
 	}
 	for _, file := range snap.Files {
 		p := file.Path
 		if folder != "" {
 			p = folder + "/" + p
 		}
-		data, err := r.readNoteBlob(ctx, source, file.Hash, file.Size)
+		data, err := r.readNoteBlobWithQuery(ctx, tx, source, file.Hash, file.Size)
 		if err != nil {
 			return nil, nil, err
 		}

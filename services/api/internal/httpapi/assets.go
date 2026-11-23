@@ -38,7 +38,13 @@ func (a *API) asset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, vault := r.PathValue("asset_id"), r.PathValue("vault_id")
-	asset, err := a.repository.AssetForUser(r.Context(), user.ID, vault, id)
+	var asset store.Asset
+	var err error
+	if r.PathValue("hash") != "" {
+		asset, err = a.repository.AssetForPublicPath(r.Context(), user.ID, r.PathValue("year"), r.PathValue("month"), r.PathValue("day"), r.PathValue("hash"))
+	} else {
+		asset, err = a.repository.AssetForUser(r.Context(), user.ID, vault, id)
+	}
 	if err != nil {
 		resourceError(w, err)
 		return

@@ -223,7 +223,7 @@ func (r *Repository) CompleteUploadSession(ctx context.Context, vaultID, uploadI
 	if session.Status != "pending" {
 		return model.UploadSession{}, fmt.Errorf("upload session is not pending")
 	}
-	storageKey, err := r.blobStore.Put(ctx, vaultID, session.ContentHash, session.ContentSize, source)
+	storageKey, err := r.blobStore.PutAt(ctx, vaultID, session.ContentHash, session.ContentSize, session.CreatedAt, source)
 	if err != nil {
 		return model.UploadSession{}, err
 	}
@@ -474,7 +474,7 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 			},
 		}
 	}
-	actualSize, actualHash, err := r.verifyBlob(ctx, request.VaultID, request.ContentHash)
+	actualSize, actualHash, err := r.verifyBlob(ctx, tx, request.VaultID, request.ContentHash)
 	if err != nil {
 		return SyncSubmitResult{}, &SyncError{
 			Status:  409,
@@ -509,7 +509,7 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 	}
 
 	if request.Metadata.Format == "md" {
-		data, err := r.readNoteBlob(ctx, request.VaultID, request.ContentHash, request.ContentSize)
+		data, err := r.readNoteBlobWithQuery(ctx, tx, request.VaultID, request.ContentHash, request.ContentSize)
 		if err != nil {
 			return SyncSubmitResult{}, err
 		}
@@ -541,7 +541,7 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 	}
 	storageKey := upload.StorageKey
 	if storageKey == "" {
-		storageKey = storageKeyForHash(request.VaultID, request.ContentHash)
+		storageKey = storageKeyForHash(request.VaultID, request.ContentHash, upload.CreatedAt)
 	}
 	if err := ensureBlobTx(ctx, tx, request.VaultID, blobID, request.ContentHash, request.ContentSize, storageKey, time.Now().UTC()); err != nil {
 		return SyncSubmitResult{}, err
@@ -730,8 +730,14 @@ func (r *Repository) Manifest(ctx context.Context, vaultID, deviceID string) (Sy
 	}, nil
 }
 
-func (r *Repository) verifyBlob(ctx context.Context, vaultID, contentHash string) (int64, string, error) {
-	reader, err := r.blobStore.OpenContext(ctx, vaultID, contentHash)
+func (r *Repository) verifyBlob(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, vaultID, contentHash string) (int64, string, error) {
+	var storageKey string
+	if err := queryer.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, vaultID, contentHash).Scan(&storageKey); err != nil {
+		return 0, "", err
+	}
+	reader, err := r.blobStore.OpenContext(ctx, vaultID, contentHash, storageKey)
 	if err != nil {
 		return 0, "", err
 	}
@@ -879,9 +885,9 @@ func blobIDForHash(contentHash string) string {
 	return "blob_" + strings.TrimPrefix(contentHash, "sha256:")
 }
 
-func storageKeyForHash(vaultID, contentHash string) string {
+func storageKeyForHash(vaultID, contentHash string, createdAt time.Time) string {
 	hexHash := strings.TrimPrefix(contentHash, "sha256:")
-	return "blobs/" + vaultID + "/" + hexHash[:2] + "/" + hexHash
+	return "blobs/" + vaultID + "/" + createdAt.UTC().Format("2006/01/02") + "/" + hexHash
 }
 
 func nullableString(value *string) any {

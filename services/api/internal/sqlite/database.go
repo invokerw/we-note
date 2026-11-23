@@ -198,8 +198,10 @@ CREATE INDEX IF NOT EXISTS idx_sync_operations_change ON sync_operations(vault_i
 	if err := db.migrateFileStorage(ctx); err != nil {
 		return err
 	}
-	_, err := db.ExecContext(ctx, resourcesSchema)
-	return err
+	if _, err := db.ExecContext(ctx, resourcesSchema); err != nil {
+		return err
+	}
+	return ensureCompatibilityColumns(ctx, db)
 }
 
 func (db *Database) migrateFileStorage(ctx context.Context) error {
@@ -256,8 +258,16 @@ func ensureCompatibilityColumns(ctx context.Context, db *Database) error {
 		{"changes", "device_id", `ALTER TABLE changes ADD COLUMN device_id TEXT NOT NULL DEFAULT ''`},
 		{"changes", "client_timestamp", `ALTER TABLE changes ADD COLUMN client_timestamp TEXT NOT NULL DEFAULT ''`},
 		{"upload_sessions", "storage_key", `ALTER TABLE upload_sessions ADD COLUMN storage_key TEXT`},
+		{"export_jobs", "storage_key", `ALTER TABLE export_jobs ADD COLUMN storage_key TEXT`},
 	}
 	for _, column := range columns {
+		var tableExists bool
+		if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?)`, column.table).Scan(&tableExists); err != nil {
+			return fmt.Errorf("inspect %s table: %w", column.table, err)
+		}
+		if !tableExists {
+			continue
+		}
 		rows, err := db.QueryContext(ctx, `PRAGMA table_info(`+column.table+`)`)
 		if err != nil {
 			return fmt.Errorf("inspect %s columns: %w", column.table, err)

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -45,8 +46,8 @@ func (s *S3Store) key(vault, hash string) (string, error) {
 	digest := strings.TrimPrefix(hash, "sha256:")
 	return path.Join(s.prefix, "blobs", vault, digest[:2], digest), nil
 }
-func (s *S3Store) Put(ctx context.Context, vault, hash string, size int64, source io.Reader) (string, error) {
-	key, err := s.key(vault, hash)
+func (s *S3Store) PutAt(ctx context.Context, vault, hash string, size int64, createdAt time.Time, source io.Reader) (string, error) {
+	key, err := s.keyAt(vault, hash, createdAt)
 	if err != nil {
 		return "", err
 	}
@@ -77,8 +78,21 @@ func (s *S3Store) Put(ctx context.Context, vault, hash string, size int64, sourc
 	}
 	return key, nil
 }
-func (s *S3Store) OpenContext(ctx context.Context, vault, hash string) (io.ReadCloser, error) {
-	key, err := s.key(vault, hash)
+func (s *S3Store) keyAt(vault, hash string, createdAt time.Time) (string, error) {
+	if !vaultIDPattern.MatchString(vault) || !hashPattern.MatchString(hash) {
+		return "", errors.New("invalid blob identity")
+	}
+	digest := strings.TrimPrefix(hash, "sha256:")
+	return path.Join(s.prefix, "blobs", vault, createdAt.UTC().Format("2006/01/02"), digest), nil
+}
+func (s *S3Store) OpenContext(ctx context.Context, vault, hash, storageKey string) (io.ReadCloser, error) {
+	key := storageKey
+	var err error
+	if key == "" {
+		key, err = s.key(vault, hash)
+	} else {
+		key, err = s.validateKey(vault, hash, key)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -87,4 +101,17 @@ func (s *S3Store) OpenContext(ctx context.Context, vault, hash string) (io.ReadC
 		return nil, err
 	}
 	return out.Body, nil
+}
+
+func (s *S3Store) validateKey(vault, hash, storageKey string) (string, error) {
+	if !vaultIDPattern.MatchString(vault) || !hashPattern.MatchString(hash) {
+		return "", errors.New("invalid blob identity")
+	}
+	clean := path.Clean(storageKey)
+	digest := strings.TrimPrefix(hash, "sha256:")
+	prefix := path.Join(s.prefix, "blobs", vault) + "/"
+	if clean != storageKey || !strings.HasPrefix(clean, prefix) || path.Base(clean) != digest {
+		return "", errors.New("invalid blob storage key")
+	}
+	return clean, nil
 }

@@ -24,6 +24,7 @@ func (r *Repository) writeExportSnapshot(ctx context.Context, z *zip.Writer, vau
 	if snap.Mode == "portable" {
 		for _, a := range snap.Assets {
 			targets[a.URL] = a.Path
+			targets[r.publicBase+"/assets/"+a.ID] = a.Path
 		}
 	}
 	for i := range snap.Files {

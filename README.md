@@ -95,7 +95,7 @@ APK 位于 `apps/client/src-tauri/gen/android/app/build/outputs/apk/`。登录 H
 
 ## HTTPS 与存储
 
-默认数据库和本地 Blob 保存在 API 进程工作目录的 `data/` 下。跨设备部署时，用 `-public-url` 指定所有设备都能访问的 HTTPS 源站。可在反向代理终止 TLS，也可给 API 传入 `-tls-cert` 和 `-tls-key`。该源站用于生成稳定的 `/assets/{asset_id}` 地址。资源网关验证账户访问权限。网页端在本地开发时也能预览私有附件。
+默认数据库和本地 Blob 保存在 API 进程工作目录的 `data/` 下。跨设备部署时，用 `-public-url` 指定所有设备都能访问的 HTTPS 源站。可在反向代理终止 TLS，也可给 API 传入 `-tls-cert` 和 `-tls-key`。该源站用于生成稳定的 `/assets/YYYY/MM/DD/<sha256>` 地址。资源网关验证账户访问权限。网页端在本地开发时也能预览私有附件。
 
 指定 `-s3-bucket` 即可使用 S3。`-s3-region` 选择区域，`-s3-prefix` 指定对象前缀。MinIO 等兼容服务可通过 `-s3-endpoint` 配置地址。凭据由 AWS SDK 的默认凭据链提供。应将 SQLite 数据库与对应的 Blob 存储一同备份。
 

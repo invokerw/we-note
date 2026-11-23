@@ -39,7 +39,8 @@ POST   /api/v1/vaults/{vault_id}/assets/uploads
 POST   /api/v1/vaults/{vault_id}/assets/{asset_id}/complete
 GET    /api/v1/vaults/{vault_id}/assets/{asset_id}
 DELETE /api/v1/vaults/{vault_id}/assets/{asset_id}
-GET    /assets/{asset_id}
+GET    /assets/{year}/{month}/{day}/{sha256}
+GET    /assets/{asset_id}                         # 兼容旧 URL
 POST   /api/v1/shares
 GET    /api/v1/shares/sent
 GET    /api/v1/shares/inbox
@@ -62,7 +63,7 @@ The file tree lists active files in path order. File content reads return the cu
 
 Run the tests from this directory with `go test ./...`. Start the development server with `go run ./cmd/wenote-api`. The server stores local blobs under `./data/storage` by default and accepts `-blobs` to change that path.
 
-File creation accepts `path` and a base64 `content` string. Editing, moving, deleting and restoring take `base_version_id` or `base_content_hash`. Clients can send `base_path` to detect a concurrent move and `Idempotency-Key` to replay an acknowledged write. The write response includes the file ID, path, version, content hash and Vault revision. The JSON file write endpoint accepts notes up to 16 MiB. Asset uploads accept up to 256 MiB and verify the declared size and digest before completion.
+File creation accepts `path` and a base64 `content` string. Editing, moving, deleting and restoring take `base_version_id` or `base_content_hash`. Clients can send `base_path` to detect a concurrent move and `Idempotency-Key` to replay an acknowledged write. The write response includes the file ID, path, version, content hash and Vault revision. The JSON file write endpoint accepts notes up to 16 MiB. Asset uploads accept up to 256 MiB and verify the declared size and digest before completion. Completed assets return a canonical URL in the form `https://host/assets/YYYY/MM/DD/<sha256>`.
 
 ### Resumable attachments
 

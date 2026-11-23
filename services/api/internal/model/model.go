@@ -34,6 +34,7 @@ type File struct {
 	CurrentContentHash string    `json:"current_content_hash,omitempty"`
 	CurrentContentSize int64     `json:"current_content_size"`
 	CurrentBlobID      string    `json:"current_blob_id,omitempty"`
+	CurrentStorageKey  string    `json:"-"`
 	IsDeleted          bool      `json:"is_deleted"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -44,6 +45,7 @@ type FileVersion struct {
 	FileID            string    `json:"file_id"`
 	VaultID           string    `json:"vault_id"`
 	BlobID            string    `json:"blob_id"`
+	StorageKey        string    `json:"-"`
 	ContentHash       string    `json:"content_hash"`
 	ContentSize       int64     `json:"content_size"`
 	ParentVersionID   *string   `json:"parent_version_id,omitempty"`
