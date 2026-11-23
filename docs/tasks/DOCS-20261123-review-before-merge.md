@@ -13,3 +13,5 @@
 2026-11-23 `IN_PROGRESS`。在原版技能和 AGENTS.md 中确认，旧规则要求先取得用户确认再合并。
 
 自审核对了首次合并、验收返工与最终清理三条路径。将重复的状态表统一到开发账本，并明确每轮校验的是实际交付提交。`quick_validate.py .codex/skills/wenote-development`、文档相对链接及章节锚点检查、`git diff --check` 均通过。本次只改开发流程文档，验收入口为主分支技能中的「测试通过后自审」和「合并、验收与返工」。
+
+2026-11-23 `DELIVERED`。已验证技能提交 `783252a` 已合入本地 `main`（`git merge-base --is-ancestor 783252a main` 退出 0）。任务分支与原 worktree 保留，等待用户验收。
