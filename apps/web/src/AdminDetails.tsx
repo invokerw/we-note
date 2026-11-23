@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Alert, Button, Card, Modal } from "antd";
+import { DataTable, formatBytes, formatDate } from "./AdminUI";
 import { request } from "./api";
 
 type Asset = {
@@ -44,11 +46,11 @@ export function Inventory({
         .then(setStorage),
     ]).catch((e) => setError(String(e)));
   }, [token]);
+  const [selected, setSelected] = useState<Asset | null>(null);
   return (
-    <section className="admin-panel">
-      <h2>附件与存储</h2>
-      {error && <p role="alert">{error}</p>}
-      <div className="admin-cards">
+    <>
+      {error && <Alert title={error} type="error" showIcon />}
+      <div className="gm-stat-grid">
         {Object.entries({
           blob_bytes: "去重后对象占用",
           current_file_bytes: "当前笔记",
@@ -56,55 +58,59 @@ export function Inventory({
           pending_upload_bytes: "待完成上传",
           historical_bytes: "历史版本",
           reclaimable_bytes: "已删除附件（逻辑大小）",
-        }).map(([id, label]) => (
-          <section className="admin-card" key={id}>
-            <span>{label}</span>
-            <strong>{storage[id]?.toLocaleString() ?? "—"} B</strong>
-          </section>
+        }).map(([key, title]) => (
+          <div className="gm-stat" key={key}>
+            <span>{title}</span>
+            <strong>
+              {storage[key] === undefined ? "—" : formatBytes(storage[key])}
+            </strong>
+          </div>
         ))}
       </div>
-      <h3>附件</h3>
-      {!assets.length ? (
-        <p>暂无附件</p>
-      ) : (
-        <div className="admin-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>附件名</th>
-                <th>所属用户</th>
-                <th>笔记库</th>
-                <th>字节数</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((a) => (
-                <tr key={a.asset_id}>
-                  <td>{a.name}</td>
-                  <td>{a.owner_email}</td>
-                  <td>{a.vault_name}</td>
-                  <td>{a.content_size.toLocaleString()}</td>
-                  <td>
-                    <button
-                      onClick={() => {
-                        if (a.deleted || confirm(`将 ${a.name} 移入回收站？`))
-                          action(
-                            `assets/${a.asset_id}/${a.deleted ? "restore" : "delete"}`,
-                            "附件状态已更新",
-                          );
-                      }}
-                    >
-                      {a.deleted ? "恢复附件" : "移入回收站"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+      <Card title="附件清单">
+        <DataTable<Asset>
+          rowKey="asset_id"
+          dataSource={assets}
+          columns={[
+            { title: "附件名", dataIndex: "name" },
+            { title: "所属用户", dataIndex: "owner_email" },
+            { title: "笔记库", dataIndex: "vault_name" },
+            { title: "大小", dataIndex: "content_size", render: formatBytes },
+            {
+              title: "操作",
+              render: (_, a) => (
+                <Button
+                  size="small"
+                  type="link"
+                  danger={!a.deleted}
+                  onClick={() =>
+                    a.deleted
+                      ? action(`assets/${a.asset_id}/restore`, "附件状态已更新")
+                      : setSelected(a)
+                  }
+                >
+                  {a.deleted ? "恢复附件" : "移入回收站"}
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Card>
+      <Modal
+        title="将附件移入回收站？"
+        open={!!selected}
+        okText="确认移入"
+        okButtonProps={{ danger: true }}
+        onCancel={() => setSelected(null)}
+        onOk={() => {
+          if (selected)
+            action(`assets/${selected.asset_id}/delete`, "附件状态已更新");
+          setSelected(null);
+        }}
+      >
+        <p>{selected?.name}</p>
+      </Modal>
+    </>
   );
 }
 export function Logs({ token }: { token: string }) {
@@ -123,59 +129,34 @@ export function Logs({ token }: { token: string }) {
   }, [token]);
   return (
     <>
-      {error && <p role="alert">{error}</p>}
-      <section className="admin-panel">
-        <h2>管理操作</h2>
-        <div className="admin-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>操作</th>
-                <th>操作者 ID</th>
-                <th>对象</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((e) => (
-                <tr key={e.id}>
-                  <td>{new Date(e.created_at).toLocaleString()}</td>
-                  <td>{e.action}</td>
-                  <td>{e.actor_user_id}</td>
-                  <td>{e.object_id}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section className="admin-panel">
-        <h2>邮件投递</h2>
-        <div className="admin-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>收件人</th>
-                <th>类型</th>
-                <th>结果</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mail.map((m) => (
-                <tr key={m.id}>
-                  <td>{new Date(m.created_at).toLocaleString()}</td>
-                  <td>{m.recipient}</td>
-                  <td>{m.kind}</td>
-                  <td>
-                    {m.status} {m.error}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {error && <Alert type="error" title={error} />}
+      <Card title="管理操作">
+        <DataTable<Event>
+          rowKey="id"
+          dataSource={events}
+          columns={[
+            { title: "时间", dataIndex: "created_at", render: formatDate },
+            { title: "操作", dataIndex: "action" },
+            { title: "操作者 ID", dataIndex: "actor_user_id" },
+            { title: "对象", dataIndex: "object_id" },
+          ]}
+        />
+      </Card>
+      <Card title="邮件投递">
+        <DataTable<Delivery>
+          rowKey="id"
+          dataSource={mail}
+          columns={[
+            { title: "时间", dataIndex: "created_at", render: formatDate },
+            { title: "收件人", dataIndex: "recipient" },
+            { title: "类型", dataIndex: "kind" },
+            {
+              title: "结果",
+              render: (_, m) => [m.status, m.error].filter(Boolean).join(" · "),
+            },
+          ]}
+        />
+      </Card>
     </>
   );
 }

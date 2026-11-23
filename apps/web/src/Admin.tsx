@@ -1,7 +1,47 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Avatar,
+  Button,
+  Card,
+  Drawer,
+  Dropdown,
+  Form,
+  Input,
+  Modal,
+  Result,
+  Space,
+  Spin,
+} from "antd";
+import {
+  AppstoreOutlined,
+  TeamOutlined,
+  MailOutlined,
+  DatabaseOutlined,
+  HistoryOutlined,
+  SettingOutlined,
+  CloudServerOutlined,
+  MenuOutlined,
+  ReloadOutlined,
+  ArrowRightOutlined,
+  FolderOpenOutlined,
+  FileTextOutlined,
+  PlusOutlined,
+  DownOutlined,
+  CloudUploadOutlined,
+} from "@ant-design/icons";
+import { AdminAuth } from "./AdminAuth";
+import {
+  AdminTheme,
+  Brand,
+  DataTable,
+  formatBytes,
+  formatDate,
+  Status,
+} from "./AdminUI";
+import { SettingsPanel, type Settings } from "./AdminSettings";
 import { Inventory, Logs } from "./AdminDetails";
 import { request } from "./api";
-
 type Overview = {
   users: number;
   active_users: number;
@@ -26,27 +66,10 @@ type AdminUser = {
 type Invite = {
   id: string;
   email: string;
-  token?: string;
   expires_at: string;
   used_at?: string;
   revoked_at?: string;
   created_at: string;
-};
-type Settings = {
-  registration_mode: string;
-  require_email_verification: boolean;
-  backup_root: string;
-  backup_schedule: string;
-  smtp: {
-    host: string;
-    port: number;
-    security: string;
-    username: string;
-    from_name: string;
-    from: string;
-    reply_to: string;
-    has_password: boolean;
-  };
 };
 type Backup = {
   id: string;
@@ -59,598 +82,652 @@ type Backup = {
   completed_at?: string;
 };
 
-function formatBytes(value: number) {
-  if (!value) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let index = 0;
-  let current = value;
-  while (current >= 1024 && index < units.length - 1) {
-    current /= 1024;
-    index += 1;
-  }
-  return `${current.toFixed(index ? 1 : 0)} ${units[index]}`;
+const pages = [
+  {
+    id: "overview",
+    label: "总览",
+    title: "服务端总览",
+    icon: AppstoreOutlined,
+  },
+  { id: "users", label: "用户", title: "用户管理", icon: TeamOutlined },
+  { id: "invites", label: "邀请", title: "邀请管理", icon: MailOutlined },
+  {
+    id: "storage",
+    label: "附件与存储",
+    title: "附件与存储",
+    icon: DatabaseOutlined,
+  },
+  {
+    id: "backups",
+    label: "备份",
+    title: "备份与恢复",
+    icon: CloudUploadOutlined,
+  },
+  { id: "logs", label: "操作记录", title: "操作记录", icon: HistoryOutlined },
+  {
+    id: "settings",
+    label: "系统设置",
+    title: "系统设置",
+    icon: SettingOutlined,
+  },
+];
+const registrationLabels: Record<string, string> = {
+  invite_only: "仅邀请注册",
+  open: "开放注册",
+  closed: "已关闭注册",
+};
+const backupLabels: Record<string, string> = {
+  daily: "每 24 小时",
+  weekly: "每 7 天",
+  off: "手动备份",
+};
+function inviteStatus(i: Invite) {
+  if (i.used_at) return <Status>已使用</Status>;
+  if (i.revoked_at) return <Status>已撤销</Status>;
+  if (new Date(i.expires_at) < new Date())
+    return <Status color="orange">已过期</Status>;
+  return <Status color="purple">待使用</Status>;
 }
-
-function formatDate(value?: string) {
-  return value ? new Date(value).toLocaleString() : "—";
+function backupStatus(b: Backup) {
+  if (b.status === "completed") return <Status color="green">已完成</Status>;
+  if (b.status === "failed") return <Status color="red">失败</Status>;
+  return <Status color="blue">执行中</Status>;
 }
-
-export default function Admin({
-  token,
-  logout,
-}: {
-  token: string;
-  logout: () => void;
-}) {
-  const [tab, setTab] = useState("overview");
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [invites, setInvites] = useState<Invite[]>([]);
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [backups, setBackups] = useState<Backup[]>([]);
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [revision, setRevision] = useState(0);
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function run(action: () => Promise<void>) {
-    setBusy(true);
-    setMessage("");
-    try {
-      await action();
-    } catch (error) {
-      setMessage(String(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function loadOverview() {
-    setOverview(await (await request(token, "/api/v1/admin/overview")).json());
-  }
-  async function loadUsers() {
-    setUsers(
-      (await (await request(token, "/api/v1/admin/users")).json()).users,
-    );
-  }
-  async function loadInvites() {
-    setInvites(
-      (await (await request(token, "/api/v1/admin/invitations")).json())
-        .invitations,
-    );
-  }
-  async function loadSettings() {
-    setSettings(await (await request(token, "/api/v1/admin/settings")).json());
-  }
-  async function loadBackups() {
-    setBackups(
-      (await (await request(token, "/api/v1/admin/backups")).json()).backups,
-    );
+type Props = { token: string; login: (s: string) => void; logout: () => void };
+export default function Admin(props: Props) {
+  useEffect(() => {
+    const title = document.title;
+    document.title = "WeNote · 服务端管理";
+    return () => {
+      document.title = title;
+    };
+  }, []);
+  return (
+    <AdminTheme>
+      {props.token ? (
+        <Dashboard token={props.token} logout={props.logout} />
+      ) : (
+        <AdminAuth login={props.login} />
+      )}
+    </AdminTheme>
+  );
+}
+function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
+  const [tab, setTab] = useState("overview"),
+    [drawer, setDrawer] = useState(false),
+    [authorized, setAuthorized] = useState<boolean | null>(null),
+    [email, setEmail] = useState("");
+  const [overview, setOverview] = useState<Overview | null>(null),
+    [users, setUsers] = useState<AdminUser[]>([]),
+    [invites, setInvites] = useState<Invite[]>([]),
+    [settings, setSettings] = useState<Settings | null>(null),
+    [backups, setBackups] = useState<Backup[]>([]),
+    [revision, setRevision] = useState(0);
+  const [notice, setNotice] = useState(""),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [dialog, setDialog] = useState<"invite" | "mail" | null>(null),
+    [emailForm] = Form.useForm<{ address: string }>();
+  const active = pages.find((p) => p.id === tab)!;
+  async function data(path: string) {
+    return (await request(token, "/api/v1/admin/" + path)).json();
   }
   async function refresh() {
     const me = await (await request(token, "/api/v1/me")).json();
     setAuthorized(me.role === "system_admin");
     if (me.role !== "system_admin") return;
+    setEmail(me.email);
+    const [summary, people, invitations, config, jobs] = await Promise.all(
+      ["overview", "users", "invitations", "settings", "backups"].map(data),
+    );
+    setOverview(summary);
+    setUsers(people.users);
+    setInvites(invitations.invitations);
+    setSettings(config);
+    setBackups(jobs.backups);
     setRevision((n) => n + 1);
-    await Promise.all([
-      loadOverview(),
-      loadUsers(),
-      loadInvites(),
-      loadSettings(),
-      loadBackups(),
-    ]);
   }
-
+  async function run(work: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await work();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     void run(refresh);
   }, [token]);
-
-  function action(path: string, success: string) {
+  function navigate(id: string) {
+    setTab(id);
+    setDrawer(false);
+    setNotice("");
+    setError("");
+    window.scrollTo(0, 0);
+  }
+  function action(path: string, success: string, body?: unknown) {
     void run(async () => {
-      const response = await request(token, "/api/v1/admin/" + path, "POST");
-      const result = response.status === 204 ? {} : await response.json();
-      setMessage(
+      const r = await request(token, "/api/v1/admin/" + path, "POST", body),
+        result = r.status === 204 ? {} : await r.json();
+      await refresh();
+      setNotice(
         result.delivery_status
           ? "邮件投递状态 " + result.delivery_status
-          : success,
+          : result.path && path.endsWith("/restore")
+            ? "恢复目录：" + result.path
+            : success,
       );
-      await refresh();
     });
   }
-  async function invite() {
-    const email = prompt("受邀邮箱");
-    if (!email) return;
+  function openEmail(kind: "invite" | "mail") {
+    setError("");
+    setDialog(kind);
+  }
+  async function sendEmail({ address }: { address: string }) {
+    const invite = dialog === "invite";
     await run(async () => {
       const result = await (
-        await request(token, "/api/v1/admin/invitations", "POST", { email })
+        await request(
+          token,
+          "/api/v1/admin/" + (invite ? "invitations" : "smtp/test"),
+          "POST",
+          invite ? { email: address } : { recipient: address },
+        )
       ).json();
-      setMessage(`邀请已创建。投递状态 ${result.delivery_status}`);
-      await Promise.all([loadInvites(), loadOverview()]);
+      setDialog(null);
+      await refresh();
+      setNotice(
+        invite
+          ? "邀请已创建。投递状态 " + result.delivery_status
+          : "测试邮件已发送",
+      );
     });
   }
-
-  async function saveSettings(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!settings) return;
-    const form = new FormData(event.currentTarget);
-    await run(async () => {
-      await request(token, "/api/v1/admin/settings", "PUT", {
-        registration_mode: form.get("registration_mode"),
-        require_email_verification:
-          form.get("require_email_verification") === "on",
-        backup_root: form.get("backup_root"),
-        backup_schedule: form.get("backup_schedule"),
-        smtp: {
-          host: form.get("smtp_host"),
-          port: Number(form.get("smtp_port")),
-          security: form.get("smtp_security"),
-          username: form.get("smtp_username"),
-          password: form.get("smtp_password"),
-          from_name: form.get("smtp_from_name"),
-          from: form.get("smtp_from"),
-          reply_to: form.get("smtp_reply_to"),
-        },
-      });
-      setMessage("系统设置已保存");
-      await loadSettings();
-    });
-  }
-
-  if (authorized !== true)
+  const navigation = (
+    <nav className="gm-nav" aria-label="管理导航">
+      {pages.map(({ id, label, icon: Icon }) => (
+        <Button
+          key={id}
+          aria-label={label}
+          aria-current={id === tab ? "page" : undefined}
+          type="text"
+          icon={<Icon />}
+          onClick={() => navigate(id)}
+        >
+          {label}
+        </Button>
+      ))}
+    </nav>
+  );
+  if (!authorized)
     return (
-      <main className="admin-panel">
-        <h1>
-          {authorized === false ? "此页面需要管理员权限" : "正在检查管理员权限"}
-        </h1>
-        <p role="status">{message}</p>
-        <a href="/">返回笔记</a> <button onClick={logout}>退出登录</button>
+      <main className="gm-gate">
+        {authorized === null && !error ? (
+          <Spin />
+        ) : (
+          <Result
+            status={authorized === false ? "403" : "warning"}
+            title={
+              authorized === false ? "此页面需要管理员权限" : "无法加载后台"
+            }
+            subTitle={error}
+            extra={
+              <Space>
+                <Button href="/">返回笔记</Button>
+                <Button onClick={logout}>退出登录</Button>
+              </Space>
+            }
+          />
+        )}
       </main>
     );
   return (
-    <div className="admin-shell">
-      <header className="admin-header">
-        <div>
-          <p className="admin-eyebrow">WeNote GM</p>
-          <h1>服务端管理</h1>
-        </div>
-        <div className="toolbar">
-          <button onClick={() => void run(refresh)} disabled={busy}>
-            刷新
-          </button>
-          <a href="/">返回笔记</a> <a href="/#change">修改密码</a>{" "}
-          <button onClick={logout}>退出登录</button>
-        </div>
-      </header>
-      <div className="admin-layout">
-        <nav className="admin-nav" aria-label="管理导航">
-          {[
-            ["overview", "总览"],
-            ["users", "用户"],
-            ["invites", "邀请"],
-            ["storage", "附件与存储"],
-            ["logs", "操作记录"],
-            ["settings", "系统设置"],
-            ["backups", "备份"],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              className={tab === id ? "selected" : ""}
-              onClick={() => setTab(id)}
+    <div className="gm-shell">
+      <aside className="gm-side">
+        <Brand />
+        <div className="gm-side-title">管理控制台</div>
+        {navigation}
+        <a className="gm-return" href="/">
+          返回笔记 <ArrowRightOutlined />
+        </a>
+      </aside>
+      <Drawer
+        title={<Brand />}
+        placement="left"
+        size={252}
+        open={drawer}
+        onClose={() => setDrawer(false)}
+        destroyOnHidden
+      >
+        {navigation}
+        <a className="gm-return" href="/">
+          返回笔记 <ArrowRightOutlined />
+        </a>
+      </Drawer>
+      <div className="gm-work">
+        <header className="gm-bar">
+          <div>
+            <Button
+              className="gm-mobile-nav"
+              type="text"
+              aria-label="打开管理导航"
+              icon={<MenuOutlined />}
+              onClick={() => setDrawer(true)}
+            />
+            <CloudServerOutlined /> 服务端管理
+          </div>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "password", label: <a href="/#change">修改密码</a> },
+                { key: "logout", label: "退出登录", onClick: logout },
+              ],
+            }}
+          >
+            <Button type="text" aria-label="管理员账户">
+              <Avatar size={26}>{email.slice(0, 1).toUpperCase()}</Avatar>
+              <span className="gm-admin-email">{email}</span>
+              <DownOutlined />
+            </Button>
+          </Dropdown>
+        </header>
+        <main className="gm-main">
+          <div className="gm-heading">
+            <h1>{active.title}</h1>
+            <Button
+              aria-label="刷新"
+              icon={<ReloadOutlined />}
+              loading={busy}
+              onClick={() => void run(refresh)}
             >
-              {label}
-            </button>
-          ))}
-        </nav>
-        <main className="admin-main">
-          {message && (
-            <p className="message" role="status">
-              {message}
-            </p>
+              刷新
+            </Button>
+          </div>
+          {error && !dialog && <Alert title={error} type="error" showIcon />}
+          {notice && (
+            <div role="status">
+              <Alert title={notice} type="success" showIcon />
+            </div>
           )}
           {tab === "overview" && overview && (
             <>
-              <div className="admin-cards">
+              <div className="gm-stat-grid">
                 {[
-                  ["用户", overview.users],
-                  ["活跃用户", overview.active_users],
-                  ["待处理邀请", overview.pending_invites],
-                  ["Vault", overview.vaults],
-                  ["笔记", overview.files],
-                  ["附件", overview.assets],
-                  ["Blob 占用", formatBytes(overview.storage_bytes)],
-                ].map(([label, value]) => (
-                  <section className="admin-card" key={String(label)}>
+                  {
+                    label: "用户总数",
+                    value: overview.users,
+                    icon: TeamOutlined,
+                    color: "purple",
+                  },
+                  {
+                    label: "笔记库",
+                    value: overview.vaults,
+                    icon: FolderOpenOutlined,
+                    color: "blue",
+                  },
+                  {
+                    label: "笔记总数",
+                    value: overview.files,
+                    icon: FileTextOutlined,
+                    color: "teal",
+                  },
+                ].map(({ label, value, icon: Icon, color }) => (
+                  <div className="gm-stat" key={label}>
+                    <div className={"gm-stat-icon " + color}>
+                      <Icon />
+                    </div>
                     <span>{label}</span>
-                    <strong>{value}</strong>
-                  </section>
+                    <strong>{value.toLocaleString()}</strong>
+                  </div>
                 ))}
               </div>
+              <div className="gm-overview">
+                <section className="gm-storage">
+                  <div>
+                    <DatabaseOutlined /> 存储占用
+                  </div>
+                  <strong>{formatBytes(overview.storage_bytes)}</strong>
+                  <p>{overview.assets} 个附件</p>
+                  <Button onClick={() => navigate("storage")}>
+                    查看存储详情 <ArrowRightOutlined />
+                  </Button>
+                  <div aria-hidden="true" className="gm-storage-discs">
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                </section>
+                <Card
+                  title="实例配置"
+                  extra={
+                    <Button type="link" onClick={() => navigate("settings")}>
+                      管理设置
+                    </Button>
+                  }
+                >
+                  <dl className="gm-facts">
+                    <div>
+                      <dt>注册方式</dt>
+                      <dd>
+                        {registrationLabels[
+                          settings?.registration_mode || ""
+                        ] || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>邮箱验证</dt>
+                      <dd>
+                        {settings?.require_email_verification
+                          ? "必须验证"
+                          : "可选"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>备份计划</dt>
+                      <dd>
+                        {backupLabels[settings?.backup_schedule || ""] || "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                </Card>
+              </div>
+              <Card
+                title="账户与邀请"
+                extra={
+                  <Button type="link" onClick={() => navigate("invites")}>
+                    管理邀请
+                  </Button>
+                }
+              >
+                <div className="gm-fact-strip">
+                  <div>
+                    <TeamOutlined />
+                    <span>活跃用户</span>
+                    <strong>{overview.active_users}</strong>
+                  </div>
+                  <div>
+                    <MailOutlined />
+                    <span>待处理邀请</span>
+                    <strong>{overview.pending_invites}</strong>
+                  </div>
+                </div>
+              </Card>
             </>
           )}
           {tab === "users" && (
-            <section className="admin-panel">
-              <div className="admin-panel-heading">
-                <h2>用户管理</h2>
-              </div>
-              <div className="admin-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>邮箱</th>
-                      <th>状态</th>
-                      <th>验证</th>
-                      <th>Vault</th>
-                      <th>占用</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id}>
-                        <td>
-                          {user.email}
-                          <small>{formatDate(user.created_at)}</small>
-                        </td>
-                        <td>
-                          {user.status === "disabled"
-                            ? "已禁用"
-                            : user.role === "system_admin"
-                              ? "管理员"
-                              : "正常"}
-                        </td>
-                        <td>{user.email_verified_at ? "已验证" : "未验证"}</td>
-                        <td>{user.vaults}</td>
-                        <td>{formatBytes(user.storage_bytes)}</td>
-                        <td>
-                          {user.role !== "system_admin" &&
-                            (user.status === "disabled" ? (
-                              <button
-                                onClick={() =>
-                                  void run(async () => {
-                                    await request(
-                                      token,
-                                      `/api/v1/admin/users/${user.id}/enable`,
-                                      "POST",
-                                    );
-                                    await loadUsers();
-                                  })
-                                }
-                              >
-                                恢复
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() =>
-                                  void run(async () => {
-                                    await request(
-                                      token,
-                                      `/api/v1/admin/users/${user.id}/disable`,
-                                      "POST",
-                                      { reason: "管理员操作" },
-                                    );
-                                    await loadUsers();
-                                  })
-                                }
-                              >
-                                禁用
-                              </button>
-                            ))}
-                          <button
+            <Card>
+              <DataTable<AdminUser>
+                rowKey="id"
+                dataSource={users}
+                columns={[
+                  {
+                    title: "邮箱",
+                    dataIndex: "email",
+                    render: (v, u) => (
+                      <div className="gm-identity">
+                        {v}
+                        <small>{formatDate(u.created_at)}</small>
+                      </div>
+                    ),
+                  },
+                  {
+                    title: "状态",
+                    render: (_, u) =>
+                      u.status === "disabled" ? (
+                        <Status color="red">已禁用</Status>
+                      ) : u.role === "system_admin" ? (
+                        <Status color="purple">管理员</Status>
+                      ) : (
+                        <Status color="green">正常</Status>
+                      ),
+                  },
+                  {
+                    title: "邮箱验证",
+                    render: (_, u) =>
+                      u.email_verified_at ? "已验证" : "未验证",
+                  },
+                  { title: "笔记库", dataIndex: "vaults" },
+                  {
+                    title: "占用",
+                    dataIndex: "storage_bytes",
+                    render: formatBytes,
+                  },
+                  {
+                    title: "操作",
+                    render: (_, u) => (
+                      <Space size={0}>
+                        {u.role !== "system_admin" && (
+                          <Button
+                            type="link"
+                            danger={u.status !== "disabled"}
                             onClick={() =>
-                              action(
-                                `users/${user.id}/reset-password`,
-                                "已请求重置密码",
-                              )
+                              u.status === "disabled"
+                                ? action(`users/${u.id}/enable`, "账户已恢复")
+                                : action(
+                                    `users/${u.id}/disable`,
+                                    "账户已禁用",
+                                    { reason: "管理员操作" },
+                                  )
                             }
                           >
-                            重置密码
-                          </button>
-                          {user.role !== "system_admin" && (
-                            <button
-                              onClick={() =>
-                                action(`users/${user.id}/logout`, "会话已撤销")
-                              }
-                            >
-                              撤销会话
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                            {u.status === "disabled" ? "恢复" : "禁用"}
+                          </Button>
+                        )}
+                        <Button
+                          type="link"
+                          onClick={() =>
+                            action(
+                              `users/${u.id}/reset-password`,
+                              "已请求重置密码",
+                            )
+                          }
+                        >
+                          重置密码
+                        </Button>
+                        {u.role !== "system_admin" && (
+                          <Button
+                            type="link"
+                            onClick={() =>
+                              action(`users/${u.id}/logout`, "会话已撤销")
+                            }
+                          >
+                            撤销会话
+                          </Button>
+                        )}
+                      </Space>
+                    ),
+                  },
+                ]}
+              />
+            </Card>
           )}
           {tab === "invites" && (
-            <section className="admin-panel">
-              <div className="admin-panel-heading">
-                <h2>邀请注册</h2>
-                <button className="primary" onClick={() => void invite()}>
+            <Card
+              title="邀请记录"
+              extra={
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  aria-label="创建邀请"
+                  onClick={() => openEmail("invite")}
+                >
                   创建邀请
-                </button>
-              </div>
-              <div className="admin-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>邮箱</th>
-                      <th>状态</th>
-                      <th>有效期</th>
-                      <th>创建时间</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invites.map((item) => (
-                      <tr key={item.id}>
-                        <td>
-                          {item.email}
-                          {item.token && <small>令牌 {item.token}</small>}
-                        </td>
-                        <td>
-                          {item.used_at
-                            ? "已使用"
-                            : item.revoked_at
-                              ? "已撤销"
-                              : new Date(item.expires_at) < new Date()
-                                ? "已过期"
-                                : "待使用"}
-                        </td>
-                        <td>{formatDate(item.expires_at)}</td>
-                        <td>{formatDate(item.created_at)}</td>
-                        <td>
-                          {!item.revoked_at && !item.used_at && (
-                            <>
-                              <button
-                                onClick={() =>
-                                  action(
-                                    `invitations/${item.id}/resend`,
-                                    "已重发",
-                                  )
-                                }
-                              >
-                                重发
-                              </button>
-                              <button
-                                onClick={() =>
-                                  action(
-                                    `invitations/${item.id}/revoke`,
-                                    "已撤销邀请",
-                                  )
-                                }
-                              >
-                                撤销
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                </Button>
+              }
+            >
+              <DataTable<Invite>
+                rowKey="id"
+                dataSource={invites}
+                columns={[
+                  { title: "邮箱", dataIndex: "email" },
+                  { title: "状态", render: (_, i) => inviteStatus(i) },
+                  {
+                    title: "有效期",
+                    dataIndex: "expires_at",
+                    render: formatDate,
+                  },
+                  {
+                    title: "创建时间",
+                    dataIndex: "created_at",
+                    render: formatDate,
+                  },
+                  {
+                    title: "操作",
+                    render: (_, i) =>
+                      !i.used_at &&
+                      !i.revoked_at && (
+                        <Space size={0}>
+                          <Button
+                            type="link"
+                            onClick={() =>
+                              action(`invitations/${i.id}/resend`, "已重发")
+                            }
+                          >
+                            重发
+                          </Button>
+                          <Button
+                            type="link"
+                            danger
+                            onClick={() =>
+                              action(`invitations/${i.id}/revoke`, "已撤销邀请")
+                            }
+                          >
+                            撤销
+                          </Button>
+                        </Space>
+                      ),
+                  },
+                ]}
+              />
+            </Card>
+          )}
+          {tab === "settings" && settings && (
+            <SettingsPanel
+              settings={settings}
+              busy={busy}
+              test={() => openEmail("mail")}
+              save={(value) =>
+                run(async () => {
+                  await request(token, "/api/v1/admin/settings", "PUT", value);
+                  setSettings(await data("settings"));
+                  setNotice("系统设置已保存");
+                })
+              }
+            />
           )}
           {tab === "storage" && (
-            <Inventory token={token} key={revision} action={action} />
+            <Inventory key={revision} token={token} action={action} />
           )}
-          {tab === "logs" && <Logs token={token} key={revision} />}
-          {tab === "settings" && settings && (
-            <section className="admin-panel">
-              <h2>系统设置</h2>
-              <form className="admin-form" onSubmit={saveSettings}>
-                <label>
-                  注册模式
-                  <select
-                    name="registration_mode"
-                    defaultValue={settings.registration_mode}
-                  >
-                    <option value="invite_only">仅邀请注册</option>
-                    <option value="open">开放注册</option>
-                    <option value="closed">关闭注册</option>
-                  </select>
-                </label>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    name="require_email_verification"
-                    defaultChecked={settings.require_email_verification}
-                  />
-                  必须验证邮箱
-                </label>
-                <label>
-                  备份目录
-                  <input
-                    name="backup_root"
-                    defaultValue={settings.backup_root}
-                  />
-                </label>
-                <label>
-                  自动备份
-                  <select
-                    name="backup_schedule"
-                    defaultValue={settings.backup_schedule}
-                  >
-                    <option value="off">关闭</option>
-                    <option value="daily">每 24 小时</option>
-                    <option value="weekly">每 7 天</option>
-                  </select>
-                </label>
-                <h3>SMTP</h3>
-                <label>
-                  主机
-                  <input name="smtp_host" defaultValue={settings.smtp.host} />
-                </label>
-                <label>
-                  端口
-                  <input
-                    name="smtp_port"
-                    type="number"
-                    defaultValue={settings.smtp.port || 587}
-                  />
-                </label>
-                <label>
-                  安全方式
-                  <select
-                    name="smtp_security"
-                    defaultValue={settings.smtp.security || "starttls"}
-                  >
-                    <option value="starttls">STARTTLS</option>
-                    <option value="tls">TLS</option>
-                    <option value="plain">无加密</option>
-                  </select>
-                </label>
-                <label>
-                  用户名
-                  <input
-                    name="smtp_username"
-                    defaultValue={settings.smtp.username}
-                  />
-                </label>
-                <label>
-                  密码
-                  <input
-                    name="smtp_password"
-                    type="password"
-                    placeholder={
-                      settings.smtp.has_password
-                        ? "已配置，留空保持不变"
-                        : "请输入密码"
-                    }
-                  />
-                </label>
-                <label>
-                  发件人名称
-                  <input
-                    name="smtp_from_name"
-                    defaultValue={settings.smtp.from_name}
-                  />
-                </label>
-                <label>
-                  发件人地址
-                  <input
-                    name="smtp_from"
-                    type="email"
-                    defaultValue={settings.smtp.from}
-                  />
-                </label>
-                <label>
-                  Reply-To
-                  <input
-                    name="smtp_reply_to"
-                    type="email"
-                    defaultValue={settings.smtp.reply_to}
-                  />
-                </label>
-                <button className="primary" disabled={busy}>
-                  保存设置
-                </button>
-              </form>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  const recipient = prompt("测试邮件收件人");
-                  if (recipient)
-                    void run(async () => {
-                      await request(token, "/api/v1/admin/smtp/test", "POST", {
-                        recipient,
-                      });
-                      setMessage("测试邮件已发送");
-                    });
-                }}
-              >
-                发送测试邮件
-              </button>
-            </section>
-          )}
+          {tab === "logs" && <Logs key={revision} token={token} />}
           {tab === "backups" && (
-            <section className="admin-panel">
-              <div className="admin-panel-heading">
-                <h2>备份与恢复</h2>
-                <button
-                  className="primary"
-                  onClick={() =>
-                    void run(async () => {
-                      await request(token, "/api/v1/admin/backups", "POST");
-                      await loadBackups();
-                    })
-                  }
+            <Card
+              title="备份任务"
+              extra={
+                <Button
+                  type="primary"
+                  aria-label="立即备份"
+                  icon={<CloudUploadOutlined />}
+                  loading={busy}
+                  onClick={() => action("backups", "备份已完成")}
                 >
                   立即备份
-                </button>
-              </div>
-              <div className="admin-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>状态</th>
-                      <th>大小</th>
-                      <th>校验哈希</th>
-                      <th>创建时间</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {backups.map((item) => (
-                      <tr key={item.id}>
-                        <td>
-                          {item.status === "completed"
-                            ? "已完成"
-                            : item.status === "failed"
-                              ? "失败"
-                              : "执行中"}
-                        </td>
-                        <td>{formatBytes(item.size)}</td>
-                        <td>
-                          <code>{item.checksum || "—"}</code>
-                        </td>
-                        <td>{formatDate(item.created_at)}</td>
-                        <td>
-                          {item.status === "completed" && (
-                            <>
-                              <button
-                                onClick={() =>
-                                  void run(async () => {
-                                    await request(
-                                      token,
-                                      `/api/v1/admin/backups/${item.id}/verify`,
-                                      "POST",
-                                    );
-                                    setMessage("备份校验通过");
-                                  })
-                                }
-                              >
-                                校验
-                              </button>
-                              <button
-                                onClick={() =>
-                                  void run(async () => {
-                                    const restored = await (
-                                      await request(
-                                        token,
-                                        `/api/v1/admin/backups/${item.id}/restore`,
-                                        "POST",
-                                      )
-                                    ).json();
-                                    setMessage("恢复目录：" + restored.path);
-                                  })
-                                }
-                              >
-                                准备恢复
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                </Button>
+              }
+            >
+              <DataTable<Backup>
+                rowKey="id"
+                dataSource={backups}
+                columns={[
+                  {
+                    title: "创建时间",
+                    dataIndex: "created_at",
+                    render: formatDate,
+                  },
+                  { title: "状态", render: (_, b) => backupStatus(b) },
+                  { title: "大小", dataIndex: "size", render: formatBytes },
+                  {
+                    title: "校验哈希",
+                    render: (_, b) =>
+                      b.checksum ? (
+                        <code className="gm-digest" title={b.checksum}>
+                          {b.checksum}
+                        </code>
+                      ) : (
+                        b.error || "—"
+                      ),
+                  },
+                  {
+                    title: "操作",
+                    render: (_, b) =>
+                      b.status === "completed" && (
+                        <Space size={0}>
+                          <Button
+                            type="link"
+                            onClick={() =>
+                              action(`backups/${b.id}/verify`, "备份校验通过")
+                            }
+                          >
+                            校验
+                          </Button>
+                          <Button
+                            type="link"
+                            onClick={() =>
+                              action(`backups/${b.id}/restore`, "准备恢复完成")
+                            }
+                          >
+                            准备恢复
+                          </Button>
+                        </Space>
+                      ),
+                  },
+                ]}
+              />
+            </Card>
           )}
         </main>
       </div>
+      <Modal
+        title={dialog === "invite" ? "创建邀请" : "发送测试邮件"}
+        open={dialog !== null}
+        onCancel={() => {
+          setDialog(null);
+          setError("");
+        }}
+        onOk={() => emailForm.submit()}
+        okText={dialog === "invite" ? "发送邀请" : "发送"}
+        confirmLoading={busy}
+        destroyOnHidden
+      >
+        <Form
+          layout="vertical"
+          requiredMark={false}
+          form={emailForm}
+          onFinish={sendEmail}
+          preserve={false}
+        >
+          <Form.Item
+            name="address"
+            label={dialog === "invite" ? "受邀邮箱" : "收件人邮箱"}
+            rules={[
+              { required: true, type: "email", message: "请输入有效邮箱" },
+            ]}
+          >
+            <Input
+              type="email"
+              autoComplete="off"
+              placeholder="name@example.com"
+            />
+          </Form.Item>
+        </Form>
+        {dialog && error && <Alert type="error" title={error} />}
+      </Modal>
     </div>
   );
 }

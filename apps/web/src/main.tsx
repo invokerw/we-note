@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { lazy, Suspense, useCallback } from "react";
 import {
   Sharing,
   Audit,
@@ -30,38 +30,24 @@ import {
   type UserPreferences,
 } from "./preferences";
 import "./style.css";
-import Admin from "./Admin";
+const Admin = lazy(() => import("./Admin"));
 import { AccountAction, accountAction } from "./AccountAction";
 function Auth({ login }: { login: (s: string) => void }) {
   const [register, setRegister] = useState(false),
-    [bootstrap, setBootstrap] = useState(false),
     [mode, setMode] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!location.pathname.startsWith("/gm")) {
-      request("", "/api/v1/auth/registration")
-        .then((r) => r.json())
-        .then((p) => setMode(p.registration_mode))
-        .catch((e) => setError(String(e)));
-      return;
-    }
-    request("", "/api/v1/admin/bootstrap")
+    request("", "/api/v1/auth/registration")
       .then((r) => r.json())
-      .then((result) => setBootstrap(Boolean(result.available)))
-      .catch(() => {});
+      .then((p) => setMode(p.registration_mode))
+      .catch((e) => setError(String(e)));
   }, []);
   return (
     <div className="auth">
       <Cover />
       <div className="entry-form">
-        <h1>
-          {bootstrap
-            ? "初始化 GM 管理员"
-            : register
-              ? "创建账户"
-              : "打开你的笔记库"}
-        </h1>
+        <h1>{register ? "创建账户" : "打开你的笔记库"}</h1>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -72,12 +58,7 @@ function Auth({ login }: { login: (s: string) => void }) {
               };
             setBusy(true);
             try {
-              if (bootstrap) {
-                await request("", "/api/v1/admin/bootstrap", "POST", {
-                  ...body,
-                  setup_token: data.get("setup_token"),
-                });
-              } else if (register) {
+              if (register) {
                 const registration = await (
                   await request("", "/api/v1/auth/register", "POST", body)
                 ).json();
@@ -103,18 +84,6 @@ function Auth({ login }: { login: (s: string) => void }) {
             }
           }}
         >
-          {bootstrap && (
-            <label>
-              服务器初始化令牌
-              <input
-                required
-                type="password"
-                name="setup_token"
-                autoComplete="off"
-                placeholder="数据库目录中的 setup.token"
-              />
-            </label>
-          )}
           <label>
             邮箱
             <input type="email" name="email" autoComplete="username" required />
@@ -130,14 +99,14 @@ function Auth({ login }: { login: (s: string) => void }) {
             />
           </label>
           <button disabled={busy} className="primary">
-            {bootstrap ? "创建管理员并登录" : register ? "注册并登录" : "登录"}
+            {register ? "注册并登录" : "登录"}
           </button>
         </form>
         {mode === "invite_only" && (
           <p>本站仅限邀请注册，请通过邀请邮件创建账户。</p>
         )}
         {mode === "closed" && <p>本站已关闭注册。</p>}
-        {!bootstrap && mode === "open" && (
+        {mode === "open" && (
           <button
             onClick={() => {
               setRegister(!register);
@@ -147,12 +116,9 @@ function Auth({ login }: { login: (s: string) => void }) {
             {register ? "已有账户，登录" : "创建账户"}
           </button>
         )}
-        {!bootstrap && (
-          <p>
-            <a href="/#forgot">找回密码</a> ·{" "}
-            <a href="/#resend">重发验证邮件</a>
-          </p>
-        )}
+        <p>
+          <a href="/#forgot">找回密码</a> · <a href="/#resend">重发验证邮件</a>
+        </p>
         {error && <p role="alert">{error}</p>}
       </div>
     </div>
@@ -842,18 +808,19 @@ function App() {
       />
     );
   if (location.pathname.startsWith("/gm"))
-    return token ? (
-      <Admin
-        token={token}
-        logout={() => {
-          void request(token, "/api/v1/auth/logout", "POST").catch(() => {});
-          sessionStorage.removeItem("wenote-renewal");
-          sessionStorage.removeItem("wenote-session");
-          setToken("");
-        }}
-      />
-    ) : (
-      auth
+    return (
+      <Suspense fallback={<div role="status">正在载入管理后台…</div>}>
+        <Admin
+          token={token}
+          login={setToken}
+          logout={() => {
+            void request(token, "/api/v1/auth/logout", "POST").catch(() => {});
+            sessionStorage.removeItem("wenote-renewal");
+            sessionStorage.removeItem("wenote-session");
+            setToken("");
+          }}
+        />
+      </Suspense>
     );
   if (shared)
     return (

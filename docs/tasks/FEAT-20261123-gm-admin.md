@@ -147,6 +147,20 @@
 | --- | --- | --- | --- |
 | 2026-11-23 | `IN_PROGRESS` | 用户确认开始实现，任务 worktree 和分支已创建 | 按计划进入 TDD 实现 |
 | 2026-11-23 | `DELIVERED` | 服务端全量测试、Web 构建和隔离服务冒烟通过 | 交付用户验收 |
+| 2026-11-23 | `CHANGES_REQUESTED` | 用户要求重新设计 GM 界面并选用 UI 框架 | 在原分支改进 Web 页面 |
+| 2026-11-23 | `DELIVERED` | Ant Design 改版通过构建、浏览器回归和两种宽度的截图检查 | 用户在原地址验收 |
+
+## 界面改版验收
+
+采用 Ant Design 6.7.2，按 `/gm` 路由加载。桌面使用常驻侧栏，窄屏使用抽屉导航。邀请、发送测试邮件和附件回收均使用页内弹窗。设置按注册与验证、邮件服务、本地备份分组。
+
+| 检查 | 结果 |
+| --- | --- |
+| 旧界面运行 `node apps/web/tests/gm.mjs` | 退出 1，找不到新版的「服务端总览」标题 |
+| `npm run build --prefix apps/web` | 退出 0，TypeScript 和 Vite 通过。GM 独立脚本约 277 KB gzip |
+| `WENOTE_GM_PREVIEW_DIR="$PWD/dist/local" node apps/web/tests/gm.mjs` | 退出 0，临时数据库和本机 SMTP 完成开户、邮件表单、账户权限、附件回收与恢复、备份恢复读回 |
+| 桌面与窄屏 | Chrome 1280 × 840 和 390 × 844。窄屏测试检查抽屉导航和设置页横向溢出。已核对 `dist/local/gm-overview.png` 与 `dist/local/gm-mobile.png` |
+| 用户入口 | `http://localhost:18080/gm`，由原任务实例提供新版静态文件 |
 
 ## 用户验收
 

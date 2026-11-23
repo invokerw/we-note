@@ -10,6 +10,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright-core";
 const root = resolve(import.meta.dirname, "../../.."),
   temp = await mkdtemp(join(tmpdir(), "wenote-gm-test-"));
+const previewDir = process.env.WENOTE_GM_PREVIEW_DIR;
 const children = [],
   messages = [];
 // This test mailbox accepts only local connections and keeps messages in memory.
@@ -133,20 +134,35 @@ try {
   await gm.getByLabel("邮箱", { exact: true }).fill(owner);
   await gm.getByLabel("密码", { exact: true }).fill(randomUUID());
   await button(gm, "创建管理员并登录").click();
+  await gm.getByRole("heading", { name: "服务端总览", exact: true }).waitFor();
+  await gm.setViewportSize({ width: 390, height: 844 });
+  await button(gm, "打开管理导航").click();
   await button(gm, "系统设置").click();
+  assert.ok(
+    await gm.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    "mobile settings overflow",
+  );
+  await gm.setViewportSize({ width: 1280, height: 840 });
   await gm.getByLabel("主机", { exact: true }).fill("127.0.0.1");
   await gm.getByLabel("端口").fill(String(port));
-  await gm.getByLabel("安全方式").selectOption("plain");
+  await gm.getByRole("combobox", { name: "安全方式" }).click();
+  await gm.getByText("无加密", { exact: true }).click();
   await gm.getByLabel("发件人地址").fill(owner);
   await button(gm, "保存设置").click();
   await gm.getByText("系统设置已保存", { exact: true }).waitFor();
-  gm.once("dialog", (d) => d.accept(owner));
   await button(gm, "发送测试邮件").click();
+  const testMail = gm.getByRole("dialog", { name: "发送测试邮件" });
+  await testMail.getByLabel("收件人邮箱").fill(owner);
+  await button(testMail, "发送").click();
   await gm.getByText("测试邮件已发送", { exact: true }).waitFor();
   assert.equal(messages.length, 1);
   await button(gm, "邀请").click();
-  gm.once("dialog", (d) => d.accept(email));
   await button(gm, "创建邀请").click();
+  await gm
+    .getByRole("dialog", { name: "创建邀请" })
+    .getByLabel("受邀邮箱")
+    .fill(email);
+  await button(gm.getByRole("dialog"), "发送邀请").click();
   await gm.getByRole("cell", { name: email, exact: true }).waitFor();
   const invited = gm.getByRole("row").filter({ hasText: email });
   const original = mailLink("invite", origin);
@@ -166,8 +182,12 @@ try {
     );
   assert.equal((await useInvite(original)).status, 404);
   const other = "withdrawn@example.test";
-  gm.once("dialog", (d) => d.accept(other));
   await button(gm, "创建邀请").click();
+  await gm
+    .getByRole("dialog", { name: "创建邀请" })
+    .getByLabel("受邀邮箱")
+    .fill(other);
+  await button(gm.getByRole("dialog"), "发送邀请").click();
   const withdrawn = gm.getByRole("row").filter({ hasText: other });
   await withdrawn.waitFor();
   const revoked = mailLink("invite", origin);
@@ -241,8 +261,8 @@ try {
   );
   await button(gm, "附件与存储").click();
   await gm.getByRole("cell", { name: "sample.txt" }).waitFor();
-  gm.once("dialog", (d) => d.accept());
   await button(gm, "移入回收站").click();
+  await button(gm.getByRole("dialog"), "确认移入").click();
   await button(gm, "恢复附件").click();
   await button(gm, "移入回收站").waitFor();
   await button(gm, "操作记录").click();
@@ -287,6 +307,24 @@ try {
     bytes,
   );
   await button(gm, "用户").click();
+  if (previewDir) {
+    await button(gm, "总览").click();
+    await gm.screenshot({
+      path: join(previewDir, "gm-overview.png"),
+      animations: "disabled",
+    });
+    await gm.setViewportSize({ width: 390, height: 844 });
+    await gm.reload();
+    await gm.getByRole("button", { name: "查看存储详情" }).waitFor();
+    assert.equal(await gm.locator("header.gm-bar").count(), 1);
+    await gm.screenshot({
+      fullPage: true,
+      path: join(previewDir, "gm-mobile.png"),
+      animations: "disabled",
+    });
+    await gm.setViewportSize({ width: 1280, height: 840 });
+    await button(gm, "用户").click();
+  }
   await row.getByRole("button", { name: "撤销会话" }).click();
   await gm.getByText("会话已撤销", { exact: true }).waitFor();
   assert.equal((await api(origin, "me", valid)).status, 401);
