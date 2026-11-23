@@ -14,6 +14,7 @@ import {
   history,
   historyKeymap,
   indentWithTab,
+  isolateHistory,
 } from "@codemirror/commands";
 import { Compartment, Prec } from "@codemirror/state";
 import { fenceLanguage, liveCodeHighlight } from "./codeHighlight";
@@ -57,6 +58,29 @@ export function captureInsertion(view: EditorView | null) {
     resumeWriting(view, trigger);
     return true;
   };
+}
+
+export function applyDocumentText(view: EditorView, text: string) {
+  const old = view.state.doc.toString();
+  if (old === text) return;
+  const { start, oldEnd, newEnd } = changedRange(old, text);
+  const map = (position: number) => {
+    if (position <= start) return position;
+    if (position >= oldEnd) return position + newEnd - oldEnd;
+    return start + Math.min(position - start, newEnd - start);
+  };
+  const { anchor, head } = view.state.selection.main;
+  view.dispatch({
+    changes: {
+      from: start,
+      to: oldEnd,
+      insert: text.slice(start, newEnd),
+    },
+    selection: { anchor: map(anchor), head: map(head) },
+    userEvent: "input.format.save",
+    annotations: isolateHistory.of("full"),
+    scrollIntoView: false,
+  });
 }
 
 export default function Source({

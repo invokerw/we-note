@@ -73,9 +73,20 @@ try {
   }
   await click("登录");
   await create("设置验收.md", '# 设置验收\n\n`answer`\n\n```python\nanswer = "ok" if True else 0\n```');
+  const formatId = await create("自动格式化.md", "占位");
   await click("插件");
   await click("禁用 Markdown");
   await click("Markdown 设置");
+  for (const label of [
+    "启用保存时自动格式化",
+    "中日韩文字与英文之间加空格",
+    "中日韩文字与数字之间加空格",
+    "英文与数字之间加空格",
+    "清理普通行尾空格",
+    "整理连续空行",
+  ]) {
+    assert.equal(await page.getByLabel(label).isChecked(), true, label);
+  }
   async function setRule(label, value, pluginId = "com.wenote.md") {
     const [saved] = await Promise.all([
       page.waitForResponse((r) =>
@@ -110,6 +121,54 @@ try {
   await page.locator('.mindmap-theme-preview[data-xmind-theme="youdao"] .mindmap-preview-root').waitFor();
   await click("启用 Markdown");
   await page.reload();
+  await click("自动格式化.md");
+  await page.locator('.document-mode.mode-split[data-markdown-theme="paper"]').waitFor();
+  await click("编辑模式");
+  await click("源码");
+  const messyMarkdown = [
+    "---",
+    "title: 你好world",
+    "count: 100",
+    "---",
+    "",
+    "你好world 共100个 Python3   ",
+    "",
+    "",
+    "`你好world`",
+    "```js",
+    "你好world",
+    "",
+    "",
+    "```",
+    "",
+    "",
+  ].join("\n");
+  const formattedMarkdown = [
+    "---",
+    "title: 你好world",
+    "count: 100",
+    "---",
+    "",
+    "你好 world 共 100 个 Python 3  ",
+    "",
+    "`你好world`",
+    "```js",
+    "你好world",
+    "",
+    "",
+    "```",
+    "",
+  ].join("\n");
+  const sourceEditor = page.getByLabel("笔记源码");
+  await sourceEditor.fill(messyMarkdown);
+  await click("保存");
+  await page.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();
+  assert.equal((await content(formatId)).toString(), formattedMarkdown);
+  const sourceLines = () => sourceEditor.locator(".cm-line").allTextContents();
+  await sourceEditor.press("ControlOrMeta+z");
+  assert.deepEqual(await sourceLines(), messyMarkdown.split("\n"));
+  await sourceEditor.press("ControlOrMeta+Shift+z");
+  assert.deepEqual(await sourceLines(), formattedMarkdown.split("\n"));
   await click("设置验收.md");
   await page.locator('.document-mode.mode-split[data-markdown-theme="paper"]').waitFor();
   await page.locator('.split-preview [data-language="python"] .md-keyword').first().waitFor();

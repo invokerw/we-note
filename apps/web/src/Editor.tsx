@@ -4,9 +4,10 @@ import { browserExport } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { captureInsertion, resumeWriting } from "./markdown/Source";
+import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
 import type { EditorView } from "@codemirror/view";
 import { Document, type Mode } from "./markdown/Markdown";
+import { formatMarkdown } from "./markdown/saveFormat";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { download, type Hit } from "./Resources";
 import { base64, Note, request, uploadAsset, Version } from "./api";
@@ -221,11 +222,26 @@ export default function Editor({
       if (writing) resumeWriting(writing);
     }
   }
+  function formatBeforeSave() {
+    if (note.format !== "md" || !markdownSettings.autoFormatOnSave) return;
+    const current = source.current.text,
+      formatted = formatMarkdown(current, markdownSettings).text,
+      cm = editor.current;
+    if (formatted === current) return;
+    if (cm && cm.state.doc.toString() === current) {
+      applyDocumentText(cm, formatted);
+    } else {
+      source.current.edit(formatted);
+      setText(formatted);
+      dirty(formatted !== saved.current);
+    }
+  }
   async function save() {
+    formatBeforeSave();
     const value = source.current.serialize();
     await saveBytes(new TextEncoder().encode(value));
     if (!alive.current) return;
-    saved.current = text;
+    saved.current = source.current.text;
     dirty(false);
   }
   async function saveBytes(data: Uint8Array) {

@@ -10,6 +10,12 @@ export type MarkdownPreferences = {
   splitRatio: number;
   syncScroll: boolean;
   fontSize: MarkdownFontSize;
+  autoFormatOnSave: boolean;
+  cjkLatinSpacing: boolean;
+  cjkDigitSpacing: boolean;
+  latinDigitSpacing: boolean;
+  trimTrailingWhitespace: boolean;
+  normalizeBlankLines: boolean;
 };
 
 export type XMindPreferences = {
@@ -28,6 +34,12 @@ export const defaultMarkdownPreferences: MarkdownPreferences = {
   splitRatio: 50,
   syncScroll: true,
   fontSize: "medium",
+  autoFormatOnSave: true,
+  cjkLatinSpacing: true,
+  cjkDigitSpacing: true,
+  latinDigitSpacing: true,
+  trimTrailingWhitespace: true,
+  normalizeBlankLines: true,
 };
 
 export const defaultXMindPreferences: XMindPreferences = {
@@ -75,6 +87,12 @@ function markdown(value: unknown): MarkdownPreferences {
     syncScroll: input.syncScroll !== false,
     fontSize:
       fontSize === "small" || fontSize === "large" ? fontSize : "medium",
+    autoFormatOnSave: input.autoFormatOnSave !== false,
+    cjkLatinSpacing: input.cjkLatinSpacing !== false,
+    cjkDigitSpacing: input.cjkDigitSpacing !== false,
+    latinDigitSpacing: input.latinDigitSpacing !== false,
+    trimTrailingWhitespace: input.trimTrailingWhitespace !== false,
+    normalizeBlankLines: input.normalizeBlankLines !== false,
   };
 }
 

@@ -100,6 +100,57 @@ export default function MarkdownSettings({
         />
         分屏编辑同步滚动
       </label>
+      <fieldset>
+        <legend>保存时自动格式化</legend>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={value.autoFormatOnSave}
+            onChange={(e) => update("autoFormatOnSave", e.target.checked)}
+          />
+          启用保存时自动格式化
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={value.cjkLatinSpacing}
+            onChange={(e) => update("cjkLatinSpacing", e.target.checked)}
+          />
+          中日韩文字与英文之间加空格
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={value.cjkDigitSpacing}
+            onChange={(e) => update("cjkDigitSpacing", e.target.checked)}
+          />
+          中日韩文字与数字之间加空格
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={value.latinDigitSpacing}
+            onChange={(e) => update("latinDigitSpacing", e.target.checked)}
+          />
+          英文与数字之间加空格
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={value.trimTrailingWhitespace}
+            onChange={(e) => update("trimTrailingWhitespace", e.target.checked)}
+          />
+          清理普通行尾空格
+        </label>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={value.normalizeBlankLines}
+            onChange={(e) => update("normalizeBlankLines", e.target.checked)}
+          />
+          整理连续空行
+        </label>
+      </fieldset>
     </div>
   );
 }

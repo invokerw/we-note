@@ -8,9 +8,10 @@ import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { boardStrokes } from "./markdown/Whiteboard";
-import { captureInsertion, resumeWriting } from "./markdown/Source";
+import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
 import type { EditorView } from "@codemirror/view";
 import { Document, type Mode } from "./markdown/Markdown";
+import { formatMarkdown } from "./markdown/saveFormat";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { Resources, type ResourceClient, type Hit } from "./Resources";
 import { multipart, multipartThreshold } from "./multipart";
@@ -386,11 +387,25 @@ function Workspace({
       setBusy(false);
     }
   }
+  function formatBeforeSave() {
+    if (!/\.md$/i.test(path) || !markdownSettings.autoFormatOnSave) return;
+    const current = source.current.text,
+      formatted = formatMarkdown(current, markdownSettings).text,
+      cm = editor.current;
+    if (formatted === current) return;
+    if (cm && cm.state.doc.toString() === current) {
+      applyDocumentText(cm, formatted);
+    } else {
+      source.current.edit(formatted);
+      setText(formatted);
+    }
+  }
   async function save() {
+    formatBeforeSave();
     const raw = source.current.serialize();
     const hash = await local<string>(vault, "save", { path, base, text: raw });
     setBase(hash);
-    setSaved(text);
+    setSaved(source.current.text);
     await load();
     notify("已保存到本地目录");
   }
