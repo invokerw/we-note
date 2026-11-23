@@ -103,7 +103,7 @@ APK 位于 `apps/client/src-tauri/gen/android/app/build/outputs/apk/`。登录 H
 
 开发任务按功能开发、Bug 修复、重构、测试、文档和工程维护分类，登记在 [开发账本](docs/开发账本.md)，详细执行方式见 [开发工作流](docs/开发工作流.md)。具体实现使用独立 Git worktree 和 `codex/` 分支，按 TDD 先写失败测试，再实现和回归验证。服务端任务使用独立端口和运行目录，客户端任务从任务 worktree 构建。
 
-自我验收通过后交付用户验收，用户明确确认后才合回主分支并清理 worktree 与任务分支。Codex 需要执行仓库流程时读取 [WeNote 开发流程 skill](.codex/skills/wenote-development/SKILL.md)。
+每轮测试通过后自审代码，对修改处复测，提交并直接合入本地 `main` 供用户验收。验收反馈在原 worktree 处理并再次合入。用户确认通过后清理 worktree 和任务分支。Codex 需要执行仓库流程时读取 [WeNote 开发流程 skill](.codex/skills/wenote-development/SKILL.md)。
 
 ## 运行验收
 
