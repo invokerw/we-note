@@ -8,7 +8,7 @@
 | 类型 | `feature` |
 | 登记日期 | `2026-11-23` |
 | 影响端 | `web` / `desktop` / `android` |
-| 状态 | `ACCEPTED` |
+| 状态 | `MERGED` |
 | 基线分支 | `main` |
 | 基线提交 | `9795a26c60f6fcff795e49434f019624715605f8` |
 | 任务分支 | `codex/feature-markdown-save-format-20261123` |
@@ -196,6 +196,7 @@
 | 2026-11-23 | `IN_PROGRESS` | 用户确认 7 项范围，已创建任务 worktree 和分支 | 编写失败测试并实现格式化模块 |
 | 2026-11-23 | `DELIVERED` | 自我验收通过，Web、桌面构建和阶段四浏览器验收完成 | 用户验收 |
 | 2026-11-23 | `ACCEPTED` | 用户确认验收通过 | 合并到 `main`，更新账本并清理任务 worktree 与分支 |
+| 2026-11-23 | `MERGED` | 合并提交 `73f018a`，合并后单测和 Web/Desktop 构建通过 | 任务完成 |
 
 ## 用户验收
 
@@ -207,7 +208,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 合并提交 | 待填写 |
-| 合并后验证 | 待填写 |
-| worktree 清理时间 | 待填写 |
-| 分支清理时间 | 待填写 |
+| 合并提交 | `73f018a`（`feat(markdown): format on explicit save`） |
+| 合并后验证 | `node --experimental-strip-types --test apps/web/tests/markdown-save-format.test.mjs`、`npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`git diff --check`，均退出状态 0 |
+| worktree 清理时间 | 2026-11-23 |
+| 分支清理时间 | 2026-11-23 |
