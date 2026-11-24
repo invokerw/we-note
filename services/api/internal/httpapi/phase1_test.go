@@ -20,6 +20,7 @@ func TestSnapshotImportIsAtomicIsolatedAndReplayable(t *testing.T) {
 	if err = db.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
+	enableOpenRegistration(t, db)
 	blobs, err := blob.NewLocalStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

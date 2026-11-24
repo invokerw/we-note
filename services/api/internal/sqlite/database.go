@@ -17,6 +17,7 @@ var resourcesSchema string
 
 type Database struct {
 	*sql.DB
+	Filename string
 }
 
 func Open(ctx context.Context, filename string) (*Database, error) {
@@ -36,7 +37,7 @@ func Open(ctx context.Context, filename string) (*Database, error) {
 			return nil, fmt.Errorf("configure sqlite database: %w", err)
 		}
 	}
-	return &Database{DB: db}, nil
+	return &Database{DB: db, Filename: filename}, nil
 }
 
 func (db *Database) Migrate(ctx context.Context) error {
@@ -50,7 +51,15 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    status TEXT NOT NULL DEFAULT 'active',
+    email_verified_at TEXT,
+    last_login_at TEXT,
+    password_changed_at TEXT,
+    disabled_at TEXT,
+    disabled_reason TEXT,
+    deleted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS vaults (
@@ -184,6 +193,76 @@ CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS idx_sync_operations_change ON sync_operations(vault_id, change_id);
+
+CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_by TEXT REFERENCES users(id),
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS invitations (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    invited_by TEXT NOT NULL REFERENCES users(id),
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    revoked_at TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email,created_at DESC);
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS email_deliveries (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    sent_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS admin_audit_events (
+    id INTEGER PRIMARY KEY,
+    actor_user_id TEXT NOT NULL REFERENCES users(id),
+    action TEXT NOT NULL,
+    object_type TEXT NOT NULL,
+    object_id TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_events(id DESC);
+
+CREATE TABLE IF NOT EXISTS backup_jobs (
+    id TEXT PRIMARY KEY,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL,
+    path TEXT NOT NULL DEFAULT '',
+    size INTEGER NOT NULL DEFAULT 0,
+    checksum TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    completed_at TEXT
+);
 `
 
 	if _, err := db.ExecContext(ctx, schema); err != nil {
@@ -201,7 +280,15 @@ CREATE INDEX IF NOT EXISTS idx_sync_operations_change ON sync_operations(vault_i
 	if _, err := db.ExecContext(ctx, resourcesSchema); err != nil {
 		return err
 	}
-	return ensureCompatibilityColumns(ctx, db)
+	if err := ensureCompatibilityColumns(ctx, db); err != nil {
+		return err
+	}
+	_, err := db.ExecContext(ctx, `
+INSERT OR IGNORE INTO system_settings(key,value,updated_at) VALUES
+('registration_mode','invite_only',CURRENT_TIMESTAMP),
+('require_email_verification','true',CURRENT_TIMESTAMP),
+('backup_schedule','off',CURRENT_TIMESTAMP),('backup_root','./data/backups',CURRENT_TIMESTAMP)`)
+	return err
 }
 
 func (db *Database) migrateFileStorage(ctx context.Context) error {
@@ -259,6 +346,14 @@ func ensureCompatibilityColumns(ctx context.Context, db *Database) error {
 		{"changes", "client_timestamp", `ALTER TABLE changes ADD COLUMN client_timestamp TEXT NOT NULL DEFAULT ''`},
 		{"upload_sessions", "storage_key", `ALTER TABLE upload_sessions ADD COLUMN storage_key TEXT`},
 		{"export_jobs", "storage_key", `ALTER TABLE export_jobs ADD COLUMN storage_key TEXT`},
+		{"users", "role", `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`},
+		{"users", "status", `ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`},
+		{"users", "email_verified_at", `ALTER TABLE users ADD COLUMN email_verified_at TEXT`},
+		{"users", "last_login_at", `ALTER TABLE users ADD COLUMN last_login_at TEXT`},
+		{"users", "password_changed_at", `ALTER TABLE users ADD COLUMN password_changed_at TEXT`},
+		{"users", "deleted_at", `ALTER TABLE users ADD COLUMN deleted_at TEXT`},
+		{"users", "disabled_at", `ALTER TABLE users ADD COLUMN disabled_at TEXT`},
+		{"users", "disabled_reason", `ALTER TABLE users ADD COLUMN disabled_reason TEXT`},
 	}
 	for _, column := range columns {
 		var tableExists bool

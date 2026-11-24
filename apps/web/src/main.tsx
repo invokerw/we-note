@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { lazy, Suspense, useCallback } from "react";
 import {
   Sharing,
   Audit,
@@ -36,10 +36,19 @@ import {
 import "./style.css";
 import "./phone.css";
 import "./workspace.css";
+const Admin = lazy(() => import("./Admin"));
+import { AccountAction, accountAction } from "./AccountAction";
 function Auth({ login }: { login: (s: string) => void }) {
   const [register, setRegister] = useState(false),
+    [mode, setMode] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  useEffect(() => {
+    request("", "/api/v1/auth/registration")
+      .then((r) => r.json())
+      .then((p) => setMode(p.registration_mode))
+      .catch((e) => setError(String(e)));
+  }, []);
   return (
     <div className="auth">
       <Cover />
@@ -55,8 +64,20 @@ function Auth({ login }: { login: (s: string) => void }) {
               };
             setBusy(true);
             try {
-              if (register)
-                await request("", "/api/v1/auth/register", "POST", body);
+              if (register) {
+                const registration = await (
+                  await request("", "/api/v1/auth/register", "POST", body)
+                ).json();
+                if (registration.verification_required) {
+                  setRegister(false);
+                  setError(
+                    registration.delivery_status === "sent"
+                      ? "请查收验证邮件后登录。"
+                      : "请联系管理员检查 SMTP，再重发验证邮件。",
+                  );
+                  return;
+                }
+              }
               const s = await (
                 await request("", "/api/v1/auth/login", "POST", body)
               ).json();
@@ -87,36 +108,61 @@ function Auth({ login }: { login: (s: string) => void }) {
             {register ? "注册并登录" : "登录"}
           </button>
         </form>
-        <button
-          onClick={() => {
-            setRegister(!register);
-            setError("");
-          }}
-        >
-          {register ? "已有账户，登录" : "创建账户"}
-        </button>
+        {mode === "invite_only" && (
+          <p>本站仅限邀请注册，请通过邀请邮件创建账户。</p>
+        )}
+        {mode === "closed" && <p>本站已关闭注册。</p>}
+        {mode === "open" && (
+          <button
+            onClick={() => {
+              setRegister(!register);
+              setError("");
+            }}
+          >
+            {register ? "已有账户，登录" : "创建账户"}
+          </button>
+        )}
+        <p>
+          <a href="/#forgot">找回密码</a> · <a href="/#resend">重发验证邮件</a>
+        </p>
         {error && <p role="alert">{error}</p>}
       </div>
     </div>
   );
 }
+type TrashItem = {
+  id: string;
+  kind: "asset" | "file";
+  name: string;
+  expires_at: number;
+};
 function Library({ token, logout }: { token: string; logout: () => void }) {
   const [vaults, setVaults] = useState<Vault[]>([]),
     [vault, setVault] = useState(""),
     [files, setFiles] = useState<Note[]>([]),
     [note, setNote] = useState<Note | null>(null),
     [view, setView] = useState("files"),
-    [trash, setTrash] = useState<Note[]>([]),
+    [trash, setTrash] = useState<{
+      files: Note[];
+      items: TrashItem[];
+      can_manage: boolean;
+    }>({ files: [], items: [], can_manage: false }),
     [shares, setShares] = useState<Share[]>([]),
     [message, msg] = useState(""),
     [origin, setOrigin] = useState(location.origin),
-    [preferences, setPreferences] = useState<UserPreferences>(
-      loadLocalPreferences,
-    );
+    [preferences, setPreferences] =
+      useState<UserPreferences>(loadLocalPreferences);
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const panes = usePanes();
   const phone = !!useMediaQuery("(max-width: 720px)");
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    request(token, "/api/v1/me")
+      .then((r) => r.json())
+      .then((u) => setIsAdmin(u.role === "system_admin"))
+      .catch(() => setIsAdmin(false));
+  }, [token]);
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
   const encryptedIO = useCallback<EncryptedIO>(
@@ -233,7 +279,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     if (!leave()) return;
     setNote(null);
     if (s === "trash")
-      setTrash((await (await request(token, base + "/trash")).json()).files);
+      setTrash(await (await request(token, base + "/trash")).json());
     if (s === "inbox" || s === "sent")
       setShares(
         (await (await request(token, "/api/v1/shares/" + s)).json()).shares,
@@ -241,6 +287,43 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     if (s === "files") await list();
     setView(s);
     panes.setPane("doc");
+  }
+  async function changeTrash(
+    operation: "restore" | "purge" | "empty",
+    item?: TrashItem,
+  ) {
+    if (
+      operation === "empty" &&
+      !confirm("彻底清空这个笔记库的回收站？仍被引用的项目将保留。")
+    )
+      return;
+    if (
+      operation === "purge" &&
+      !confirm(`彻底删除「${item?.name}」及其历史版本？`)
+    )
+      return;
+    if (operation === "restore" && item?.kind === "file") {
+      const f = trash.files.find((note) => note.file_id === item.id);
+      if (!f) throw Error("笔记已变化，请重新打开回收站");
+      const old = entryPath(f.path, f.current_content_hash),
+        path = prompt("恢复路径", old);
+      if (!path) return;
+      await request(token, base + "/files/" + f.file_id + "/restore", "POST", {
+        base_version_id: f.current_version_id,
+        path: old === f.path ? path : path.replace(/\/$/, "") + "/" + marker,
+      });
+    } else {
+      const result = await (
+        await request(token, base + "/trash", "POST", {
+          operation,
+          kind: item?.kind,
+          id: item?.id,
+        })
+      ).json();
+      if (result.retained) msg(`${result.retained} 个项目仍被引用，已保留。`);
+    }
+    await list();
+    await section("trash");
   }
   async function create(path: string, bytes: Uint8Array) {
     const r = await (
@@ -434,6 +517,24 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         }
         account={
           <div className="account-actions">
+            {isAdmin && (
+              <a
+                href="/gm"
+                onClick={(e) => {
+                  if (!leave()) e.preventDefault();
+                }}
+              >
+                服务端管理
+              </a>
+            )}
+            <a
+              href="/#change"
+              onClick={(e) => {
+                if (!leave()) e.preventDefault();
+              }}
+            >
+              修改密码
+            </a>
             <button
               onClick={() => {
                 if (leave()) logout();
@@ -575,7 +676,10 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         ) : view === "encrypted" ? (
           <EncryptedVaults io={encryptedIO} dirty={encryptedDirty} />
         ) : view === "插件" ? (
-          <Manager preferences={preferences} updatePluginSetting={updatePluginSetting} />
+          <Manager
+            preferences={preferences}
+            updatePluginSetting={updatePluginSetting}
+          />
         ) : ["搜索", "附件", "导出"].includes(view) ? (
           <LibraryResources
             key={vault + view}
@@ -595,37 +699,51 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                   : "已发送"}
             </h1>
             {view === "trash" &&
-              (trash.length ? (
-                trash.map((f) => (
-                  <div className="row" key={f.file_id}>
-                    {entryPath(f.path, f.current_content_hash)}
-                    <button
-                      onClick={() =>
-                        run(async () => {
-                          const old = entryPath(f.path, f.current_content_hash);
-                          const p = prompt("恢复路径", old);
-                          if (!p) return;
-                          await request(
-                            token,
-                            base + "/files/" + f.file_id + "/restore",
-                            "POST",
-                            {
-                              base_version_id: f.current_version_id,
-                              path:
-                                old === f.path
-                                  ? p
-                                  : p.replace(/\/$/, "") + "/" + marker,
-                            },
-                          );
-                          await list();
-                          await section("trash");
-                        })
-                      }
-                    >
-                      恢复
+              (trash.items.length ? (
+                <>
+                  {trash.can_manage && (
+                    <button onClick={() => run(() => changeTrash("empty"))}>
+                      清空回收站
                     </button>
-                  </div>
-                ))
+                  )}
+                  {trash.items.map((item) => {
+                    const f = trash.files.find((n) => n.file_id === item.id);
+                    return (
+                      <div className="row" key={item.id}>
+                        <span>
+                          {f
+                            ? entryPath(f.path, f.current_content_hash)
+                            : item.name}
+                          <small className="trash-expiry">
+                            {item.kind === "asset" ? "附件" : "笔记"} ·{" "}
+                            {new Date(
+                              item.expires_at * 1000,
+                            ).toLocaleDateString()}{" "}
+                            起可自动清理
+                          </small>
+                        </span>
+                        {(trash.can_manage || item.kind === "file") && (
+                          <button
+                            onClick={() =>
+                              run(() => changeTrash("restore", item))
+                            }
+                          >
+                            恢复
+                          </button>
+                        )}
+                        {trash.can_manage && (
+                          <button
+                            onClick={() =>
+                              run(() => changeTrash("purge", item))
+                            }
+                          >
+                            彻底删除
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
               ) : (
                 <p>回收站为空。</p>
               ))}
@@ -727,9 +845,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   );
 }
 function App() {
+  const [action, setAction] = useState(accountAction);
   const [shared, setShared] = useState(readShareLocation);
   useEffect(() => {
     const navigate = () => {
+      setAction(accountAction());
       const route = readShareLocation();
       setShared((old) =>
         route && !route.secret && old?.id === route.id ? old : route,
@@ -754,6 +874,29 @@ function App() {
       }}
     />
   );
+  if (action)
+    return (
+      <AccountAction
+        key={action.name + action.secret}
+        action={action}
+        token={token}
+      />
+    );
+  if (location.pathname.startsWith("/gm"))
+    return (
+      <Suspense fallback={<div role="status">正在载入管理后台…</div>}>
+        <Admin
+          token={token}
+          login={setToken}
+          logout={() => {
+            void request(token, "/api/v1/auth/logout", "POST").catch(() => {});
+            sessionStorage.removeItem("wenote-renewal");
+            sessionStorage.removeItem("wenote-session");
+            setToken("");
+          }}
+        />
+      </Suspense>
+    );
   if (shared)
     return (
       <PublicShare key={shared.id} entry={shared} token={token} login={auth} />

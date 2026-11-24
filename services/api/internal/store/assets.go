@@ -127,7 +127,19 @@ func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaTy
 	return a, tx.Commit()
 }
 func (r *Repository) AssetForUser(ctx context.Context, user, vault, id string) (Asset, error) {
-	return r.scanAsset(r.db.QueryRowContext(ctx, assetSelect+`JOIN workspace_members m ON m.vault_id=a.vault_id WHERE m.user_id=? AND a.id=? AND (?='' OR a.vault_id=?) AND a.is_deleted=0`, user, id, vault, vault))
+	asset, err := r.scanAsset(r.db.QueryRowContext(ctx, assetSelect+`JOIN workspace_members m ON m.vault_id=a.vault_id WHERE m.user_id=? AND a.id=? AND (?='' OR a.vault_id=?) AND a.is_deleted=0`, user, id, vault, vault))
+	if err != ErrNotFound || vault != "" {
+		return asset, err
+	}
+	asset, err = r.scanAsset(r.db.QueryRowContext(ctx, assetSelect+`JOIN workspace_members m ON m.vault_id=a.vault_id WHERE m.user_id=? AND a.id=? AND a.is_deleted=1`, user, id))
+	if err != nil {
+		return asset, err
+	}
+	used, err := r.noteUsesAsset(ctx, r.db.DB, asset.Vault, id)
+	if err == nil && !used {
+		err = ErrNotFound
+	}
+	return asset, err
 }
 func (r *Repository) OpenAsset(ctx context.Context, a Asset) (io.ReadCloser, error) {
 	if a.Status != "completed" {
@@ -145,7 +157,21 @@ func (r *Repository) AssetForPublicPath(ctx context.Context, user, year, month, 
 	if _, err := time.Parse(assetDateLayout, date); err != nil || !syncHashPattern.MatchString("sha256:"+digest) {
 		return Asset{}, ErrNotFound
 	}
-	return r.assetForReference(ctx, r.db, user, "", r.publicBase+"/assets/"+date+"/"+digest)
+	asset, err := r.assetForReference(ctx, r.db, user, "", r.publicBase+"/assets/"+date+"/"+digest)
+	if !errors.Is(err, ErrNotFound) {
+		return asset, err
+	}
+	ids, err := stringList(ctx, r.db.DB, `SELECT a.id FROM assets a JOIN upload_sessions u ON u.id=a.upload_id AND u.vault_id=a.vault_id JOIN workspace_members m ON m.vault_id=a.vault_id WHERE m.user_id=? AND a.is_deleted=1 AND u.status='completed' AND substr(a.created_at,1,10)=? AND u.content_hash=? ORDER BY a.id`, user, strings.Join([]string{year, month, day}, "-"), "sha256:"+digest)
+	if err != nil {
+		return Asset{}, err
+	}
+	for _, id := range ids {
+		asset, err = r.AssetForUser(ctx, user, "", id)
+		if !errors.Is(err, ErrNotFound) {
+			return asset, err
+		}
+	}
+	return Asset{}, ErrNotFound
 }
 
 func (r *Repository) assetForReference(ctx context.Context, queryer interface {
@@ -236,4 +262,23 @@ func (r *Repository) ListAssets(ctx context.Context, vault string) ([]Asset, err
 		assets = append(assets, a)
 	}
 	return assets, rows.Err()
+}
+
+func (r *Repository) SetMailBase(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "" {
+		return errors.New("invalid mail URL")
+	}
+	local := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
+	if u.Scheme != "https" && !(local && u.Scheme == "http") {
+		return errors.New("mail URL requires HTTPS or loopback HTTP")
+	}
+	r.mailBase = strings.TrimRight(raw, "/")
+	return nil
+}
+func (r *Repository) MailBase() string {
+	if r.mailBase != "" {
+		return r.mailBase
+	}
+	return r.publicBase
 }

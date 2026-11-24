@@ -868,6 +868,11 @@ func ensureBlobTx(ctx context.Context, tx *sql.Tx, vaultID, blobID, contentHash 
 				},
 			}
 		}
+		// A repeated write on a later UTC date can leave two physical keys for this hash.
+		if existingStorageKey != storageKey {
+			_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO retired_object_keys(vault_id,hash,storage_key) VALUES(?,?,?)`, vaultID, contentHash, storageKey)
+			return err
+		}
 		return nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {

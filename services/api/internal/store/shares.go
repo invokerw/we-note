@@ -61,12 +61,15 @@ func (r *Repository) readNoteBlob(ctx context.Context, vault, hash string, size 
 func (r *Repository) readNoteBlobWithQuery(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, vault, hash string, size int64) ([]byte, error) {
-	if size > maxNoteBytes {
-		return nil, fileError(413, "NOTE_TOO_LARGE", "note exceeds 16 MiB")
-	}
 	var storageKey string
 	if err := queryer.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, vault, hash).Scan(&storageKey); err != nil {
 		return nil, err
+	}
+	return r.readNoteBlobAt(ctx, vault, hash, size, storageKey)
+}
+func (r *Repository) readNoteBlobAt(ctx context.Context, vault, hash string, size int64, storageKey string) ([]byte, error) {
+	if size > maxNoteBytes {
+		return nil, fileError(413, "NOTE_TOO_LARGE", "note exceeds 16 MiB")
 	}
 	reader, err := r.blobStore.OpenContext(ctx, vault, hash, storageKey)
 	if err != nil {

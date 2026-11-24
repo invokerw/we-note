@@ -137,3 +137,69 @@ END;
 CREATE TRIGGER IF NOT EXISTS audit_encrypted AFTER INSERT ON encrypted_vaults BEGIN
  INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.owner,'encrypted.create',NEW.id);
 END;
+
+CREATE TABLE IF NOT EXISTS backup_locations (
+ backup_id TEXT PRIMARY KEY REFERENCES backup_jobs(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL, config TEXT NOT NULL, purpose TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS encrypted_objects (
+ vault_id TEXT PRIMARY KEY REFERENCES encrypted_vaults(id) ON DELETE CASCADE,
+ hash TEXT NOT NULL, size INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS account_cleanup (
+ user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, bytes INTEGER NOT NULL, error TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS cleanup_vaults (
+ vault_id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES account_cleanup(user_id) ON DELETE CASCADE
+);
+CREATE TRIGGER IF NOT EXISTS reserve_encrypted_vault_id BEFORE INSERT ON encrypted_vaults
+ WHEN EXISTS(SELECT 1 FROM cleanup_vaults WHERE vault_id=NEW.id) BEGIN SELECT RAISE(ABORT,'vault cleanup in progress'); END;
+CREATE TABLE IF NOT EXISTS garbage_objects (
+ vault_id TEXT NOT NULL, hash TEXT NOT NULL, bytes INTEGER NOT NULL,
+ PRIMARY KEY(vault_id,hash)
+);
+CREATE TABLE IF NOT EXISTS trash_items (
+ vault_id TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,kind TEXT NOT NULL,item TEXT NOT NULL,deleted INTEGER NOT NULL DEFAULT(unixepoch()), PRIMARY KEY(vault_id,kind,item)
+);
+CREATE INDEX IF NOT EXISTS trash_expiry ON trash_items(deleted);
+INSERT OR IGNORE INTO system_settings(key,value,updated_at) VALUES('trash_retention_days','30',CURRENT_TIMESTAMP);
+CREATE TRIGGER IF NOT EXISTS trash_files AFTER UPDATE OF is_deleted ON files WHEN NEW.is_deleted<>OLD.is_deleted BEGIN
+ DELETE FROM trash_items WHERE vault_id=NEW.vault_id AND kind='file' AND item=NEW.id;
+ INSERT INTO trash_items(vault_id,kind,item) SELECT NEW.vault_id,'file',NEW.id WHERE NEW.is_deleted=1;
+END;
+INSERT OR IGNORE INTO trash_items(vault_id,kind,item) SELECT vault_id,'file',id FROM files WHERE is_deleted=1;
+CREATE TRIGGER IF NOT EXISTS trash_assets AFTER UPDATE OF is_deleted ON assets WHEN NEW.is_deleted<>OLD.is_deleted BEGIN
+ DELETE FROM trash_items WHERE vault_id=NEW.vault_id AND kind='asset' AND item=NEW.id;
+ INSERT INTO trash_items(vault_id,kind,item) SELECT NEW.vault_id,'asset',NEW.id WHERE NEW.is_deleted=1;
+END;
+INSERT OR IGNORE INTO trash_items(vault_id,kind,item) SELECT vault_id,'asset',id FROM assets WHERE is_deleted=1;
+CREATE TRIGGER IF NOT EXISTS cancel_reclaimed_blob AFTER INSERT ON blobs BEGIN
+ DELETE FROM garbage_objects WHERE vault_id=NEW.vault_id AND hash=NEW.content_hash;
+END;
+
+CREATE TRIGGER IF NOT EXISTS release_vault_garbage AFTER DELETE ON vaults BEGIN
+ DELETE FROM garbage_objects WHERE vault_id=OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS release_encrypted_garbage AFTER DELETE ON encrypted_vaults BEGIN
+ DELETE FROM garbage_objects WHERE vault_id=OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS replace_encrypted_object AFTER UPDATE OF hash ON encrypted_objects WHEN NEW.hash<>OLD.hash BEGIN
+ INSERT OR IGNORE INTO garbage_objects VALUES(OLD.vault_id,OLD.hash,OLD.size);
+ DELETE FROM garbage_objects WHERE vault_id=NEW.vault_id AND hash=NEW.hash;
+END;
+
+CREATE TABLE IF NOT EXISTS retired_object_keys (
+ vault_id TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+ hash TEXT NOT NULL, storage_key TEXT NOT NULL, PRIMARY KEY(vault_id,hash,storage_key)
+);
+CREATE TRIGGER IF NOT EXISTS retire_blobs_key BEFORE DELETE ON blobs WHEN OLD.storage_key IS NOT NULL AND OLD.storage_key<>'' AND EXISTS(SELECT 1 FROM vaults WHERE id=OLD.vault_id) BEGIN
+ INSERT OR IGNORE INTO retired_object_keys VALUES(OLD.vault_id,OLD.content_hash,OLD.storage_key);
+END;
+CREATE TRIGGER IF NOT EXISTS retire_upload_sessions_key BEFORE DELETE ON upload_sessions WHEN OLD.storage_key IS NOT NULL AND OLD.storage_key<>'' AND EXISTS(SELECT 1 FROM vaults WHERE id=OLD.vault_id) BEGIN
+ INSERT OR IGNORE INTO retired_object_keys VALUES(OLD.vault_id,OLD.content_hash,OLD.storage_key);
+END;
+CREATE TRIGGER IF NOT EXISTS retire_export_jobs_key BEFORE DELETE ON export_jobs WHEN OLD.storage_key IS NOT NULL AND OLD.storage_key<>'' AND EXISTS(SELECT 1 FROM vaults WHERE id=OLD.vault_id) BEGIN
+ INSERT OR IGNORE INTO retired_object_keys VALUES(OLD.vault_id,OLD.hash,OLD.storage_key);
+END;
