@@ -114,7 +114,7 @@
 | --- | --- |
 | 启动命令 | `./scripts/local.py start --port 18080` |
 | 地址和端口 | `http://localhost:18080` |
-| PID | `77794`，以 `./scripts/local.py status` 为准 |
+| PID | `93462`，以 `./scripts/local.py status` 为准 |
 | 日志 | `dist/local/server.log` |
 | 数据目录 | `services/api/data`，由任务 worktree 管理 |
 | 测试账户或初始化步骤 | 打开 `/gm`，从 `services/api/data/setup.token` 复制初始化令牌，使用独立管理员邮箱创建账号 |
@@ -199,3 +199,12 @@
 ## 2026-11-24 备份恢复与存储配置
 
 在原 GM 分支（本轮基线 `eb47c6d`）上继续。管理员可以分别配置备份和在线笔记正文、历史版本、附件与导出的存储位置，支持本地、S3、WebDAV。切换前须迁移并读回校验。恢复需二次确认、先备份当前实例并校验，再恢复所选时间点。验收覆盖旧备份、远程读回、失败时保护当前数据、恢复后的登录和持久化。
+
+| 验证项目 | 结果 |
+| --- | --- |
+| 红阶段 | `go -C services/api test ./internal/httpapi -run TestAdminBackupCanCreateVerifyAndStageRestore -count=1` 退出 1，新确认接口返回 404。`TestGMStorageMigrationAndRemoteBackup` 首次因缺少配置接口编译失败，加入加密库用例后因旧密文未迁移再次失败。 |
+| 服务端 | `go -C services/api test -count=1 ./...`、`go -C services/api vet ./...`、`go -C services/api test -race ./internal/store ./internal/httpapi -count=1` 均退出 0。临时服务覆盖 S3、WebDAV、迁移失败、配置重载、远程读回、同步游标更新与恢复前备份撤回。 |
+| 浏览器 | `npm run build --prefix apps/web` 和 `node apps/web/tests/gm.mjs` 退出 0。Chrome 已验证迁移目录、恢复二次确认和取消、重新登录以及读回笔记与附件。 |
+| 验收实例 | 原任务实例 18080 已重启，健康检查正常，GM 入口返回 200。所有恢复操作仅在临时实例执行。远程存储使用本地协议测试，真实服务商和大规模数据集待验收。 |
+
+2026-11-24 状态为 `DELIVERED`，等待用户验收。
