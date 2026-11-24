@@ -6,7 +6,7 @@
 | 基线 | 本地 `main` · `722fae3` |
 | 分支 | `codex/docs-mantine-workspace-20261124` |
 | worktree | `.worktrees/mantine-workspace` |
-| 状态 | `IN_PROGRESS` |
+| 状态 | `DELIVERED` |
 
 ## 需求与验收
 
@@ -22,3 +22,5 @@
 - 完稿后在任务工作区运行临时 Python 检查脚本 `verify.py`，退出 0。确认 8 节设计、17 个本地文件引用及两张可解码的配图。官方组件说明书链接列于设计正文。
 - 自审时对照 `LibraryUI.tsx` 的实际快捷键、`PhoneUI.tsx` 的系统返回处理、`desktop.tsx` 的本地保存，以及 Rust `catalog` 的联网路径。修正草稿离开动作的表述，重绘示意图中缺失的菜单箭头，目视检查两张最终配图。`git diff --check` 退出 0。
 - 交付入口为[笔记工作区设计](../笔记工作区设计.md)。按本文前两节审阅桌面和手机流程，再核对跨端功能及验收场景。
+
+2026-11-24 `DELIVERED`。设计提交 `1acd78b` 已快进合入本地 `main`，`git merge-base --is-ancestor 1acd78b main` 退出 0。保留分支和 worktree 供用户评审及返工。
