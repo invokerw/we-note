@@ -76,7 +76,7 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	api.linkRoutes(mux)
 	api.securityRoutes(mux)
 	api.adminRoutes(mux)
-	return mux
+	return api.maintenanceMux(mux)
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {

@@ -2,9 +2,7 @@ package blob
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +12,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -23,10 +23,17 @@ type S3Store struct {
 }
 
 func NewS3Store(ctx context.Context, bucket, prefix, endpoint, region string) (*S3Store, error) {
+	return NewS3WithCredentials(ctx, bucket, prefix, endpoint, region, "", "")
+}
+func NewS3WithCredentials(ctx context.Context, bucket, prefix, endpoint, region, username, secret string) (*S3Store, error) {
 	if bucket == "" || region == "" {
 		return nil, errors.New("S3 bucket and region required")
 	}
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	opts := []func(*config.LoadOptions) error{config.WithRegion(region)}
+	if username != "" {
+		opts = append(opts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(username, secret, "")))
+	}
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -38,50 +45,30 @@ func NewS3Store(ctx context.Context, bucket, prefix, endpoint, region string) (*
 	})
 	return &S3Store{client, bucket, strings.Trim(prefix, "/")}, nil
 }
-func (s *S3Store) key(vault, hash string) (string, error) {
-	if !vaultIDPattern.MatchString(vault) || !hashPattern.MatchString(hash) {
-		return "", errors.New("invalid blob identity")
-	}
-	digest := strings.TrimPrefix(hash, "sha256:")
-	return path.Join(s.prefix, "blobs", vault, digest[:2], digest), nil
-}
 func (s *S3Store) Put(ctx context.Context, vault, hash string, size int64, source io.Reader) (string, error) {
-	key, err := s.key(vault, hash)
+	key, err := (RemoteStore{s}).Put(ctx, vault, hash, size, source)
 	if err != nil {
 		return "", err
 	}
-	if size < 0 {
-		return "", errors.New("invalid size")
-	}
-	temp, err := os.CreateTemp("", "wenote-s3-*")
-	if err != nil {
-		return "", err
-	}
-	defer os.Remove(temp.Name())
-	defer temp.Close()
-	digest := sha256.New()
-	n, err := copyWithContext(ctx, io.MultiWriter(temp, digest), source)
-	if err != nil {
-		return "", err
-	}
-	sum := digest.Sum(nil)
-	if n != size || "sha256:"+hex.EncodeToString(sum) != hash {
-		return "", errors.New("S3 upload content mismatch")
-	}
-	if _, err = temp.Seek(0, io.SeekStart); err != nil {
-		return "", err
-	}
-	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{Bucket: &s.bucket, Key: &key, Body: temp, ContentLength: &size, ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(sum))})
-	if err != nil {
-		return "", fmt.Errorf("put S3 blob: %w", err)
-	}
-	return key, nil
+	return path.Join(s.prefix, key), nil
 }
 func (s *S3Store) OpenContext(ctx context.Context, vault, hash string) (io.ReadCloser, error) {
-	key, err := s.key(vault, hash)
-	if err != nil {
-		return nil, err
+	return (RemoteStore{s}).OpenContext(ctx, vault, hash)
+}
+func (s *S3Store) PutFile(ctx context.Context, name string, f *os.File, size int64, sum []byte) error {
+	key := path.Join(s.prefix, name)
+	if size >= 64<<20 {
+		_, err := transfermanager.New(s.client).UploadObject(ctx, &transfermanager.UploadObjectInput{Bucket: &s.bucket, Key: &key, Body: f, ContentLength: &size})
+		return err
 	}
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{Bucket: &s.bucket, Key: &key, Body: f, ContentLength: &size, ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(sum))})
+	if err != nil {
+		return fmt.Errorf("put S3 object: %w", err)
+	}
+	return nil
+}
+func (s *S3Store) GetFile(ctx context.Context, name string) (io.ReadCloser, error) {
+	key := path.Join(s.prefix, name)
 	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: &s.bucket, Key: &key})
 	if err != nil {
 		return nil, err

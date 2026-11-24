@@ -137,3 +137,13 @@ END;
 CREATE TRIGGER IF NOT EXISTS audit_encrypted AFTER INSERT ON encrypted_vaults BEGIN
  INSERT INTO audit_events(owner,action,object_id) VALUES(NEW.owner,'encrypted.create',NEW.id);
 END;
+
+CREATE TABLE IF NOT EXISTS backup_locations (
+ backup_id TEXT PRIMARY KEY REFERENCES backup_jobs(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL, config TEXT NOT NULL, purpose TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS encrypted_objects (
+ vault_id TEXT PRIMARY KEY REFERENCES encrypted_vaults(id) ON DELETE CASCADE,
+ hash TEXT NOT NULL, size INTEGER NOT NULL
+);

@@ -124,6 +124,7 @@ try {
   for (const page of [gm, user]) page.setDefaultTimeout(7000);
   const owner = "admin@example.test",
     email = "member@example.test",
+    ownerPassword = randomUUID(),
     first = randomUUID(),
     next = randomUUID(),
     last = randomUUID();
@@ -132,7 +133,7 @@ try {
     .getByLabel("服务器初始化令牌")
     .fill((await readFile(join(temp, "data/setup.token"), "utf8")).trim());
   await gm.getByLabel("邮箱", { exact: true }).fill(owner);
-  await gm.getByLabel("密码", { exact: true }).fill(randomUUID());
+  await gm.getByLabel("密码", { exact: true }).fill(ownerPassword);
   await button(gm, "创建管理员并登录").click();
   await gm.getByRole("heading", { name: "服务端总览", exact: true }).waitFor();
   await gm.setViewportSize({ width: 390, height: 844 });
@@ -231,7 +232,7 @@ try {
   await button(user, "重置密码").click();
   await user.getByText(/密码已重置/).waitFor();
   assert.equal((await login(next)).status, 401);
-  const valid = (await (await login(last)).json()).access_token;
+  let valid = (await (await login(last)).json()).access_token;
   assert.ok(valid);
   const vault = await json(origin, "vaults", valid, "POST", {
       name: "恢复验收",
@@ -331,45 +332,75 @@ try {
   assert.equal(await button(gm, "批量移入回收站").isDisabled(), true);
   await button(gm, "操作记录").click();
   await gm.getByRole("cell", { name: "smtp_test", exact: true }).waitFor();
+  await button(gm, "存储配置").click();
+  const online = gm.locator("form#online");
+  await online.getByRole("combobox", { name: "存储方式" }).click();
+  await gm
+    .locator(".ant-select-dropdown")
+    .getByTitle("本地目录", { exact: true })
+    .click();
+  await online.getByLabel("在线数据目录").fill(join(temp, "migrated"));
+  await button(online, "迁移在线存储").click();
+  await button(gm.getByRole("dialog"), "确认迁移").click();
+  await gm.getByText("在线内容已校验，存储已切换").waitFor();
+  const backupConfig = gm.locator("form#backup");
+  await backupConfig.getByLabel("本地备份目录").fill(join(temp, "archives"));
+  await button(backupConfig, "保存备份存储").click();
+  await gm.getByText("备份存储已保存").waitFor();
   await button(gm, "备份").click();
   await button(gm, "立即备份").click();
   await button(gm, "校验").click();
   await gm.getByText("备份校验通过").waitFor();
-  await button(gm, "准备恢复").click();
-  const status = gm.getByRole("status").filter({ hasText: "恢复目录：" });
-  await status.waitFor();
-  const staged = resolve(
-    temp,
-    (await status.textContent()).replace("恢复目录：", ""),
+  const laterNote = await json(origin, base + "/files", valid, "POST", {
+    path: "after-backup.md",
+    content: Buffer.from("later").toString("base64"),
+  });
+  await button(gm, "恢复备份").click();
+  await button(gm.getByRole("dialog"), "取消").click();
+  assert.equal(
+    (
+      await api(
+        origin,
+        base + "/files/" + laterNote.file_id + "/content",
+        valid,
+      )
+    ).status,
+    200,
   );
-  const recovered = await start([
-    "-db",
-    join(staged, "wenote.db"),
-    "-blobs",
-    join(staged, "storage"),
-  ]);
-  const restoredUser = (await (await login(last, recovered)).json())
-    .access_token;
-  assert.ok(restoredUser);
-  const restoredNote = await api(
-    recovered,
-    base + "/files/" + note.file_id + "/content",
-    restoredUser,
+  await button(gm, "恢复备份").click();
+  await button(gm.getByRole("dialog"), "备份当前数据并恢复").click();
+  await button(
+    gm.getByRole("dialog", { name: "备份已恢复" }),
+    "重新登录",
+  ).click();
+  assert.equal((await api(origin, "me", valid)).status, 401);
+  await gm.getByLabel("邮箱", { exact: true }).fill(owner);
+  await gm.getByLabel("密码", { exact: true }).fill(ownerPassword);
+  await button(gm, "登录").click();
+  await button(gm, "备份").click();
+  await gm.getByRole("cell", { name: "恢复前自动备份" }).waitFor();
+  valid = (await (await login(last)).json()).access_token;
+  assert.ok(valid);
+  assert.equal(
+    (
+      await api(
+        origin,
+        base + "/files/" + laterNote.file_id + "/content",
+        valid,
+      )
+    ).status,
+    404,
   );
-  assert.equal(await restoredNote.text(), content);
-  assert.deepEqual(
-    await readFile(
-      join(
-        staged,
-        "storage",
-        "blobs",
-        vault.id,
-        asset.content_hash.slice(7, 9),
-        asset.content_hash.slice(7),
-      ),
-    ),
-    bytes,
+  assert.equal(
+    await (
+      await api(origin, base + "/files/" + note.file_id + "/content", valid)
+    ).text(),
+    content,
   );
+  const downloaded = await fetch(origin + "/assets/" + asset.asset_id, {
+    headers: { Authorization: "Bearer " + valid },
+  });
+  assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), bytes);
   await button(gm, "用户").click();
   if (previewDir) {
     await button(gm, "总览").click();

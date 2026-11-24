@@ -25,10 +25,13 @@ var (
 )
 
 type Repository struct {
+	managedOnline bool
 	db            *sqlite.Database
 	blobStore     blob.Store
 	publicBase    string
 	settingsKey   []byte
+	Maintenance   sync.RWMutex
+	startupStore  blob.Store
 	backupMu      sync.Mutex
 	mailBase      string
 	exportMu      sync.Mutex
@@ -42,7 +45,7 @@ func NewRepository(db *sqlite.Database, blobStores ...blob.Store) *Repository {
 	}
 	key := make([]byte, 32)
 	_, _ = rand.Read(key)
-	return &Repository{db: db, blobStore: blobStore, publicBase: "https://localhost:8443", settingsKey: key}
+	return &Repository{db: db, blobStore: blobStore, startupStore: blobStore, publicBase: "https://localhost:8443", settingsKey: key}
 }
 
 func (r *Repository) SetSettingsKey(key []byte) error {

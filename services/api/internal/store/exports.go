@@ -193,6 +193,8 @@ func (r *Repository) RunExports() {
 	go r.processExports()
 }
 func (r *Repository) processExports() {
+	r.Maintenance.RLock()
+	defer r.Maintenance.RUnlock()
 	ctx := context.Background()
 	for {
 		var id, vault string

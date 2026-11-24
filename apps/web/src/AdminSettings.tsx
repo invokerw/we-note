@@ -136,11 +136,8 @@ export function SettingsPanel({
           </Form.Item>
         </div>
       </Card>
-      <Card title="本地备份">
+      <Card title="备份计划">
         <div className="gm-fields">
-          <Form.Item name="backup_root" label="备份目录">
-            <Input />
-          </Form.Item>
           <Form.Item name="backup_schedule" label="自动备份">
             <Select
               options={[

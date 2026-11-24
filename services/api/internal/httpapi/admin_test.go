@@ -240,6 +240,41 @@ func TestAdminBackupCanCreateVerifyAndStageRestore(t *testing.T) {
 	if restored.Code != http.StatusAccepted {
 		t.Fatalf("backup restore status = %d, body = %s", restored.Code, restored.Body.String())
 	}
+	apply := "/api/v1/admin/backups/" + job.ID + "/apply"
+	if got := requestJSON(t, mux, "POST", apply, token, map[string]string{"confirm": "wrong"}); got.Code != 400 {
+		t.Fatalf("missing confirmation: %d", got.Code)
+	}
+	if _, err := db.Exec(`UPDATE system_settings SET value='open' WHERE key='registration_mode'`); err != nil {
+		t.Fatal(err)
+	}
+	got := requestJSON(t, mux, "POST", apply, token, map[string]string{"confirm": job.ID})
+	if got.Code != 200 {
+		t.Fatalf("apply: %d %s", got.Code, got.Body.String())
+	}
+	var result struct {
+		Safety string `json:"safety_backup_id"`
+	}
+	decodeResponse(t, got, &result)
+	if result.Safety == "" || repo.VerifyBackup(context.Background(), result.Safety) != nil {
+		t.Fatal("missing safety backup")
+	}
+	policy, err := repo.RegistrationPolicy(context.Background())
+	if err != nil || policy.RegistrationMode != "invite_only" {
+		t.Fatal(policy, err)
+	}
+	if got := requestJSON(t, mux, "GET", "/api/v1/me", token, nil); got.Code != 401 {
+		t.Fatal("old session survived restore")
+	}
+	token = loginUser(t, mux, "owner@example.com", "owner password")
+	got = requestJSON(t, mux, "POST", "/api/v1/admin/backups/"+result.Safety+"/apply", token, map[string]string{"confirm": result.Safety})
+	if got.Code != 200 {
+		t.Fatal(got.Body.String())
+	}
+	policy, err = repo.RegistrationPolicy(context.Background())
+	if err != nil || policy.RegistrationMode != "open" {
+		t.Fatal("safety rollback", policy, err)
+	}
+
 }
 
 func TestDailyBackupRunsOnceAndMailHistoryRequiresAdmin(t *testing.T) {

@@ -41,6 +41,7 @@ import {
   Status,
 } from "./AdminUI";
 import { SettingsPanel, type Settings } from "./AdminSettings";
+import { StorageConfigPanel, storageNames } from "./AdminStorageConfig";
 import { Inventory } from "./AdminInventory";
 import { Logs } from "./AdminDetails";
 import { request } from "./api";
@@ -62,6 +63,8 @@ type Invite = {
   created_at: string;
 };
 type Backup = {
+  purpose?: string;
+  destination?: keyof typeof storageNames;
   id: string;
   status: string;
   path?: string;
@@ -92,6 +95,12 @@ const pages = [
     label: "备份",
     title: "备份与恢复",
     icon: CloudUploadOutlined,
+  },
+  {
+    id: "storage-config",
+    label: "存储配置",
+    title: "存储配置",
+    icon: CloudServerOutlined,
   },
   { id: "logs", label: "操作记录", title: "操作记录", icon: HistoryOutlined },
   {
@@ -158,6 +167,8 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
     [busy, setBusy] = useState(false),
     [dialog, setDialog] = useState<"invite" | "mail" | null>(null),
     [emailForm] = Form.useForm<{ address: string }>();
+  const [restoreTarget, setRestoreTarget] = useState<Backup>();
+  const [safetyID, setSafetyID] = useState("");
   const active = pages.find((p) => p.id === tab)!;
   async function data(path: string) {
     return (await request(token, "/api/v1/admin/" + path)).json();
@@ -209,9 +220,7 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
       setNotice(
         result.delivery_status
           ? "邮件投递状态 " + result.delivery_status
-          : result.path && path.endsWith("/restore")
-            ? "恢复目录：" + result.path
-            : success,
+          : success,
       );
     });
   }
@@ -533,6 +542,12 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
               }
             />
           )}
+          {tab === "storage-config" && (
+            <div className="gm-settings">
+              <StorageConfigPanel token={token} scope="online" />
+              <StorageConfigPanel token={token} scope="backup" />
+            </div>
+          )}
           {tab === "storage" && (
             <Inventory
               revision={revision}
@@ -567,6 +582,17 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
                     dataIndex: "created_at",
                     render: formatDate,
                   },
+                  {
+                    title: "类型",
+                    render: (_, b) =>
+                      b.purpose === "before_restore"
+                        ? "恢复前自动备份"
+                        : "常规备份",
+                  },
+                  {
+                    title: "存储",
+                    render: (_, b) => storageNames[b.destination || "local"],
+                  },
                   { title: "状态", render: (_, b) => backupStatus(b) },
                   { title: "大小", dataIndex: "size", render: formatBytes },
                   {
@@ -595,11 +621,14 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
                           </Button>
                           <Button
                             type="link"
-                            onClick={() =>
-                              action(`backups/${b.id}/restore`, "准备恢复完成")
-                            }
+                            danger
+                            disabled={busy}
+                            onClick={() => {
+                              setError("");
+                              setRestoreTarget(b);
+                            }}
                           >
-                            准备恢复
+                            恢复备份
                           </Button>
                         </Space>
                       ),
@@ -610,6 +639,62 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
           )}
         </main>
       </div>
+      <Modal
+        title="恢复备份"
+        open={!!restoreTarget}
+        okText="备份当前数据并恢复"
+        cancelText="取消"
+        okButtonProps={{ danger: true }}
+        confirmLoading={busy}
+        closable={!busy}
+        keyboard={!busy}
+        mask={{ closable: !busy }}
+        cancelButtonProps={{ disabled: busy }}
+        onCancel={() => setRestoreTarget(undefined)}
+        onOk={() =>
+          restoreTarget &&
+          void run(async () => {
+            const response = await request(
+              token,
+              `/api/v1/admin/backups/${restoreTarget.id}/apply`,
+              "POST",
+              { confirm: restoreTarget.id },
+            );
+            const result = await response.json();
+            setRestoreTarget(undefined);
+            setSafetyID(result.safety_backup_id);
+          })
+        }
+      >
+        {restoreTarget && (
+          <p>
+            将所有用户、笔记和附件恢复至{" "}
+            <strong>{formatDate(restoreTarget.created_at)}</strong>。备份大小为{" "}
+            {formatBytes(restoreTarget.size)}。
+          </p>
+        )}
+        <p>
+          恢复期间会暂停访问。服务器会先备份并校验当前数据。完成后，所有用户都需要用备份时的账户密码重新登录。
+        </p>
+        {error && <Alert type="error" title={error} showIcon />}
+      </Modal>
+      <Modal
+        title="备份已恢复"
+        open={!!safetyID}
+        closable={false}
+        keyboard={false}
+        mask={{ closable: false }}
+        footer={
+          <Button type="primary" onClick={logout}>
+            重新登录
+          </Button>
+        }
+      >
+        <p>
+          恢复前的数据已保存。如需撤回，可在备份列表中选择这份「恢复前自动备份」。
+        </p>
+        <code>{safetyID}</code>
+      </Modal>
       <Modal
         title={dialog === "invite" ? "创建邀请" : "发送测试邮件"}
         open={dialog !== null}

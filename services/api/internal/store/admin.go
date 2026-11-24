@@ -91,6 +91,8 @@ type AdminSettings struct {
 }
 
 type BackupJob struct {
+	Destination string     `json:"destination,omitempty"`
+	Purpose     string     `json:"purpose,omitempty"`
 	ID          string     `json:"id"`
 	Status      string     `json:"status"`
 	Path        string     `json:"path,omitempty"`
@@ -759,7 +761,7 @@ func (r *Repository) SaveBackupJob(ctx context.Context, job BackupJob, actor str
 }
 
 func (r *Repository) ListBackupJobs(ctx context.Context) ([]BackupJob, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id,status,path,size,checksum,error,created_at,COALESCE(completed_at,'') FROM backup_jobs ORDER BY created_at DESC`)
+	rows, err := r.db.QueryContext(ctx, `SELECT j.id,status,path,size,checksum,error,created_at,COALESCE(completed_at,''),COALESCE(l.kind,'local'),COALESCE(l.purpose,'') FROM backup_jobs j LEFT JOIN backup_locations l ON l.backup_id=j.id ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -768,7 +770,7 @@ func (r *Repository) ListBackupJobs(ctx context.Context) ([]BackupJob, error) {
 	for rows.Next() {
 		var item BackupJob
 		var created, completed string
-		if err := rows.Scan(&item.ID, &item.Status, &item.Path, &item.Size, &item.Checksum, &item.Error, &created, &completed); err != nil {
+		if err := rows.Scan(&item.ID, &item.Status, &item.Path, &item.Size, &item.Checksum, &item.Error, &created, &completed, &item.Destination, &item.Purpose); err != nil {
 			return nil, err
 		}
 		if item.CreatedAt, err = parseTime(created); err != nil {

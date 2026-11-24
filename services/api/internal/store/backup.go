@@ -24,6 +24,9 @@ type backupManifest struct {
 }
 
 func (r *Repository) CreateBackup(ctx context.Context, actor string) (BackupJob, error) {
+	return r.createBackup(ctx, actor, "")
+}
+func (r *Repository) createBackup(ctx context.Context, actor, purpose string) (BackupJob, error) {
 	if !r.backupMu.TryLock() {
 		return BackupJob{}, ErrConflict
 	}
@@ -75,7 +78,7 @@ func (r *Repository) CreateBackup(ctx context.Context, actor string) (BackupJob,
 		return r.failBackup(ctx, job, actor, temporary, gzipWriter, tarWriter, err)
 	}
 	defer db.Close()
-	rows, err := db.QueryContext(ctx, `SELECT vault_id,content_hash,content_size FROM blobs UNION SELECT vault_id,hash,size FROM export_jobs WHERE status='completed' ORDER BY 1,2`)
+	rows, err := db.QueryContext(ctx, backedUpObjects)
 	if err != nil {
 		return r.failBackup(ctx, job, actor, temporary, gzipWriter, tarWriter, err)
 	}
@@ -138,6 +141,9 @@ func (r *Repository) CreateBackup(ctx context.Context, actor string) (BackupJob,
 	if err := gzipWriter.Close(); err != nil {
 		return r.failBackup(ctx, job, actor, temporary, gzipWriter, nil, err)
 	}
+	if err := temporary.Sync(); err != nil {
+		return r.failBackup(ctx, job, actor, temporary, nil, nil, err)
+	}
 	if err := temporary.Close(); err != nil {
 		return r.failBackup(ctx, job, actor, temporary, nil, nil, err)
 	}
@@ -158,6 +164,9 @@ func (r *Repository) CreateBackup(ctx context.Context, actor string) (BackupJob,
 	job.Size = info.Size()
 	job.Checksum = checksum
 	job.CompletedAt = &completed
+	if err := r.publishBackup(ctx, job, purpose); err != nil {
+		return r.failBackup(ctx, job, actor, nil, nil, nil, err)
+	}
 	if _, err := r.db.ExecContext(context.WithoutCancel(ctx), `UPDATE backup_jobs SET status=?,path=?,size=?,checksum=?,completed_at=? WHERE id=?`, job.Status, job.Path, job.Size, job.Checksum, formatTime(completed), job.ID); err != nil {
 		return job, err
 	}
@@ -231,19 +240,9 @@ func fileChecksum(path string) (string, error) {
 }
 
 func (r *Repository) VerifyBackup(ctx context.Context, id string) error {
-	var path, expected string
-	if err := r.db.QueryRowContext(ctx, `SELECT path,checksum FROM backup_jobs WHERE id=? AND status='completed'`, id).Scan(&path, &expected); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
-		}
-		return err
-	}
-	actual, err := fileChecksum(path)
+	path, err := r.archivePath(ctx, id)
 	if err != nil {
 		return err
-	}
-	if actual != expected {
-		return errors.New("备份 SHA-256 校验失败")
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -275,6 +274,9 @@ func (r *Repository) VerifyBackup(ctx context.Context, id string) error {
 			if err := json.NewDecoder(tarReader).Decode(&manifest); err != nil {
 				return err
 			}
+			if manifest.Version != 1 {
+				return errors.New("不支持的备份格式版本")
+			}
 		}
 	}
 	if !foundDatabase || !foundManifest {
@@ -299,6 +301,9 @@ func (r *Repository) RestoreBackup(ctx context.Context, id string) (string, erro
 		root = "./data/backups"
 	}
 	if err != nil && !errors.Is(err, ErrNotFound) {
+		return "", err
+	}
+	if err := os.MkdirAll(root, 0750); err != nil {
 		return "", err
 	}
 	staging, err := os.MkdirTemp(root, "restore-"+id+"-")
@@ -330,6 +335,9 @@ func (r *Repository) RestoreBackup(ctx context.Context, id string) (string, erro
 		if readErr != nil {
 			return "", readErr
 		}
+		if !filepath.IsLocal(header.Name) || (header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeDir) {
+			return "", errors.New("备份包含无效的文件路径或类型")
+		}
 		target := filepath.Join(staging, filepath.Clean(header.Name))
 		if !strings.HasPrefix(target, filepath.Clean(staging)+string(os.PathSeparator)) {
 			return "", errors.New("backup contains an unsafe path")
@@ -343,7 +351,7 @@ func (r *Repository) RestoreBackup(ctx context.Context, id string) (string, erro
 		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return "", err
 		}
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o640)
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
 		if err != nil {
 			return "", err
 		}
@@ -362,6 +370,8 @@ func (r *Repository) RestoreBackup(ctx context.Context, id string) (string, erro
 
 // RunDueBackup starts at most one archive per configured interval on this instance.
 func (r *Repository) RunDueBackup(ctx context.Context, now time.Time) error {
+	r.Maintenance.RLock()
+	defer r.Maintenance.RUnlock()
 	var schedule string
 	var actor, last sql.NullString
 	err := r.db.QueryRowContext(ctx, `SELECT value,updated_by,(SELECT MAX(created_at) FROM backup_jobs) FROM system_settings WHERE key='backup_schedule'`).Scan(&schedule, &actor, &last)

@@ -48,6 +48,9 @@ func (a *API) adminRoutes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/admin/smtp/test", a.adminSMTPTest)
 	m.HandleFunc("GET /api/v1/admin/mail", a.adminMail)
 	m.HandleFunc("GET /api/v1/admin/audit", a.adminAudit)
+	m.HandleFunc(applyPattern, a.adminApplyBackup)
+	m.HandleFunc(storagePattern, a.adminStorageConfig)
+	m.HandleFunc("GET /api/v1/admin/storage/{scope}", a.adminStorageConfig)
 	m.HandleFunc("GET /api/v1/admin/backups", a.adminBackups)
 	m.HandleFunc("POST /api/v1/admin/backups", a.adminCreateBackup)
 	m.HandleFunc("POST /api/v1/admin/backups/{backup_id}/verify", a.adminVerifyBackup)
@@ -365,9 +368,6 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "registration_mode must be open, invite_only or closed")
 		return
 	}
-	if input.BackupRoot == "" {
-		input.BackupRoot = "./data/backups"
-	}
 	smtp := store.SMTPConfig{
 		Host: input.SMTP.Host, Port: input.SMTP.Port, Security: input.SMTP.Security,
 		Username: input.SMTP.Username, Password: input.SMTP.Password,
@@ -392,7 +392,10 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "INVALID_REQUEST", "请检查 SMTP 端口、加密方式和邮箱地址")
 		return
 	}
-	values := map[string]string{"registration_mode": input.RegistrationMode, "require_email_verification": strconv.FormatBool(input.RequireEmailVerification), "backup_root": input.BackupRoot, "backup_schedule": input.BackupSchedule}
+	values := map[string]string{"registration_mode": input.RegistrationMode, "require_email_verification": strconv.FormatBool(input.RequireEmailVerification), "backup_schedule": input.BackupSchedule}
+	if input.BackupRoot != "" {
+		values["backup_root"] = input.BackupRoot
+	}
 	if err := a.repository.SaveAdminSettings(r.Context(), admin.ID, values, smtp); err != nil {
 		resourceError(w, err)
 		return

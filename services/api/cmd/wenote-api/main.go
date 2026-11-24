@@ -68,6 +68,9 @@ func main() {
 		log.Fatalf("configure settings key: %v", err)
 	}
 
+	if err := repository.LoadOnlineStorage(ctx); err != nil {
+		log.Fatalf("load online storage: %v", err)
+	}
 	if err := repository.SetPublicBase(*publicBase); err != nil {
 		log.Fatal(err)
 	}
