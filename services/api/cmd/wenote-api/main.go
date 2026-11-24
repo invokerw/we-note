@@ -2,11 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,15 +30,18 @@ func main() {
 	s3Region := flag.String("s3-region", "us-east-1", "S3 region")
 	s3Prefix := flag.String("s3-prefix", "", "S3 object key prefix")
 	publicBase := flag.String("public-url", "https://localhost:8443", "public HTTPS origin for asset links")
+	mailBase := flag.String("mail-url", "", "origin for account emails (defaults to public-url)")
 	tlsCert := flag.String("tls-cert", "", "TLS certificate file")
 	tlsKey := flag.String("tls-key", "", "TLS key file")
 	webDir := flag.String("web-dir", "", "built React web app directory")
+	settingsKeyFile := flag.String("settings-key-file", "./data/settings.key", "persistent key for encrypted server settings")
 	flag.Parse()
 
 	if err := os.MkdirAll("./data", 0o750); err != nil {
 		log.Fatalf("create data directory: %v", err)
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	database, err := sqlite.Open(ctx, *databasePath)
 	if err != nil {
 		log.Fatalf("open database: %v", err)
@@ -52,16 +60,76 @@ func main() {
 		log.Fatalf("open blob store: %v", err)
 	}
 	repository := store.NewRepository(database, blobStore)
+	settingsKey, err := loadSettingsKey(*settingsKeyFile)
+	if err != nil {
+		log.Fatalf("load settings key: %v", err)
+	}
+	if err := repository.SetSettingsKey(settingsKey); err != nil {
+		log.Fatalf("configure settings key: %v", err)
+	}
 
+	if err := repository.LoadOnlineStorage(ctx); err != nil {
+		log.Fatalf("load online storage: %v", err)
+	}
 	if err := repository.SetPublicBase(*publicBase); err != nil {
 		log.Fatal(err)
 	}
+	if *mailBase != "" {
+		if err := repository.SetMailBase(*mailBase); err != nil {
+			log.Fatal(err)
+		}
+	}
+	initialized, err := repository.HasAdmin(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !initialized && os.Getenv("WENOTE_SETUP_TOKEN") == "" {
+		path := filepath.Join(filepath.Dir(*databasePath), "setup.token")
+		secret, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			key := make([]byte, 32)
+			if _, err = rand.Read(key); err != nil {
+				log.Fatal(err)
+			}
+			secret = []byte(hex.EncodeToString(key))
+			err = writeNewSecret(path, secret)
+		}
+		if err != nil || len(strings.TrimSpace(string(secret))) < 32 {
+			log.Fatal("cannot initialize setup token file")
+		}
+		os.Setenv("WENOTE_SETUP_TOKEN", strings.TrimSpace(string(secret)))
+		log.Printf("GM setup token file: %s", path)
+	}
+	if _, err = database.ExecContext(ctx, `UPDATE backup_jobs SET status='failed',error='服务已重启',completed_at=? WHERE status='running'`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		log.Fatal(err)
+	}
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				repository.CleanupInBackground()
+				if err := repository.RunDueBackup(ctx, now); err != nil {
+					log.Printf("scheduled backup: %v", err)
+				}
+			}
+		}
+	}()
 	repository.RunExports()
 	mux := httpapi.NewMux(repository)
 	if *webDir != "" {
 		web := http.FileServer(http.Dir(*webDir))
 		mux.Handle("GET /{$}", web)
 		mux.Handle("GET /static/", web)
+		mux.HandleFunc("GET /gm", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, *webDir+"/index.html")
+		})
+		mux.HandleFunc("GET /gm/", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, *webDir+"/index.html")
+		})
 	}
 	server := &http.Server{
 		Addr:              *address,
@@ -88,4 +156,38 @@ func main() {
 	if err != nil && err != http.ErrServerClosed {
 		log.Fatalf("serve HTTP: %v", err)
 	}
+}
+
+func loadSettingsKey(path string) ([]byte, error) {
+	key, err := os.ReadFile(path)
+	if err == nil {
+		if len(key) != 32 {
+			return nil, fmt.Errorf("settings key file must contain 32 bytes")
+		}
+		return key, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+	key = make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	if err := writeNewSecret(path, key); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func writeNewSecret(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
 }

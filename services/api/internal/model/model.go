@@ -3,9 +3,12 @@ package model
 import "time"
 
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	ID              string     `json:"id"`
+	Email           string     `json:"email"`
+	Role            string     `json:"role,omitempty"`
+	Status          string     `json:"status,omitempty"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type Vault struct {

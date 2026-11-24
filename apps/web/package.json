@@ -8,6 +8,7 @@
     "build:desktop": "tsc --noEmit && vite build --mode desktop"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.3.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.12",
@@ -22,6 +23,7 @@
     "@mantine/core": "9.8.2",
     "@mantine/hooks": "9.8.2",
     "@noble/hashes": "^2.0.1",
+    "antd": "^6.7.2",
     "codemirror": "^6.0.2",
     "fflate": "^0.8.3",
     "jsonc-parser": "^3.3.1",

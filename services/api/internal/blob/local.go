@@ -36,7 +36,7 @@ func (s *LocalStore) Put(ctx context.Context, vaultID, contentHash string, conte
 }
 
 func (s *LocalStore) PutAt(ctx context.Context, vaultID, contentHash string, contentSize int64, createdAt time.Time, source io.Reader) (string, error) {
-	if !vaultIDPattern.MatchString(vaultID) {
+	if _, err := vaultPrefix(vaultID); err != nil {
 		return "", fmt.Errorf("invalid vault id %q", vaultID)
 	}
 	if !hashPattern.MatchString(contentHash) {
@@ -46,8 +46,11 @@ func (s *LocalStore) PutAt(ctx context.Context, vaultID, contentHash string, con
 		return "", errors.New("content size cannot be negative")
 	}
 
-	hexHash := contentHash[len("sha256:"):]
-	storageKey := filepath.Join("blobs", vaultID, createdAt.UTC().Format("2006/01/02"), hexHash)
+	storageKey, err := objectKeyAt(vaultID, contentHash, createdAt)
+	if err != nil {
+		return "", err
+	}
+	storageKey = filepath.FromSlash(storageKey)
 	target := filepath.Join(s.root, storageKey)
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return "", fmt.Errorf("create blob directory: %w", err)
@@ -81,18 +84,18 @@ func (s *LocalStore) PutAt(ctx context.Context, vaultID, contentHash string, con
 		if existingInfo.Size() != contentSize {
 			return "", fmt.Errorf("existing blob size mismatch: got %d, want %d", existingInfo.Size(), contentSize)
 		}
-		return storageKey, nil
+		return filepath.ToSlash(storageKey), nil
 	} else if !os.IsNotExist(err) {
 		return "", fmt.Errorf("inspect existing blob: %w", err)
 	}
 
 	if err := os.Rename(temporaryName, target); err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return storageKey, nil
+			return filepath.ToSlash(storageKey), nil
 		}
 		return "", fmt.Errorf("commit blob: %w", err)
 	}
-	return storageKey, nil
+	return filepath.ToSlash(storageKey), nil
 }
 
 func (s *LocalStore) Open(vaultID, contentHash string) (io.ReadCloser, error) {
@@ -103,32 +106,36 @@ func (s *LocalStore) OpenContext(ctx context.Context, vaultID, contentHash, stor
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if !vaultIDPattern.MatchString(vaultID) || !hashPattern.MatchString(contentHash) {
+	if _, err := vaultPrefix(vaultID); err != nil || !hashPattern.MatchString(contentHash) {
 		return nil, errors.New("invalid blob identity")
 	}
 	hexHash := contentHash[len("sha256:"):]
-	var path string
+	var blobPath string
 	if storageKey != "" {
 		var err error
-		path, err = s.pathForOpen(vaultID, hexHash, storageKey)
+		blobPath, err = s.pathForOpen(vaultID, hexHash, storageKey)
 		if err != nil {
 			return nil, err
 		}
-	}
-	if storageKey == "" {
-		legacyPath := filepath.Join(s.root, "blobs", vaultID, hexHash[:2], hexHash)
+	} else {
+		legacyKey, err := objectKey(vaultID, contentHash)
+		if err != nil {
+			return nil, err
+		}
+		legacyPath := filepath.Join(s.root, filepath.FromSlash(legacyKey))
 		file, err := os.Open(legacyPath)
 		if err == nil {
 			return file, nil
 		}
-		matches, globErr := filepath.Glob(filepath.Join(s.root, "blobs", vaultID, "*", "*", "*", hexHash))
+		prefix, _ := vaultPrefix(vaultID)
+		matches, globErr := filepath.Glob(filepath.Join(s.root, prefix, "*", "*", "*", hexHash))
 		if globErr == nil && len(matches) > 0 {
-			path = matches[0]
+			blobPath = matches[0]
 		} else {
-			path = legacyPath
+			blobPath = legacyPath
 		}
 	}
-	file, err := os.Open(path)
+	file, err := os.Open(blobPath)
 	if err != nil {
 		return nil, fmt.Errorf("open blob: %w", err)
 	}
@@ -136,9 +143,13 @@ func (s *LocalStore) OpenContext(ctx context.Context, vaultID, contentHash, stor
 }
 
 func (s *LocalStore) pathForOpen(vaultID, hexHash, storageKey string) (string, error) {
+	prefix, err := vaultPrefix(vaultID)
+	if err != nil {
+		return "", err
+	}
 	clean := filepath.Clean(filepath.FromSlash(storageKey))
-	prefix := filepath.Join("blobs", vaultID) + string(filepath.Separator)
-	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || !strings.HasPrefix(clean, prefix) || filepath.Base(clean) != hexHash {
+	expectedPrefix := filepath.FromSlash(prefix) + string(filepath.Separator)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || !strings.HasPrefix(clean, expectedPrefix) || filepath.Base(clean) != hexHash {
 		return "", errors.New("invalid blob storage key")
 	}
 	return filepath.Join(s.root, clean), nil

@@ -60,13 +60,18 @@ func TestSyncUploadSubmitPullReplayAndManifest(t *testing.T) {
 
 	base := []byte("# Roadmap v1\n")
 	baseHash := digest(base)
-	if _, err := blobStore.Put(ctx, vault.ID, baseHash, int64(len(base)), bytes.NewReader(base)); err != nil {
+	ns, err := blob.VaultNamespace(user.ID, vault.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := blobStore.Put(ctx, ns, baseHash, int64(len(base)), bytes.NewReader(base))
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.ExecContext(ctx, `
 		INSERT INTO blobs(id, vault_id, content_hash, content_size, storage_key, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-		`, "blob_"+baseHash[len("sha256:"):], vault.ID, baseHash, len(base), "blobs/"+vault.ID+"/"+baseHash[len("sha256:"):][:2]+"/"+baseHash[len("sha256:"):], "2026-11-21T09:00:00Z"); err != nil {
+		`, "blob_"+baseHash[len("sha256:"):], vault.ID, baseHash, len(base), key, "2026-11-21T09:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.ExecContext(ctx, `

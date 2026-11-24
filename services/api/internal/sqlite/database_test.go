@@ -99,7 +99,7 @@ func TestFileMigrationPreservesPopulatedVersionChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Exercise the rebuild with the same references and rows an existing installation holds.
-	_, err = db.Exec(`INSERT INTO users VALUES ('u','a@b','hash','now');INSERT INTO vaults(id,owner_user_id,name,created_at) VALUES('v','u','one','now'),('w','u','two','now');INSERT INTO blobs VALUES('b','v','hash',0,'key','now');INSERT INTO files(id,vault_id,path,format,current_version_id,created_at,updated_at) VALUES('f','v','a.md','md','a','now','now');INSERT INTO file_versions(id,vault_id,file_id,blob_id,content_hash,content_size,vault_revision,created_at) VALUES('a','v','f','b','hash',0,1,'now');DELETE FROM schema_migrations WHERE version=3; DROP TABLE file_requests;`)
+	_, err = db.Exec(`INSERT INTO users(id,email,password_hash,created_at) VALUES ('u','a@b','hash','now');INSERT INTO vaults(id,owner_user_id,name,created_at) VALUES('v','u','one','now'),('w','u','two','now');INSERT INTO blobs VALUES('b','v','hash',0,'key','now');INSERT INTO files(id,vault_id,path,format,current_version_id,created_at,updated_at) VALUES('f','v','a.md','md','a','now','now');INSERT INTO file_versions(id,vault_id,file_id,blob_id,content_hash,content_size,vault_revision,created_at) VALUES('a','v','f','b','hash',0,1,'now');DELETE FROM schema_migrations WHERE version=3; DROP TABLE file_requests;`)
 	if err != nil {
 		t.Fatal(err)
 	}

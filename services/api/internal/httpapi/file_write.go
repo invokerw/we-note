@@ -50,7 +50,21 @@ func (a *API) trash(w http.ResponseWriter, r *http.Request) {
 		resourceError(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"files": files})
+	items, err := a.repository.TrashItems(r.Context(), r.PathValue("vault_id"))
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	user, ok := a.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	vault, err := a.repository.VaultForUser(r.Context(), user.ID, r.PathValue("vault_id"))
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"files": files, "items": items, "can_manage": vault.OwnerUserID == user.ID})
 }
 func (a *API) versionContent(w http.ResponseWriter, r *http.Request) {
 	if !a.canReadFiles(w, r) {
@@ -85,4 +99,29 @@ func (a *API) changeEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) manageTrash(w http.ResponseWriter, r *http.Request) {
+	user, ok := a.authenticatedUser(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Operation string `json:"operation"`
+		Kind      string `json:"kind"`
+		ID        string `json:"id"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, 400, "INVALID_REQUEST", "请选择回收站操作")
+		return
+	}
+	held, err := a.repository.ManageTrash(r.Context(), user.ID, r.PathValue("vault_id"), input.Operation, input.Kind, input.ID)
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	if input.Operation != "restore" {
+		go a.repository.CleanupInBackground()
+	}
+	writeJSON(w, 200, map[string]int{"retained": held})
 }

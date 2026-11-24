@@ -15,10 +15,11 @@ import (
 
 type API struct {
 	repository *store.Repository
+	mailer     Mailer
 }
 
 func NewAPI(repository *store.Repository) *API {
-	return &API{repository: repository}
+	return &API{repository: repository, mailer: SMTPMailer{}}
 }
 
 func NewMux(repository *store.Repository) *http.ServeMux {
@@ -51,6 +52,7 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.HandleFunc("PATCH /api/v1/vaults/{vault_id}/files/{file_id}", api.writeFile("move_file"))
 	mux.HandleFunc("DELETE /api/v1/vaults/{vault_id}/files/{file_id}", api.writeFile("delete_file"))
 	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/files/{file_id}/restore", api.writeFile("restore_file"))
+	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/trash", api.manageTrash)
 	mux.HandleFunc("GET /api/v1/vaults/{vault_id}/trash", api.trash)
 	mux.HandleFunc("GET /api/v1/vaults/{vault_id}/files/{file_id}/versions/{version_id}/content", api.versionContent)
 	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/assets/uploads", api.createAsset)
@@ -75,7 +77,8 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	api.shareRoutes(mux)
 	api.linkRoutes(mux)
 	api.securityRoutes(mux)
-	return mux
+	api.adminRoutes(mux)
+	return api.maintenanceMux(mux)
 }
 
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
@@ -84,8 +87,17 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	if !strings.Contains(request.Email, "@") || len(request.Password) < 8 {
+	if !validEmail(request.Email) || len(request.Password) < 8 {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "email and a password of at least 8 characters are required")
+		return
+	}
+	settings, err := a.repository.RegistrationPolicy(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not load registration policy")
+		return
+	}
+	if settings.RegistrationMode != "open" {
+		writeError(w, http.StatusForbidden, "REGISTRATION_DISABLED", "registration requires an invitation")
 		return
 	}
 	hash, err := password.Hash(request.Password)
@@ -93,13 +105,23 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not hash password")
 		return
 	}
-	user, err := a.repository.CreateUser(r.Context(), request.Email, hash)
+	user, err := a.repository.CreatePendingUser(r.Context(), request.Email, hash)
 	if errors.Is(err, store.ErrConflict) {
 		writeError(w, http.StatusConflict, "EMAIL_ALREADY_REGISTERED", "email is already registered")
 		return
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not create user")
+		return
+	}
+	if settings.RequireEmailVerification {
+		verificationToken, tokenErr := a.repository.CreateEmailVerificationToken(r.Context(), user.ID, 24*time.Hour)
+		if tokenErr != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not create email verification")
+			return
+		}
+		delivery := a.deliverEmail(r.Context(), "verification", user.Email, "验证你的 WeNote 邮箱", "请打开以下地址验证邮箱。\n\n"+a.repository.MailBase()+"/#verify="+verificationToken)
+		writeJSON(w, 201, map[string]any{"verification_required": true, "delivery_status": delivery})
 		return
 	}
 	writeJSON(w, http.StatusCreated, user)
@@ -116,11 +138,29 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "email or password is incorrect")
 		return
 	}
-	session, err := a.repository.CreateSession(r.Context(), user.ID, 30*time.Minute)
+	if user.Status == "deleted" {
+		writeError(w, 403, "ACCOUNT_DELETED", "账户已移入回收站，请联系管理员")
+		return
+	}
+	if user.Status == "disabled" {
+		writeError(w, http.StatusForbidden, "ACCOUNT_DISABLED", "account is disabled")
+		return
+	}
+	settings, settingsErr := a.repository.RegistrationPolicy(r.Context())
+	if settingsErr != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not load account policy")
+		return
+	}
+	if settings.RequireEmailVerification && user.EmailVerifiedAt == nil {
+		writeError(w, http.StatusForbidden, "EMAIL_NOT_VERIFIED", "email verification is required")
+		return
+	}
+	session, err := a.repository.CreateLoginSession(r.Context(), user.ID, hash, 30*time.Minute)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not create session")
 		return
 	}
+	_ = a.repository.MarkLogin(r.Context(), user.ID)
 	writeJSON(w, http.StatusOK, session)
 }
 

@@ -23,6 +23,7 @@ func TestFileReadEndpoints(t *testing.T) {
 	if err := database.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
+	enableOpenRegistration(t, database)
 	blobStore, err := blob.NewLocalStore(filepath.Join(t.TempDir(), "storage"))
 	if err != nil {
 		t.Fatal(err)
@@ -40,9 +41,13 @@ func TestFileReadEndpoints(t *testing.T) {
 	latest := []byte("# Roadmap v2\n\n- read endpoint\n")
 	baseHash := digest(base)
 	latestHash := digest(latest)
+	ns, err := blob.VaultNamespace(user.ID, vault.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, content := range [][]byte{base, latest} {
 		hash := digest(content)
-		storageKey, err := blobStore.Put(ctx, vault.ID, hash, int64(len(content)), bytes.NewReader(content))
+		storageKey, err := blobStore.Put(ctx, ns, hash, int64(len(content)), bytes.NewReader(content))
 		if err != nil {
 			t.Fatal(err)
 		}

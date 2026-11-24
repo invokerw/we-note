@@ -28,6 +28,7 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 		if err = db.Migrate(ctx); err != nil {
 			t.Fatal(err)
 		}
+		enableOpenRegistration(t, db)
 		b, err := blob.NewLocalStore(filepath.Join(dir, "blobs"))
 		if err != nil {
 			t.Fatal(err)
@@ -115,7 +116,8 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 	if err := db.QueryRow(`SELECT storage_key FROM upload_sessions WHERE id=?`, asset.Upload).Scan(&storageKey); err != nil {
 		t.Fatal(err)
 	}
-	wantKey := filepath.Join("blobs", v.ID, asset.CreatedAt.UTC().Format("2006/01/02"), strings.TrimPrefix(asset.Hash, "sha256:"))
+	digest := strings.TrimPrefix(asset.Hash, "sha256:")
+	wantKey := filepath.Join("users", alice.ID, "vaults", v.ID, asset.CreatedAt.UTC().Format("2006/01/02"), digest)
 	if storageKey != wantKey {
 		t.Fatalf("storage key = %q, want %q", storageKey, wantKey)
 	}
