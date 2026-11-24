@@ -114,7 +114,7 @@
 | --- | --- |
 | 启动命令 | `./scripts/local.py start --port 18080` |
 | 地址和端口 | `http://localhost:18080` |
-| PID | `93462`，以 `./scripts/local.py status` 为准 |
+| PID | `96529`，以 `./scripts/local.py status` 为准 |
 | 日志 | `dist/local/server.log` |
 | 数据目录 | `services/api/data`，由任务 worktree 管理 |
 | 测试账户或初始化步骤 | 打开 `/gm`，从 `services/api/data/setup.token` 复制初始化令牌，使用独立管理员邮箱创建账号 |
@@ -208,3 +208,16 @@
 | 验收实例 | 原任务实例 18080 已重启，健康检查正常，GM 入口返回 200。所有恢复操作仅在临时实例执行。远程存储使用本地协议测试，真实服务商和大规模数据集待验收。 |
 
 2026-11-24 状态为 `DELIVERED`，等待用户验收。
+
+## 2026-11-24 存储位置库与用途分配
+
+在原任务分支（本轮基线 `1490cb4`）继续。验收覆盖添加多个同类型命名位置、编辑位置、在线内容与备份独立选择或共用、旧配置接入、迁移失败保留原选择、重启及恢复后保留位置库。使用临时实例执行 Go 和 GM 浏览器测试。
+
+| 本轮验收 | 命令与结果 |
+| --- | --- |
+| 失败测试 | `go -C services/api test ./internal/httpapi -run '^TestStorageLocationCatalog$' -count=1` 退出 1，新目录接口返回 404。 |
+| 服务端 | `go -C services/api test -count=1 ./...`、`go -C services/api vet ./...`、`go -C services/api test -race ./internal/store ./internal/httpapi -count=1` 均退出 0。覆盖独立选择和共用、共享位置修改和失败回滚、过期编辑、旧客户端、凭据隐藏与恢复后的目录保留。 |
+| Web | `npm run build --prefix apps/web`、`node apps/web/tests/gm.mjs` 退出 0。Chrome 验证同类型位置新增和改名、取消迁移、共用后独立切换、在用位置移除保护及备份恢复。 |
+| 用户入口 | `http://localhost:18080/gm` → 存储配置。健康检查通过，GM 返回 200。实际数据迁移和恢复测试使用临时实例。 |
+
+状态为 `DELIVERED`，在任务分支等待用户验收。

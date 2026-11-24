@@ -551,3 +551,9 @@
   padding: 0;
   background: transparent;
 }
+
+.gm-location { display: grid; gap: 3px; max-width: min(31vw, 26rem); }
+.gm-location small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #626578; }
+.gm-storage-binding { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.gm-storage-binding label { font-weight: 600; }
+.gm-storage-binding small { color: #626578; line-height: 1.6; }

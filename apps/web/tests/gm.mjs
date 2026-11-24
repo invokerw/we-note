@@ -333,20 +333,45 @@ try {
   await button(gm, "操作记录").click();
   await gm.getByRole("cell", { name: "smtp_test", exact: true }).waitFor();
   await button(gm, "存储配置").click();
-  const online = gm.locator("form#online");
-  await online.getByRole("combobox", { name: "存储方式" }).click();
-  await gm
-    .locator(".ant-select-dropdown")
-    .getByTitle("本地目录", { exact: true })
-    .click();
-  await online.getByLabel("在线数据目录").fill(join(temp, "migrated"));
-  await button(online, "迁移在线存储").click();
-  await button(gm.getByRole("dialog"), "确认迁移").click();
-  await gm.getByText("在线内容已校验，存储已切换").waitFor();
-  const backupConfig = gm.locator("form#backup");
-  await backupConfig.getByLabel("本地备份目录").fill(join(temp, "archives"));
-  await button(backupConfig, "保存备份存储").click();
-  await gm.getByText("备份存储已保存").waitFor();
+  const locationRow = (name) =>
+    gm.getByRole("row").filter({ has: gm.getByText(name, { exact: true }) });
+  async function addLocation(name, dir) {
+    await button(gm, "添加存储位置").click();
+    const dialog = gm.getByRole("dialog", { name: "添加存储位置" });
+    await dialog.getByLabel("位置名称").fill(name);
+    await dialog.getByLabel("本地目录").fill(dir);
+    await button(dialog, "保存位置").click();
+    await locationRow(name).getByText("未使用").waitFor();
+  }
+  async function selectLocation(scope, name, confirm) {
+    const select = gm.getByRole("combobox", { name: scope, exact: true });
+    await select.click();
+    const list = await select.getAttribute("aria-controls");
+    await gm
+      .locator(".ant-select-dropdown")
+      .filter({ has: gm.locator("#" + list) })
+      .getByTitle(name, { exact: true })
+      .click();
+    await button(gm.getByRole("dialog"), confirm).click();
+  }
+  await addLocation("笔记磁盘", join(temp, "migrated"));
+  await addLocation("备份磁盘", join(temp, "archives"));
+  await button(locationRow("笔记磁盘"), "编辑").click();
+  const editor = gm.getByRole("dialog", { name: "编辑存储位置" });
+  await editor.getByLabel("位置名称").fill("工作室 NAS");
+  await button(editor, "保存位置").click();
+  await locationRow("工作室 NAS").waitFor();
+  await selectLocation("在线内容", "工作室 NAS", "取消");
+  await locationRow("工作室 NAS").getByText("未使用").waitFor();
+  await selectLocation("在线内容", "工作室 NAS", "确认迁移");
+  await locationRow("工作室 NAS")
+    .getByText("在线内容", { exact: true })
+    .waitFor();
+  await selectLocation("备份", "工作室 NAS", "确认切换");
+  await locationRow("工作室 NAS").getByText("备份", { exact: true }).waitFor();
+  assert.ok(await button(locationRow("工作室 NAS"), "移除").isDisabled());
+  await selectLocation("备份", "备份磁盘", "确认切换");
+  await locationRow("备份磁盘").getByText("备份", { exact: true }).waitFor();
   await button(gm, "备份").click();
   await button(gm, "立即备份").click();
   await button(gm, "校验").click();

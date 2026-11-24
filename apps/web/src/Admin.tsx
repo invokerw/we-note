@@ -543,10 +543,7 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
             />
           )}
           {tab === "storage-config" && (
-            <div className="gm-settings">
-              <StorageConfigPanel token={token} scope="online" />
-              <StorageConfigPanel token={token} scope="backup" />
-            </div>
+            <StorageConfigPanel token={token} />
           )}
           {tab === "storage" && (
             <Inventory

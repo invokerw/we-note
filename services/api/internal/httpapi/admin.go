@@ -49,6 +49,9 @@ func (a *API) adminRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/admin/mail", a.adminMail)
 	m.HandleFunc("GET /api/v1/admin/audit", a.adminAudit)
 	m.HandleFunc(applyPattern, a.adminApplyBackup)
+	for _, pattern := range []string{"GET /api/v1/admin/storage-catalog", "POST /api/v1/admin/storage-catalog/profiles", "PUT /api/v1/admin/storage-catalog/profiles/{id}", "DELETE /api/v1/admin/storage-catalog/profiles/{id}", "PUT /api/v1/admin/storage-catalog/bindings/{scope}"} {
+		m.HandleFunc(pattern, a.adminStorageCatalog)
+	}
 	m.HandleFunc(storagePattern, a.adminStorageConfig)
 	m.HandleFunc("GET /api/v1/admin/storage/{scope}", a.adminStorageConfig)
 	m.HandleFunc("GET /api/v1/admin/backups", a.adminBackups)

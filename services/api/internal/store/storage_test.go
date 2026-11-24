@@ -127,6 +127,13 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 			if err := fresh.ConfigureStorage(ctx, "owner", "backup", StorageConfig{Kind: "local"}); err != nil {
 				t.Fatal(err)
 			}
+			catalog, err := fresh.StorageCatalog(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = fresh.SaveStorageProfile(ctx, "owner", "", "备用位置", StorageConfig{Kind: "local", Directory: filepath.Join(root, "unused")}, catalog.Revision); err != nil {
+				t.Fatal(err)
+			}
 			if err := fresh.VerifyBackup(ctx, job.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -144,6 +151,15 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 			failReads = false
 			if _, err := fresh.ApplyBackup(ctx, "owner", job.ID); err != nil {
 				t.Fatal(err)
+			}
+			after, err := fresh.StorageCatalog(ctx)
+			if err != nil || after.Online != catalog.Online || after.Backup != catalog.Backup || after.Profiles[len(after.Profiles)-1].Name != "备用位置" {
+				t.Fatal("current catalog lost after restore", err)
+			}
+			for _, p := range after.Profiles {
+				if p.Secret != "" {
+					t.Fatal("catalog exposed stored credentials")
+				}
 			}
 			if _, err = fresh.PullSyncChanges(ctx, "v", "device", 55); err == nil {
 				t.Fatal("pre-restore cursor still accepted")
