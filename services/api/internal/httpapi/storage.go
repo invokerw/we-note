@@ -16,7 +16,9 @@ func (a *API) maintenanceMux(inner *http.ServeMux) *http.ServeMux {
 	outer.Handle("/healthz", inner)
 	outer.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		gate := &a.repository.Maintenance
-		if !gate.TryRLock() {
+		if a.repository.Cleaning.Load() {
+			gate.RLock()
+		} else if !gate.TryRLock() {
 			w.Header().Set("Retry-After", "5")
 			writeError(w, 503, "MAINTENANCE", "正在迁移存储或恢复备份，请稍后重试")
 			return

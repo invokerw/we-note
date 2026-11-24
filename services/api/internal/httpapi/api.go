@@ -52,6 +52,7 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.HandleFunc("PATCH /api/v1/vaults/{vault_id}/files/{file_id}", api.writeFile("move_file"))
 	mux.HandleFunc("DELETE /api/v1/vaults/{vault_id}/files/{file_id}", api.writeFile("delete_file"))
 	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/files/{file_id}/restore", api.writeFile("restore_file"))
+	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/trash", api.manageTrash)
 	mux.HandleFunc("GET /api/v1/vaults/{vault_id}/trash", api.trash)
 	mux.HandleFunc("GET /api/v1/vaults/{vault_id}/files/{file_id}/versions/{version_id}/content", api.versionContent)
 	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/assets/uploads", api.createAsset)

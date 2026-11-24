@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/weifei/we-note/services/api/internal/blob"
@@ -86,7 +88,7 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 			defer srv.Close()
 			const encryptedID = "ef721403-7744-4dd2-937a-3db614f6bd33"
 			envelope := Envelope{IV: make([]byte, 12), Ciphertext: []byte("encrypted content predating GM")}
-			if _, err = repo.SaveEncrypted(ctx, "owner", encryptedID, envelope); err != nil {
+			if _, err = db.Exec(`INSERT INTO encrypted_vaults VALUES(?,?,1,?,?,CURRENT_TIMESTAMP)`, encryptedID, "owner", envelope.Ciphertext, envelope.IV); err != nil {
 				t.Fatal(err)
 			}
 			profile := StorageConfig{Kind: kind, Endpoint: srv.URL, Username: "account", Secret: "secret", Bucket: "bucket", Region: "us-east-1"}
@@ -181,9 +183,321 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 			if err := fresh.ConfigureStorage(ctx, "owner", "online", dest); err != nil {
 				t.Fatal(err)
 			}
-			b, err := os.ReadFile(filepath.Join(dest.Directory, key))
+			b, err := os.ReadFile(filepath.Join(dest.Directory, "users", "owner", "vaults", strings.TrimPrefix(key, "blobs/")))
 			if err != nil || string(b) != text {
 				t.Fatal("missing migrated note", err)
+			}
+		})
+	}
+}
+
+func TestOwnedStorageAndAccountCleanup(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	db, err := sqlite.Open(ctx, filepath.Join(root, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	local, _ := blob.NewLocalStore(root)
+	r := NewRepository(db, local)
+	admin, _ := r.CreateUser(ctx, "admin@test.test", "hash")
+	alice, _ := r.CreateUser(ctx, "alice@test.test", "hash")
+	bob, _ := r.CreateUser(ctx, "bob@test.test", "hash")
+	content := "same bytes"
+	hash := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(content)))
+	keys := map[string]string{}
+	vaults := map[string]string{}
+	for _, id := range []string{alice.ID, bob.ID} {
+		v, err := r.CreateVault(ctx, id, "Notes")
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err := r.blobStore.Put(ctx, v.ID, hash, int64(len(content)), strings.NewReader(content))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(key, "users/"+id+"/vaults/"+v.ID+"/") {
+			t.Errorf("unscoped key %s", key)
+		}
+		keys[id] = filepath.Join(root, key)
+		vaults[id] = v.ID
+	}
+	if _, err = r.WriteFile(ctx, alice.ID, vaults[alice.ID], "", "create_file", "", FileWrite{Path: "shared.md", Content: []byte("shared contents")}); err != nil {
+		t.Fatal(err)
+	}
+	share, err := r.ShareFiles(ctx, alice.ID, "share", ShareRequest{Vault: vaults[alice.ID], Recipient: bob.Email, Paths: []string{"shared.md"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	imported, err := r.AcceptShare(ctx, bob.ID, share.ID, vaults[bob.ID], "imported")
+	if err != nil || len(imported) != 1 {
+		t.Fatal(imported, err)
+	}
+	if err = r.ChangeUserStatus(ctx, admin.ID, alice.ID, "delete", "", alice.Email); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.RunCleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(keys[alice.ID]); err != nil {
+		t.Fatal("legacy account lost data", err)
+	}
+	if err = r.ChangeUserStatus(ctx, admin.ID, alice.ID, "purge", "", bob.Email); err == nil {
+		t.Fatal("wrong confirmation accepted")
+	}
+	if err = r.ChangeUserStatus(ctx, admin.ID, alice.ID, "purge", "", alice.Email); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.RunCleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(keys[alice.ID]); !os.IsNotExist(err) {
+		t.Fatal("deleted account kept object", err)
+	}
+	if _, err = os.Stat(keys[bob.ID]); err != nil {
+		t.Fatal("other owner lost object", err)
+	}
+	_, in, err := r.OpenFileContent(ctx, vaults[bob.ID], imported[0].FileID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer in.Close()
+	data, err := io.ReadAll(in)
+	if err != nil || string(data) != "shared contents" {
+		t.Fatal("imported copy damaged", err)
+	}
+}
+
+func TestTrashExpiryReferencesAndLegacyLayout(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	db, err := sqlite.Open(ctx, filepath.Join(root, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	local, _ := blob.NewLocalStore(root)
+	r := NewRepository(db, local)
+	user, err := r.CreateUser(ctx, "user@example.test", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := r.CreateVault(ctx, user.ID, "Notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "attachment"
+	hash := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(text)))
+	a, err := r.CreateAsset(ctx, user.ID, v.ID, "plain.txt", "text/plain", hash, "", int64(len(text)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.CompleteUploadSession(ctx, v.ID, a.Upload, strings.NewReader(text)); err != nil {
+		t.Fatal(err)
+	}
+	var key string
+	if err = db.QueryRow(`SELECT storage_key FROM blobs WHERE content_hash=?`, hash).Scan(&key); err != nil {
+		t.Fatal(err)
+	}
+	newPath := filepath.Join(root, key)
+	oldKey, err := local.Put(ctx, v.ID, hash, int64(len(text)), strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(newPath); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.LoadOnlineStorage(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(newPath); err != nil {
+		t.Fatal("old layout not migrated", err)
+	}
+	if _, err = os.Stat(filepath.Join(root, oldKey)); !os.IsNotExist(err) {
+		t.Fatal("old duplicate still occupies storage", err)
+	}
+	note, err := r.WriteFile(ctx, user.ID, v.ID, "", "create_file", "", FileWrite{Path: "note.md", Content: []byte(a.URL)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := r.WriteFile(ctx, user.ID, v.ID, note.FileID, "update_file_content", "", FileWrite{BaseVersion: note.Version, Content: []byte("current")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.DeleteAsset(ctx, user.ID, v.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.AssetForUser(ctx, user.ID, "", a.ID); err != nil {
+		t.Fatal("historical attachment unreadable", err)
+	}
+	if _, err = r.ManageTrash(ctx, user.ID, v.ID, "purge", "asset", a.ID); err != errPinned {
+		t.Fatal("referenced asset purge", err)
+	}
+	if _, err = r.WriteFile(ctx, user.ID, v.ID, note.FileID, "delete_file", "", FileWrite{BaseVersion: updated.Version}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.ManageTrash(ctx, "someone_else", v.ID, "empty", "", ""); err == nil {
+		t.Fatal("cross-account purge")
+	}
+	if err = r.RunCleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	items, err := r.TrashItems(ctx, v.ID)
+	if err != nil || len(items) != 2 || items[0].Expires-items[0].Deleted != 30*86400 {
+		t.Fatal(items, err)
+	}
+	if _, err = db.Exec(`UPDATE trash_items SET deleted=unixepoch()-86400*31`); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.RunCleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	items, err = r.TrashItems(ctx, v.ID)
+	if err != nil || len(items) != 0 {
+		t.Fatal(items, err)
+	}
+	if _, err = os.Stat(newPath); !os.IsNotExist(err) {
+		t.Fatal("unreferenced asset still on disk", err)
+	}
+	var n int
+	if err = db.QueryRow(`SELECT count(*) FROM blobs`).Scan(&n); err != nil || n != 0 {
+		t.Fatal("unreclaimed blobs", n, err)
+	}
+}
+
+func TestRemotePurgeRetriesAfterRestart(t *testing.T) {
+	for _, kind := range []string{"webdav", "s3"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			root := t.TempDir()
+			db, err := sqlite.Open(ctx, filepath.Join(root, "db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			if err = db.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			local, _ := blob.NewLocalStore(filepath.Join(root, "online"))
+			repo := NewRepository(db, local)
+			admin, err := repo.CreateUser(ctx, "admin@test.test", "hash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			alice, _ := repo.CreateUser(ctx, "a@test.test", "hash")
+			bob, _ := repo.CreateUser(ctx, "b@test.test", "hash")
+			v, _ := repo.CreateVault(ctx, alice.ID, "A")
+			other, _ := repo.CreateVault(ctx, bob.ID, "B")
+			objects := map[string]string{}
+			var reject atomic.Bool
+			var mu sync.Mutex
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				defer mu.Unlock()
+				key := strings.TrimPrefix(r.URL.Path, "/")
+				if kind == "s3" {
+					key = strings.TrimPrefix(key, "bucket/")
+				}
+				switch r.Method {
+				case "MKCOL":
+					w.WriteHeader(201)
+				case "PUT":
+					data, _ := io.ReadAll(r.Body)
+					objects[key] = string(data)
+				case "GET":
+					if r.URL.Query().Get("list-type") == "2" {
+						fmt.Fprint(w, `<ListBucketResult><IsTruncated>false</IsTruncated>`)
+						for k := range objects {
+							if strings.HasPrefix(k, r.URL.Query().Get("prefix")) {
+								fmt.Fprintf(w, "<Contents><Key>%s</Key></Contents>", k)
+							}
+						}
+						fmt.Fprint(w, `</ListBucketResult>`)
+						return
+					}
+					data, ok := objects[key]
+					if !ok {
+						w.WriteHeader(404)
+						return
+					}
+					io.WriteString(w, data)
+				case "DELETE":
+					if reject.Load() {
+						w.WriteHeader(403)
+						return
+					}
+					delete(objects, key)
+					if kind == "webdav" {
+						for k := range objects {
+							if strings.HasPrefix(k, strings.TrimRight(key, "/")+"/") {
+								delete(objects, k)
+							}
+						}
+					}
+					w.WriteHeader(204)
+				default:
+					w.WriteHeader(405)
+				}
+			}))
+			defer srv.Close()
+			profile := StorageConfig{Kind: kind, Endpoint: srv.URL, Username: "u", Secret: "pass", Region: "us-east-1", Bucket: "bucket"}
+			if err = repo.ConfigureStorage(ctx, admin.ID, "online", profile); err != nil {
+				t.Fatal(err)
+			}
+			for _, pair := range [][2]string{{alice.ID, v.ID}, {bob.ID, other.ID}} {
+				if _, err = repo.WriteFile(ctx, pair[0], pair[1], "", "create_file", "", FileWrite{Path: "note.md", Content: []byte("same")}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err = repo.ChangeUserStatus(ctx, admin.ID, alice.ID, "purge", "", alice.Email); err != nil {
+				t.Fatal(err)
+			}
+			reject.Store(true)
+			if err = repo.RunCleanup(ctx); err == nil {
+				t.Fatal("failed remote delete reported success")
+			}
+			users, err := repo.ListAdminUsers(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var status bool
+			for _, u := range users {
+				if u.ID == alice.ID {
+					status = u.CleanupError != "" && u.PendingBytes == 4 && u.Status == "purging"
+				}
+			}
+			if !status {
+				t.Fatal("missing pending bytes and error")
+			}
+			fresh := NewRepository(db, local)
+			fresh.SetSettingsKey(repo.settingsKey)
+			if err = fresh.LoadOnlineStorage(ctx); err != nil {
+				t.Fatal(err)
+			}
+			reject.Store(false)
+			if err = fresh.RunCleanup(ctx); err != nil {
+				t.Fatal(err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			kept := false
+			for k := range objects {
+				if strings.HasPrefix(k, "users/"+alice.ID+"/") {
+					t.Fatal("object remained", k)
+				}
+				if strings.HasPrefix(k, "users/"+bob.ID+"/") {
+					kept = true
+				}
+			}
+			if !kept {
+				t.Fatal("other account lost its object")
 			}
 		})
 	}

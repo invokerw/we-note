@@ -291,16 +291,42 @@ try {
     .waitFor();
   await button(gm.getByRole("dialog"), "确认移入").click();
   await sample.waitFor({ state: "hidden" });
-  await gm.getByText("回收站", { exact: true }).click();
-  await sample.getByRole("checkbox").check();
-  await assetRow("pending.pdf").getByRole("checkbox").check();
-  await button(gm, "批量恢复").click();
-  await button(gm.getByRole("dialog"), "确认恢复").click();
-  await sample.waitFor({ state: "hidden" });
-  await gm
-    .locator(".ant-segmented")
-    .getByText("在用附件", { exact: true })
-    .click();
+  assert.equal(await gm.getByText("回收站", { exact: true }).count(), 0);
+  await user.evaluate(
+    (s) => sessionStorage.setItem("wenote-session", s),
+    valid,
+  );
+  await user.goto(origin + "/");
+  await user.getByLabel("笔记库", { exact: true }).selectOption(vault.id);
+  await button(user, "回收站").click();
+  for (const name of ["sample.txt", "pending.pdf"]) {
+    const item = user.locator(".row").filter({ hasText: name });
+    await item.getByText(/起可自动清理/).waitFor();
+    await button(item, "恢复").click();
+    await item.waitFor({ state: "hidden" });
+  }
+  await user.getByText("回收站为空。").waitFor();
+  for (const name of ["discard-a.md", "discard-b.md"]) {
+    const created = await json(origin, base + "/files", valid, "POST", {
+      path: name,
+      content: Buffer.from("temporary note").toString("base64"),
+    });
+    await json(origin, base + "/files/" + created.file_id, valid, "DELETE", {
+      base_version_id: created.version_id,
+    });
+  }
+  await button(user, "回收站").click();
+  const discard = user.locator(".row").filter({ hasText: "discard-a.md" });
+  user.once("dialog", (d) => d.dismiss());
+  await button(discard, "彻底删除").click();
+  await discard.waitFor();
+  user.once("dialog", (d) => d.accept());
+  await button(discard, "彻底删除").click();
+  await discard.waitFor({ state: "hidden" });
+  user.once("dialog", (d) => d.accept());
+  await button(user, "清空回收站").click();
+  await user.getByText("回收站为空。").waitFor();
+  await button(gm, "刷新").click();
   await sample.waitFor();
   for (let index = 0; index < 10; index++) {
     await json(origin, base + "/assets/uploads", valid, "POST", {
@@ -456,30 +482,25 @@ try {
   assert.equal((await login(last)).status, 403);
   await gm.getByLabel("搜索用户邮箱").fill("member@");
   await button(row, "更多操作").click();
-  await gm.getByRole("menuitem", { name: "删除账户" }).click();
+  await gm.getByRole("menuitem", { name: "移入删除状态" }).click();
   const deletion = gm.getByRole("dialog", { name: "删除账户" });
-  assert.equal(await button(deletion, "确认删除").isDisabled(), true);
+  assert.equal(await button(deletion, "确认移入删除状态").isDisabled(), true);
   await deletion.getByLabel("输入完整邮箱确认").fill(email);
-  await button(deletion, "确认删除").click();
-  await row.waitFor({ state: "hidden" });
-  await gm.getByText("回收站", { exact: true }).click();
+  await button(deletion, "确认移入删除状态").click();
+  await row.getByText("旧版已删除", { exact: true }).waitFor();
   await button(row, "还原账户").click();
-  await row.waitFor({ state: "hidden" });
-  await gm.getByText("用户列表", { exact: true }).click();
-  await button(row, "启用").waitFor();
+  await row.getByRole("button", { name: "启用", exact: true }).waitFor();
   assert.equal((await login(last)).status, 403);
-  await button(row, "启用").click();
-  await row.getByRole("button", { name: "禁用", exact: true }).waitFor();
-  const afterRestore = await (await login(last)).json();
-  assert.ok(afterRestore.access_token);
-  const originalNote = await api(
-    origin,
-    base + "/files/" + note.file_id + "/content",
-    afterRestore.access_token,
-  );
-  assert.equal(await originalNote.text(), content);
+  await button(row, "更多操作").click();
+  await gm.getByRole("menuitem", { name: "永久删除账户" }).click();
+  const purge = gm.getByRole("dialog", { name: "永久删除账户" });
+  await purge.getByLabel("输入完整邮箱确认").fill(email);
+  await button(purge, "确认永久删除").click();
+  await row.waitFor({ state: "hidden" });
+  assert.equal((await login(last)).status, 401);
+  assert.equal(await gm.getByText("回收站", { exact: true }).count(), 0);
   console.log(
-    "GM browser acceptance passed: setup, SMTP, invitation, verification, permissions, passwords, user trash and suspension, filtered multi-page asset selection, batch trash/restore, audit and recovery of note and attachment.",
+    "GM browser acceptance passed including personal trash, owner restore and permanent account deletion.",
   );
 } finally {
   await chrome?.close();

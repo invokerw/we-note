@@ -35,7 +35,7 @@ func (a *API) adminRoutes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/admin/assets/batch", a.adminBatchAssets)
 	m.HandleFunc("GET /api/v1/admin/assets", a.adminAssets)
 	m.HandleFunc("POST /api/v1/admin/assets/{asset_id}/delete", a.adminDeleteAsset)
-	for _, action := range []string{"disable", "enable", "delete", "restore"} {
+	for _, action := range []string{"disable", "enable", "delete", "restore", "purge"} {
 		m.HandleFunc("POST /api/v1/admin/users/{user_id}/"+action, a.adminChangeUserStatus(action))
 	}
 	m.HandleFunc("POST /api/v1/admin/users/{user_id}/reset-password", a.adminResetPassword)
@@ -233,6 +233,11 @@ func (a *API) adminChangeUserStatus(action string) http.HandlerFunc {
 			resourceError(w, err)
 			return
 		}
+		if action == "purge" {
+			go a.repository.CleanupInBackground()
+			writeJSON(w, 202, map[string]string{"status": "purging"})
+			return
+		}
 		w.WriteHeader(204)
 	}
 }
@@ -348,6 +353,7 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
+		TrashDays                *int   `json:"trash_retention_days"`
 		RegistrationMode         string `json:"registration_mode"`
 		RequireEmailVerification bool   `json:"require_email_verification"`
 		BackupSchedule           string `json:"backup_schedule"`
@@ -396,6 +402,13 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	values := map[string]string{"registration_mode": input.RegistrationMode, "require_email_verification": strconv.FormatBool(input.RequireEmailVerification), "backup_schedule": input.BackupSchedule}
+	if input.TrashDays != nil {
+		if *input.TrashDays < 1 || *input.TrashDays > 3650 {
+			writeError(w, 400, "INVALID_REQUEST", "回收站保留天数必须在 1 至 3650 之间")
+			return
+		}
+		values["trash_retention_days"] = strconv.Itoa(*input.TrashDays)
+	}
 	if input.BackupRoot != "" {
 		values["backup_root"] = input.BackupRoot
 	}

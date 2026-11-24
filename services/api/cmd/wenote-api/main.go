@@ -111,6 +111,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case now := <-ticker.C:
+				repository.CleanupInBackground()
 				if err := repository.RunDueBackup(ctx, now); err != nil {
 					log.Printf("scheduled backup: %v", err)
 				}

@@ -157,6 +157,18 @@ func (r *Repository) editCatalog(ctx context.Context, actor string, revision int
 	backup := cat.profile(cat.Backup).StorageConfig
 	var target blob.Store
 	if online != oldOnline {
+		if !sameObjectLocation(online, oldOnline) {
+			if err = r.drainGarbage(ctx); err != nil {
+				return err
+			}
+			var pending bool
+			if err = r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_cleanup UNION ALL SELECT 1 FROM garbage_objects)`).Scan(&pending); err != nil {
+				return err
+			}
+			if pending {
+				return errors.New("请等待当前存储清理完成后再切换在线位置")
+			}
+		}
 		target, err = r.onlineStore(ctx, online)
 		if err != nil {
 			return err
@@ -236,8 +248,9 @@ func (r *Repository) editCatalog(ctx context.Context, actor string, revision int
 		return err
 	}
 	if target != nil {
-		r.blobStore = target
-		r.managedOnline = true
+		if err = r.bindOwners(ctx, target); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -124,13 +124,23 @@ function Auth({ login }: { login: (s: string) => void }) {
     </div>
   );
 }
+type TrashItem = {
+  id: string;
+  kind: "asset" | "file";
+  name: string;
+  expires_at: number;
+};
 function Library({ token, logout }: { token: string; logout: () => void }) {
   const [vaults, setVaults] = useState<Vault[]>([]),
     [vault, setVault] = useState(""),
     [files, setFiles] = useState<Note[]>([]),
     [note, setNote] = useState<Note | null>(null),
     [view, setView] = useState("files"),
-    [trash, setTrash] = useState<Note[]>([]),
+    [trash, setTrash] = useState<{
+      files: Note[];
+      items: TrashItem[];
+      can_manage: boolean;
+    }>({ files: [], items: [], can_manage: false }),
     [shares, setShares] = useState<Share[]>([]),
     [message, msg] = useState(""),
     [origin, setOrigin] = useState(location.origin),
@@ -262,7 +272,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     if (!leave()) return;
     setNote(null);
     if (s === "trash")
-      setTrash((await (await request(token, base + "/trash")).json()).files);
+      setTrash(await (await request(token, base + "/trash")).json());
     if (s === "inbox" || s === "sent")
       setShares(
         (await (await request(token, "/api/v1/shares/" + s)).json()).shares,
@@ -270,6 +280,43 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     if (s === "files") await list();
     setView(s);
     panes.setPane("doc");
+  }
+  async function changeTrash(
+    operation: "restore" | "purge" | "empty",
+    item?: TrashItem,
+  ) {
+    if (
+      operation === "empty" &&
+      !confirm("彻底清空这个笔记库的回收站？仍被引用的项目将保留。")
+    )
+      return;
+    if (
+      operation === "purge" &&
+      !confirm(`彻底删除「${item?.name}」及其历史版本？`)
+    )
+      return;
+    if (operation === "restore" && item?.kind === "file") {
+      const f = trash.files.find((note) => note.file_id === item.id);
+      if (!f) throw Error("笔记已变化，请重新打开回收站");
+      const old = entryPath(f.path, f.current_content_hash),
+        path = prompt("恢复路径", old);
+      if (!path) return;
+      await request(token, base + "/files/" + f.file_id + "/restore", "POST", {
+        base_version_id: f.current_version_id,
+        path: old === f.path ? path : path.replace(/\/$/, "") + "/" + marker,
+      });
+    } else {
+      const result = await (
+        await request(token, base + "/trash", "POST", {
+          operation,
+          kind: item?.kind,
+          id: item?.id,
+        })
+      ).json();
+      if (result.retained) msg(`${result.retained} 个项目仍被引用，已保留。`);
+    }
+    await list();
+    await section("trash");
   }
   async function create(path: string, bytes: Uint8Array) {
     const r = await (
@@ -638,37 +685,51 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                   : "已发送"}
             </h1>
             {view === "trash" &&
-              (trash.length ? (
-                trash.map((f) => (
-                  <div className="row" key={f.file_id}>
-                    {entryPath(f.path, f.current_content_hash)}
-                    <button
-                      onClick={() =>
-                        run(async () => {
-                          const old = entryPath(f.path, f.current_content_hash);
-                          const p = prompt("恢复路径", old);
-                          if (!p) return;
-                          await request(
-                            token,
-                            base + "/files/" + f.file_id + "/restore",
-                            "POST",
-                            {
-                              base_version_id: f.current_version_id,
-                              path:
-                                old === f.path
-                                  ? p
-                                  : p.replace(/\/$/, "") + "/" + marker,
-                            },
-                          );
-                          await list();
-                          await section("trash");
-                        })
-                      }
-                    >
-                      恢复
+              (trash.items.length ? (
+                <>
+                  {trash.can_manage && (
+                    <button onClick={() => run(() => changeTrash("empty"))}>
+                      清空回收站
                     </button>
-                  </div>
-                ))
+                  )}
+                  {trash.items.map((item) => {
+                    const f = trash.files.find((n) => n.file_id === item.id);
+                    return (
+                      <div className="row" key={item.id}>
+                        <span>
+                          {f
+                            ? entryPath(f.path, f.current_content_hash)
+                            : item.name}
+                          <small className="trash-expiry">
+                            {item.kind === "asset" ? "附件" : "笔记"} ·{" "}
+                            {new Date(
+                              item.expires_at * 1000,
+                            ).toLocaleDateString()}{" "}
+                            起可自动清理
+                          </small>
+                        </span>
+                        {(trash.can_manage || item.kind === "file") && (
+                          <button
+                            onClick={() =>
+                              run(() => changeTrash("restore", item))
+                            }
+                          >
+                            恢复
+                          </button>
+                        )}
+                        {trash.can_manage && (
+                          <button
+                            onClick={() =>
+                              run(() => changeTrash("purge", item))
+                            }
+                          >
+                            彻底删除
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
               ) : (
                 <p>回收站为空。</p>
               ))}

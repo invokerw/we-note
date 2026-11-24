@@ -8,7 +8,6 @@ import {
   Dropdown,
   Input,
   Modal,
-  Segmented,
   Select,
   Space,
 } from "antd";
@@ -29,6 +28,9 @@ export type AdminUser = {
   files: number;
   assets: number;
   storage_bytes: number;
+  trash_bytes: number;
+  pending_bytes: number;
+  cleanup_error?: string;
 };
 type Change = (
   path: string,
@@ -38,7 +40,8 @@ type Change = (
 const labels: Record<string, string> = {
   active: "正常",
   disabled: "已禁用",
-  deleted: "已删除",
+  deleted: "旧版已删除",
+  purging: "等待清理",
 };
 export function AdminUsers({
   users,
@@ -53,22 +56,20 @@ export function AdminUsers({
 }) {
   const [query, setQuery] = useState(""),
     [state, setState] = useState("all"),
-    [trash, setTrash] = useState(false),
     [detail, setDetail] = useState(""),
     [operation, setOperation] = useState<{
       user: AdminUser;
-      kind: "disable" | "delete";
+      kind: "disable" | "delete" | "purge";
     } | null>(null),
     [value, setValue] = useState(""),
     [submitted, setSubmitted] = useState(false);
   const items = users.filter(
     (u) =>
-      (u.status === "deleted") === trash &&
-      (trash || state === "all" || state === u.status) &&
+      (state === "all" || state === u.status) &&
       u.email.toLowerCase().includes(query.trim().toLowerCase()),
   );
   const selected = users.find((u) => u.id === detail);
-  function open(user: AdminUser, kind: "disable" | "delete") {
+  function open(user: AdminUser, kind: "disable" | "delete" | "purge") {
     setValue("");
     setSubmitted(false);
     setOperation({ user, kind });
@@ -79,23 +80,22 @@ export function AdminUsers({
     const { user, kind } = operation;
     const ok = await action(
       `users/${user.id}/${kind}`,
-      kind === "delete" ? "账户已移入回收站" : "账户已禁用",
-      kind === "delete" ? { confirm_email: value } : { reason: value.trim() },
+      kind === "purge"
+        ? "已提交永久删除"
+        : kind === "delete"
+          ? "账户已移入删除状态"
+          : "账户已禁用",
+      kind === "delete" || kind === "purge"
+        ? { confirm_email: value }
+        : { reason: value.trim() },
     );
     if (ok) setOperation(null);
   }
-  const deleting = operation?.kind === "delete";
+  const deleting = operation?.kind === "delete" || operation?.kind === "purge";
+  const purging = operation?.kind === "purge";
   return (
     <Card title="账户清单">
       <div className="gm-list-tools">
-        <Segmented
-          value={trash ? "回收站" : "用户列表"}
-          options={["用户列表", "回收站"]}
-          onChange={(v) => {
-            setTrash(v === "回收站");
-            setDetail("");
-          }}
-        />
         <Input
           allowClear
           aria-label="搜索用户邮箱"
@@ -104,7 +104,7 @@ export function AdminUsers({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {!trash && (
+        {
           <Select
             aria-label="筛选账户状态"
             value={state}
@@ -113,9 +113,13 @@ export function AdminUsers({
               { value: "all", label: "全部状态" },
               { value: "active", label: "正常" },
               { value: "disabled", label: "已禁用" },
+              { value: "purging", label: "等待清理" },
+              ...(users.some((u) => u.status === "deleted")
+                ? [{ value: "deleted", label: "旧版已删除" }]
+                : []),
             ]}
           />
-        )}
+        }
         <span>共 {items.length} 个账户</span>
       </div>
       <DataTable<AdminUser>
@@ -151,7 +155,7 @@ export function AdminUsers({
                       : undefined
                 }
               >
-                {labels[u.status]}
+                {u.cleanup_error ? "清理失败" : labels[u.status]}
               </Status>
             ),
           },
@@ -166,26 +170,41 @@ export function AdminUsers({
             sorter: (a, b) => a.storage_bytes - b.storage_bytes,
           },
           {
-            title: trash ? "删除时间" : "最近登录",
-            render: (_, u) =>
-              formatDate(trash ? u.deleted_at : u.last_login_at),
+            title: "最近登录",
+            render: (_, u) => formatDate(u.last_login_at),
           },
           {
             title: "操作",
             render: (_, u) =>
-              u.status === "deleted" ? (
-                <Button
-                  type="link"
-                  disabled={busy}
-                  onClick={() =>
-                    void action(
-                      `users/${u.id}/restore`,
-                      u.disabled_at ? "账户已还原，仍为禁用状态" : "账户已还原",
-                    )
-                  }
-                >
-                  还原账户
-                </Button>
+              u.status === "purging" ? (
+                <Space>
+                  <Button type="link" onClick={() => setDetail(u.id)}>
+                    清理详情
+                  </Button>
+                  {u.cleanup_error && (
+                    <Button onClick={() => open(u, "purge")}>重试</Button>
+                  )}
+                </Space>
+              ) : u.status === "deleted" ? (
+                <Space>
+                  <Button
+                    type="link"
+                    disabled={busy}
+                    onClick={() =>
+                      void action(
+                        `users/${u.id}/restore`,
+                        u.disabled_at
+                          ? "账户已还原，仍为禁用状态"
+                          : "账户已还原",
+                      )
+                    }
+                  >
+                    还原账户
+                  </Button>
+                  <Button type="link" danger onClick={() => open(u, "purge")}>
+                    永久删除
+                  </Button>
+                </Space>
               ) : (
                 <Space size={2}>
                   {u.role !== "system_admin" &&
@@ -248,9 +267,14 @@ export function AdminUsers({
                                 : []),
                               {
                                 key: "delete",
-                                label: "删除账户",
-                                danger: true,
+                                label: "移入删除状态",
                                 onClick: () => open(u, "delete"),
+                              },
+                              {
+                                key: "purge",
+                                label: "永久删除账户",
+                                danger: true,
+                                onClick: () => open(u, "purge"),
                               },
                             ]),
                       ],
@@ -280,7 +304,12 @@ export function AdminUsers({
               笔记库: selected.vaults,
               笔记: selected.files,
               附件: selected.assets,
-              存储占用: formatBytes(selected.storage_bytes),
+              在线对象: formatBytes(selected.storage_bytes),
+              "回收站（逻辑大小）": formatBytes(selected.trash_bytes),
+              待清理: formatBytes(selected.pending_bytes),
+              ...(selected.cleanup_error
+                ? { 清理错误: selected.cleanup_error }
+                : {}),
               ...(selected.disabled_at
                 ? {
                     禁用时间: formatDate(selected.disabled_at),
@@ -296,8 +325,10 @@ export function AdminUsers({
       </Drawer>
       <Modal
         open={!!operation}
-        title={deleting ? "删除账户" : "禁用账户"}
-        okText={deleting ? "确认删除" : "确认禁用"}
+        title={purging ? "永久删除账户" : deleting ? "删除账户" : "禁用账户"}
+        okText={
+          purging ? "确认永久删除" : deleting ? "确认移入删除状态" : "确认禁用"
+        }
         okButtonProps={{
           danger: true,
           disabled: deleting
@@ -312,9 +343,11 @@ export function AdminUsers({
       >
         <p>{operation?.user.email}</p>
         <p>
-          {deleting
-            ? "账户将移入回收站，所有登录会话将被撤销。笔记、附件和邮箱会保留，可从回收站还原。"
-            : "禁用后，所有登录会话将被撤销。该用户需要在重新启用后登录。"}
+          {purging
+            ? `将撤销会话并永久清理该用户的 ${operation?.user.vaults} 个笔记库、${operation?.user.files} 篇在用笔记、${operation?.user.assets} 个在用附件及其回收站。在线数据 ${formatBytes(operation?.user.storage_bytes ?? 0)}。历史整机备份单独保留。`
+            : deleting
+              ? "账户会进入旧版删除状态，数据仍可由管理员还原。"
+              : "禁用后，所有登录会话将被撤销。该用户需要在重新启用后登录。"}
         </p>
         <label>
           {deleting ? "输入完整邮箱确认" : "禁用原因"}

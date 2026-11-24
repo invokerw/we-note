@@ -84,7 +84,7 @@ func (r *Repository) SaveEncrypted(ctx context.Context, user, id string, q Envel
 	defer tx.Rollback()
 	inline := q.Ciphertext
 	hash := ""
-	if r.managedOnline {
+	if r.blobStore != nil {
 		inline = []byte{}
 		hash = fmt.Sprintf("sha256:%x", sha256.Sum256(q.Ciphertext))
 	}
@@ -107,21 +107,26 @@ func (r *Repository) SaveEncrypted(ctx context.Context, user, id string, q Envel
 	if err != nil {
 		return v, err
 	}
-	if r.managedOnline {
-		if err = writeEnvelope(ctx, tx, r.blobStore, id, hash, q.Ciphertext); err != nil {
+	if r.blobStore != nil {
+		if err = writeEnvelope(ctx, tx, unwrap(r.blobStore), user, id, hash, q.Ciphertext); err != nil {
 			return v, err
 		}
 	} else if _, err = tx.ExecContext(ctx, `DELETE FROM encrypted_objects WHERE vault_id=?`, id); err != nil {
 		return v, err
 	}
+	r.owners.Store(id, user)
 	return v, tx.Commit()
 }
-func writeEnvelope(ctx context.Context, tx *sql.Tx, target blob.Store, id, hash string, data []byte) error {
-	size := int64(len(data))
-	if _, err := target.Put(ctx, id, hash, size, bytes.NewReader(data)); err != nil {
+func writeEnvelope(ctx context.Context, tx *sql.Tx, target blob.Store, owner, id, hash string, data []byte) error {
+	ns, err := blob.VaultNamespace(owner, id)
+	if err != nil {
 		return err
 	}
-	out, err := target.OpenContext(ctx, id, hash)
+	size := int64(len(data))
+	if _, err := target.Put(ctx, ns, hash, size, bytes.NewReader(data)); err != nil {
+		return err
+	}
+	out, err := target.OpenContext(ctx, ns, hash)
 	if err != nil {
 		return err
 	}
@@ -134,9 +139,9 @@ func writeEnvelope(ctx context.Context, tx *sql.Tx, target blob.Store, id, hash 
 func migrateEnvelopes(ctx context.Context, tx *sql.Tx, target blob.Store) error {
 	cursor := ""
 	for {
-		var id string
+		var id, owner string
 		var data []byte
-		err := tx.QueryRowContext(ctx, `SELECT id,ciphertext FROM encrypted_vaults WHERE id>? AND length(ciphertext)>0 ORDER BY id LIMIT 1`, cursor).Scan(&id, &data)
+		err := tx.QueryRowContext(ctx, `SELECT id,owner,ciphertext FROM encrypted_vaults WHERE id>? AND length(ciphertext)>0 ORDER BY id LIMIT 1`, cursor).Scan(&id, &owner, &data)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -144,7 +149,7 @@ func migrateEnvelopes(ctx context.Context, tx *sql.Tx, target blob.Store) error 
 			return err
 		}
 		hash := fmt.Sprintf("sha256:%x", sha256.Sum256(data))
-		if err = writeEnvelope(ctx, tx, target, id, hash, data); err != nil {
+		if err = writeEnvelope(ctx, tx, unwrap(target), owner, id, hash, data); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `UPDATE encrypted_vaults SET ciphertext=X'' WHERE id=?`, id); err != nil {

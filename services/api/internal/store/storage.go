@@ -105,15 +105,13 @@ func (r *Repository) LoadOnlineStorage(ctx context.Context) error {
 		return err
 	}
 	s, err := r.onlineStore(ctx, c)
-	if err == nil {
-		r.blobStore = s
-		_, settingErr := r.Setting(ctx, "storage_online")
-		r.managedOnline = settingErr == nil
-		if settingErr != nil && !errors.Is(settingErr, ErrNotFound) {
-			return settingErr
-		}
+	if err != nil {
+		return err
 	}
-	return err
+	if err = r.bindOwners(ctx, s); err != nil || s == nil {
+		return err
+	}
+	return r.migrateOwnedLayout(ctx)
 }
 
 const backedUpObjects = `SELECT vault_id,content_hash,content_size FROM blobs UNION SELECT vault_id,hash,size FROM export_jobs WHERE status='completed' UNION SELECT vault_id,hash,size FROM encrypted_objects ORDER BY 1,2`
@@ -131,6 +129,16 @@ func verifyReader(reader io.ReadCloser, hash string, size int64) error {
 	return nil
 }
 func copyObjects(ctx context.Context, db *sql.DB, source, target blob.Store) error {
+	owners, err := readOwners(ctx, db)
+	if err != nil {
+		return err
+	}
+	if source != nil {
+		source = ownedStore{unwrap(source), owners}
+	}
+	if target != nil {
+		target = ownedStore{unwrap(target), owners}
+	}
 	rows, err := db.QueryContext(ctx, backedUpObjects)
 	if err != nil {
 		return err

@@ -28,6 +28,9 @@ type AdminOverview struct {
 }
 
 type AdminUser struct {
+	TrashBytes   int64  `json:"trash_bytes"`
+	PendingBytes int64  `json:"pending_bytes"`
+	CleanupError string `json:"cleanup_error,omitempty"`
 	model.User
 	LastLoginAt    string `json:"last_login_at,omitempty"`
 	DisabledAt     string `json:"disabled_at,omitempty"`
@@ -83,6 +86,7 @@ type PublicSMTPConfig struct {
 }
 
 type AdminSettings struct {
+	TrashDays                int              `json:"trash_retention_days"`
 	RegistrationMode         string           `json:"registration_mode"`
 	RequireEmailVerification bool             `json:"require_email_verification"`
 	BackupSchedule           string           `json:"backup_schedule"`
@@ -207,7 +211,11 @@ func (r *Repository) AdminSettings(ctx context.Context) (AdminSettings, error) {
 	if err != nil {
 		return AdminSettings{}, err
 	}
-	return AdminSettings{
+	var days int
+	if err = r.db.QueryRowContext(ctx, `SELECT `+retentionDays).Scan(&days); err != nil {
+		return AdminSettings{}, err
+	}
+	return AdminSettings{TrashDays: days,
 		RegistrationMode:         policy.RegistrationMode,
 		RequireEmailVerification: policy.RequireEmailVerification,
 		BackupRoot:               backupRoot, BackupSchedule: schedule,
@@ -323,7 +331,7 @@ func (r *Repository) AdminOverview(ctx context.Context) (AdminOverview, error) {
 		{&out.Vaults, `SELECT count(*) FROM vaults`},
 		{&out.Files, `SELECT count(*) FROM files WHERE is_deleted=0`},
 		{&out.Assets, `SELECT count(*) FROM assets WHERE is_deleted=0`},
-		{&out.StorageBytes, `SELECT COALESCE(sum(content_size),0) FROM blobs`},
+		{&out.StorageBytes, `SELECT coalesce(sum(` + accountTotal + `),0) FROM users u`},
 	}
 	for i, item := range queries {
 		if i == 2 {
@@ -342,11 +350,13 @@ func (r *Repository) AdminOverview(ctx context.Context) (AdminOverview, error) {
 func (r *Repository) ListAdminUsers(ctx context.Context) ([]AdminUser, error) {
 	rows, err := r.db.QueryContext(ctx, `
 SELECT u.id,u.email,u.created_at,u.role,u.status,u.email_verified_at,COALESCE(u.last_login_at,''),COALESCE(u.disabled_at,''),COALESCE(u.disabled_reason,''),COALESCE(u.deleted_at,''),
-       (SELECT count(*) FROM vaults WHERE owner_user_id=u.id),
+       (SELECT count(*) FROM (`+vaultOwners+`) WHERE owner=u.id),
  (SELECT count(*) FROM files f JOIN vaults v ON v.id=f.vault_id WHERE v.owner_user_id=u.id AND f.is_deleted=0),
  (SELECT count(*) FROM assets a JOIN vaults v ON v.id=a.vault_id WHERE v.owner_user_id=u.id AND a.is_deleted=0),
- (SELECT coalesce(sum(b.content_size),0) FROM blobs b JOIN vaults v ON v.id=b.vault_id WHERE v.owner_user_id=u.id)
- FROM users u ORDER BY u.created_at DESC,u.id DESC`)
+ `+accountTotal+`,
+ (SELECT coalesce(sum(size),0) FROM (SELECT f.current_content_size AS size, f.vault_id FROM files f WHERE f.is_deleted=1 UNION ALL SELECT us.content_size,a.vault_id FROM assets a JOIN upload_sessions us ON us.id=a.upload_id WHERE a.is_deleted=1 AND us.status='completed') t JOIN vaults v ON v.id=t.vault_id WHERE v.owner_user_id=u.id),
+ coalesce(j.bytes,`+accountGarbage+`),coalesce(j.error,'')
+ FROM users u LEFT JOIN account_cleanup j ON j.user_id=u.id ORDER BY u.created_at DESC,u.id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +366,7 @@ SELECT u.id,u.email,u.created_at,u.role,u.status,u.email_verified_at,COALESCE(u.
 		var item AdminUser
 		var created string
 		var verified sql.NullString
-		if err := rows.Scan(&item.ID, &item.Email, &created, &item.Role, &item.Status, &verified, &item.LastLoginAt, &item.DisabledAt, &item.DisabledReason, &item.DeletedAt, &item.Vaults, &item.Files, &item.Assets, &item.StorageBytes); err != nil {
+		if err := rows.Scan(&item.ID, &item.Email, &created, &item.Role, &item.Status, &verified, &item.LastLoginAt, &item.DisabledAt, &item.DisabledReason, &item.DeletedAt, &item.Vaults, &item.Files, &item.Assets, &item.StorageBytes, &item.TrashBytes, &item.PendingBytes, &item.CleanupError); err != nil {
 			return nil, err
 		}
 		item.CreatedAt, err = parseTime(created)
@@ -394,6 +404,15 @@ func (r *Repository) ChangeUserStatus(ctx context.Context, actor, id, action, re
 	now := formatTime(time.Now().UTC())
 	invalidState := fileError(409, "ACCOUNT_STATE_CONFLICT", "账户状态已变化，请刷新用户列表")
 	switch action {
+	case "purge":
+		if !strings.EqualFold(strings.TrimSpace(confirmEmail), email) {
+			return fileError(400, "EMAIL_MISMATCH", "请填写该账户的完整邮箱")
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO account_cleanup(user_id,bytes) SELECT id,`+accountTotal+` FROM users u WHERE u.id=? ON CONFLICT(user_id) DO UPDATE SET error=''`, id)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE users SET status='purging' WHERE id=?`, id)
 	case "disable":
 		if status != "active" {
 			return invalidState
@@ -408,7 +427,7 @@ func (r *Repository) ChangeUserStatus(ctx context.Context, actor, id, action, re
 		if !strings.EqualFold(strings.TrimSpace(confirmEmail), email) {
 			return fileError(400, "EMAIL_MISMATCH", "请填写该账户的完整邮箱")
 		}
-		if status == "deleted" {
+		if status == "deleted" || status == "purging" {
 			return invalidState
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE users SET status='deleted',deleted_at=? WHERE id=?`, now, id)
@@ -423,7 +442,7 @@ func (r *Repository) ChangeUserStatus(ctx context.Context, actor, id, action, re
 	if err != nil {
 		return err
 	}
-	if action == "disable" || action == "delete" {
+	if action == "disable" || action == "delete" || action == "purge" {
 		if _, err = tx.ExecContext(ctx, `UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL`, now, id); err != nil {
 			return err
 		}
@@ -832,6 +851,8 @@ type AdminAsset struct {
 }
 
 type AdminStorage struct {
+	PendingCleanup     int64 `json:"pending_cleanup_bytes"`
+	BackupBytes        int64 `json:"backup_bytes"`
 	BlobBytes          int64 `json:"blob_bytes"`
 	CurrentFileBytes   int64 `json:"current_file_bytes"`
 	AssetBytes         int64 `json:"asset_bytes"`
@@ -846,7 +867,9 @@ func (r *Repository) AdminStorage(ctx context.Context) (AdminStorage, error) {
 		dest  *int64
 		query string
 	}{
-		{&out.BlobBytes, `SELECT COALESCE(sum(content_size),0) FROM blobs`},
+		{&out.BlobBytes, `SELECT coalesce(sum(content_size),0) FROM (` + backedUpObjects + `)`},
+		{&out.PendingCleanup, `SELECT coalesce((SELECT sum(bytes) FROM account_cleanup),0)+coalesce((SELECT sum(g.bytes) FROM garbage_objects g JOIN (` + vaultOwners + `) v ON g.vault_id=v.id WHERE NOT EXISTS(SELECT 1 FROM account_cleanup j WHERE j.user_id=v.owner)),0)`},
+		{&out.BackupBytes, `SELECT coalesce(sum(size),0) FROM backup_jobs WHERE status='completed'`},
 		{&out.CurrentFileBytes, `SELECT COALESCE(sum(current_content_size),0) FROM files WHERE is_deleted=0`},
 		{&out.AssetBytes, `SELECT COALESCE(sum(u.content_size),0) FROM assets a JOIN upload_sessions u ON u.id=a.upload_id WHERE a.is_deleted=0 AND u.status='completed'`},
 		{&out.PendingUploadBytes, `SELECT COALESCE(sum(content_size),0) FROM upload_sessions WHERE status='pending'`},
@@ -868,6 +891,7 @@ FROM assets a
 JOIN vaults v ON v.id=a.vault_id
 JOIN users u2 ON u2.id=v.owner_user_id
 JOIN upload_sessions us ON us.id=a.upload_id
+WHERE a.is_deleted=0
 ORDER BY a.created_at DESC,a.id DESC`)
 	if err != nil {
 		return nil, err

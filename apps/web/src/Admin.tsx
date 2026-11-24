@@ -205,6 +205,22 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
   useEffect(() => {
     void run(refresh);
   }, [token]);
+  const cleaning = users.some((u) => u.status === "purging");
+  useEffect(() => {
+    if (!cleaning || tab !== "users") return;
+    let current = true;
+    const timer = setInterval(() => {
+      data("users")
+        .then((result) => {
+          if (current) setUsers(result.users);
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => {
+      current = false;
+      clearInterval(timer);
+    };
+  }, [token, cleaning, tab]);
   function navigate(id: string) {
     setTab(id);
     setDrawer(false);
@@ -542,9 +558,7 @@ function Dashboard({ token, logout }: Pick<Props, "token" | "logout">) {
               }
             />
           )}
-          {tab === "storage-config" && (
-            <StorageConfigPanel token={token} />
-          )}
+          {tab === "storage-config" && <StorageConfigPanel token={token} />}
           {tab === "storage" && (
             <Inventory
               revision={revision}

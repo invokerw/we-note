@@ -15,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 type S3Store struct {
@@ -71,6 +73,14 @@ func (s *S3Store) GetFile(ctx context.Context, name string) (io.ReadCloser, erro
 	key := path.Join(s.prefix, name)
 	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: &s.bucket, Key: &key})
 	if err != nil {
+		var response *smithyhttp.ResponseError
+		if errors.As(err, &response) && response.HTTPStatusCode() == 404 {
+			return nil, os.ErrNotExist
+		}
+		var api smithy.APIError
+		if errors.As(err, &api) && (api.ErrorCode() == "NoSuchKey" || api.ErrorCode() == "NotFound") {
+			return nil, os.ErrNotExist
+		}
 		return nil, err
 	}
 	return out.Body, nil

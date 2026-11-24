@@ -24,11 +24,12 @@ type Objects interface {
 type RemoteStore struct{ Objects }
 
 func objectKey(vault, hash string) (string, error) {
-	if !vaultIDPattern.MatchString(vault) || !hashPattern.MatchString(hash) {
+	prefix, err := vaultPrefix(vault)
+	if err != nil || !hashPattern.MatchString(hash) {
 		return "", errors.New("invalid blob identity")
 	}
 	digest := strings.TrimPrefix(hash, "sha256:")
-	return path.Join("blobs", vault, digest[:2], digest), nil
+	return path.Join(prefix, digest[:2], digest), nil
 }
 func (s RemoteStore) OpenContext(ctx context.Context, vault, hash string) (io.ReadCloser, error) {
 	key, err := objectKey(vault, hash)
@@ -111,6 +112,9 @@ func (s WebDAV) GetFile(ctx context.Context, key string) (io.ReadCloser, error) 
 	}
 	if resp.StatusCode != 200 {
 		resp.Body.Close()
+		if resp.StatusCode == 404 {
+			return nil, os.ErrNotExist
+		}
 		return nil, fmt.Errorf("WebDAV 读取失败（HTTP %d）", resp.StatusCode)
 	}
 	return resp.Body, nil

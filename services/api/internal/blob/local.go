@@ -30,18 +30,13 @@ func NewLocalStore(root string) (*LocalStore, error) {
 }
 
 func (s *LocalStore) Put(ctx context.Context, vaultID, contentHash string, contentSize int64, source io.Reader) (string, error) {
-	if !vaultIDPattern.MatchString(vaultID) {
-		return "", fmt.Errorf("invalid vault id %q", vaultID)
-	}
-	if !hashPattern.MatchString(contentHash) {
-		return "", fmt.Errorf("invalid content hash %q", contentHash)
+	storageKey, err := objectKey(vaultID, contentHash)
+	if err != nil {
+		return "", err
 	}
 	if contentSize < 0 {
 		return "", errors.New("content size cannot be negative")
 	}
-
-	hexHash := contentHash[len("sha256:"):]
-	storageKey := filepath.Join("blobs", vaultID, hexHash[:2], hexHash)
 	target := filepath.Join(s.root, storageKey)
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return "", fmt.Errorf("create blob directory: %w", err)
@@ -90,11 +85,11 @@ func (s *LocalStore) Put(ctx context.Context, vaultID, contentHash string, conte
 }
 
 func (s *LocalStore) Open(vaultID, contentHash string) (io.ReadCloser, error) {
-	if !vaultIDPattern.MatchString(vaultID) || !hashPattern.MatchString(contentHash) {
-		return nil, errors.New("invalid blob identity")
+	key, err := objectKey(vaultID, contentHash)
+	if err != nil {
+		return nil, err
 	}
-	hexHash := contentHash[len("sha256:"):]
-	path := filepath.Join(s.root, "blobs", vaultID, hexHash[:2], hexHash)
+	path := filepath.Join(s.root, key)
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open blob: %w", err)

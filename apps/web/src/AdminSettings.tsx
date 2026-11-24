@@ -10,6 +10,7 @@ import {
 } from "antd";
 import { MailOutlined } from "@ant-design/icons";
 export type Settings = {
+  trash_retention_days: number;
   registration_mode: string;
   require_email_verification: boolean;
   backup_root: string;
@@ -135,6 +136,16 @@ export function SettingsPanel({
             <Input type="email" />
           </Form.Item>
         </div>
+      </Card>
+      <Card title="数据保留">
+        <Form.Item
+          name="trash_retention_days"
+          label="个人回收站保留天数"
+          rules={[{ required: true }]}
+          extra="保留期从移入回收站时算起，修改后对已有项目生效。"
+        >
+          <InputNumber min={1} max={3650} precision={0} />
+        </Form.Item>
       </Card>
       <Card title="备份计划">
         <div className="gm-fields">

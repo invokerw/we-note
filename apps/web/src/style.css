@@ -2285,3 +2285,5 @@ pre {
 .document-mode.mode-live[data-markdown-theme] .live-fence .live-marker {
   color: var(--md-comment);
 }
+
+.trash-expiry { display: block; color: var(--muted, #606772); margin-top: .25rem; }

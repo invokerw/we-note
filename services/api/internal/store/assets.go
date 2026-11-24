@@ -102,7 +102,19 @@ func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaTy
 	return a, tx.Commit()
 }
 func (r *Repository) AssetForUser(ctx context.Context, user, vault, id string) (Asset, error) {
-	return r.scanAsset(r.db.QueryRowContext(ctx, assetSelect+`JOIN workspace_members m ON m.vault_id=a.vault_id WHERE m.user_id=? AND a.id=? AND (?='' OR a.vault_id=?) AND a.is_deleted=0`, user, id, vault, vault))
+	asset, err := r.scanAsset(r.db.QueryRowContext(ctx, assetSelect+`JOIN workspace_members m ON m.vault_id=a.vault_id WHERE m.user_id=? AND a.id=? AND (?='' OR a.vault_id=?) AND a.is_deleted=0`, user, id, vault, vault))
+	if err != ErrNotFound || vault != "" {
+		return asset, err
+	}
+	asset, err = r.scanAsset(r.db.QueryRowContext(ctx, assetSelect+`JOIN workspace_members m ON m.vault_id=a.vault_id WHERE m.user_id=? AND a.id=? AND a.is_deleted=1`, user, id))
+	if err != nil {
+		return asset, err
+	}
+	used, err := r.noteUsesAsset(ctx, r.db.DB, asset.Vault, id)
+	if err == nil && !used {
+		err = ErrNotFound
+	}
+	return asset, err
 }
 func (r *Repository) OpenAsset(ctx context.Context, a Asset) (io.ReadCloser, error) {
 	if a.Status != "completed" {

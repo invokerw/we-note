@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/weifei/we-note/services/api/internal/blob"
@@ -25,12 +26,13 @@ var (
 )
 
 type Repository struct {
-	managedOnline bool
+	owners        *sync.Map
 	db            *sqlite.Database
 	blobStore     blob.Store
 	publicBase    string
 	settingsKey   []byte
 	Maintenance   sync.RWMutex
+	Cleaning      atomic.Bool
 	startupStore  blob.Store
 	backupMu      sync.Mutex
 	mailBase      string
@@ -45,7 +47,9 @@ func NewRepository(db *sqlite.Database, blobStores ...blob.Store) *Repository {
 	}
 	key := make([]byte, 32)
 	_, _ = rand.Read(key)
-	return &Repository{db: db, blobStore: blobStore, startupStore: blobStore, publicBase: "https://localhost:8443", settingsKey: key}
+	r := &Repository{owners: new(sync.Map), db: db, blobStore: blobStore, startupStore: blobStore, publicBase: "https://localhost:8443", settingsKey: key}
+	_ = r.bindOwners(context.Background(), blobStore)
+	return r
 }
 
 func (r *Repository) SetSettingsKey(key []byte) error {
@@ -263,7 +267,9 @@ func (r *Repository) CreateVault(ctx context.Context, ownerUserID, name string) 
 		VALUES (?, ?, 'owner', ?)`, id, ownerUserID, formatTime(createdAt)); err != nil {
 		return model.Vault{}, fmt.Errorf("create vault owner membership: %w", err)
 	}
+	r.owners.Store(id, ownerUserID)
 	if err := tx.Commit(); err != nil {
+		r.owners.Delete(id)
 		return model.Vault{}, fmt.Errorf("commit vault transaction: %w", err)
 	}
 	return model.Vault{ID: id, OwnerUserID: ownerUserID, Name: name, CreatedAt: createdAt}, nil

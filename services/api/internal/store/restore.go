@@ -16,6 +16,16 @@ import (
 // ApplyBackup runs with exclusive maintenance access. Only the last SQLite transaction
 // makes the staged data visible. Previously stored content remains available for rollback.
 func (r *Repository) ApplyBackup(ctx context.Context, actor, id string) (string, error) {
+	if err := r.drainGarbage(ctx); err != nil {
+		return "", err
+	}
+	var pending bool
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_cleanup UNION ALL SELECT 1 FROM garbage_objects)`).Scan(&pending); err != nil {
+		return "", err
+	}
+	if pending {
+		return "", errors.New("请等待在线数据清理完成后再恢复整机备份")
+	}
 	dir, err := r.RestoreBackup(ctx, id)
 	if err != nil {
 		return "", err
@@ -54,7 +64,7 @@ func (r *Repository) ApplyBackup(ctx context.Context, actor, id string) (string,
 	if err = copyObjects(ctx, stage.DB, source, r.blobStore); err != nil {
 		return "", err
 	}
-	if r.managedOnline {
+	if r.blobStore != nil {
 		tx, err := stage.BeginTx(ctx, nil)
 		if err != nil {
 			return "", err
@@ -107,6 +117,10 @@ func (r *Repository) ApplyBackup(ctx context.Context, actor, id string) (string,
 	if err != nil {
 		return "", err
 	}
+	dest.Close()
+	if err = r.bindOwners(ctx, r.blobStore); err != nil {
+		return "", err
+	}
 	return safety.ID, nil
 }
 
@@ -144,6 +158,9 @@ func keepRecoveryCatalog(ctx context.Context, conn *sql.Conn, filename, owner, a
 		`DELETE FROM recovered.backup_locations`,
 		`DELETE FROM recovered.backup_jobs`,
 		`DELETE FROM recovered.system_settings WHERE key GLOB 'storage_*' OR key GLOB 'backup_*'`,
+		`UPDATE recovered.users SET status='disabled',disabled_at=CURRENT_TIMESTAMP,disabled_reason='从未完成的清理任务恢复，请管理员核实' WHERE status='purging'`,
+		`DELETE FROM recovered.account_cleanup`,
+		`DELETE FROM recovered.garbage_objects`,
 		`DELETE FROM recovered.sessions`,
 		`DELETE FROM recovered.refresh_sessions`,
 		`DELETE FROM recovered.password_reset_tokens`,

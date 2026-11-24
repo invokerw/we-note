@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Input, Modal, Segmented, Select } from "antd";
+import { Alert, Button, Card, Input, Modal, Select } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import { DataTable, formatBytes, formatDate } from "./AdminUI";
 import { request } from "./api";
@@ -22,7 +22,6 @@ const initialFilters = {
   type: "",
   upload: "",
   minMiB: 0,
-  trash: false,
 };
 const uploadLabels: Record<string, string> = {
   pending: "上传中",
@@ -79,7 +78,7 @@ export function Inventory({
   }, [token, revision]);
   const matches = assets.filter(
     (a) =>
-      a.deleted === filter.trash &&
+      !a.deleted &&
       a.name.toLowerCase().includes(filter.name.trim().toLowerCase()) &&
       (!filter.owner || a.owner_email === filter.owner) &&
       (!filter.vault || a.vault_id === filter.vault) &&
@@ -109,10 +108,10 @@ export function Inventory({
   }
   async function confirm() {
     setSubmitted(true);
-    const op = filter.trash ? "restore" : "delete";
+    const op = "delete";
     const ok = await action(
       "assets/batch",
-      `已${filter.trash ? "恢复" : "移入回收站"} ${pending.length} 个附件`,
+      `已移入用户回收站 ${pending.length} 个附件`,
       { operation: op, asset_ids: pending.map((a) => a.asset_id) },
     );
     if (ok) {
@@ -130,6 +129,8 @@ export function Inventory({
           asset_bytes: "在用附件",
           pending_upload_bytes: "待完成上传",
           historical_bytes: "历史版本",
+          pending_cleanup_bytes: "待清理",
+          backup_bytes: "整机备份（归档大小）",
           reclaimable_bytes: "已删除附件（逻辑大小）",
         }).map(([key, title]) => (
           <div className="gm-stat" key={key}>
@@ -142,11 +143,6 @@ export function Inventory({
       </div>
       <Card title="附件清单">
         <div className="gm-list-tools">
-          <Segmented
-            value={filter.trash ? "回收站" : "在用附件"}
-            options={["在用附件", "回收站"]}
-            onChange={(v) => filters({ trash: v === "回收站" })}
-          />
           <Input
             prefix={<SearchOutlined />}
             allowClear
@@ -205,11 +201,7 @@ export function Inventory({
             ]}
             onChange={(minMiB) => filters({ minMiB })}
           />
-          <Button
-            onClick={() => filters({ ...initialFilters, trash: filter.trash })}
-          >
-            重置筛选
-          </Button>
+          <Button onClick={() => filters(initialFilters)}>重置筛选</Button>
         </div>
         <div className="gm-selection">
           <span>
@@ -218,13 +210,13 @@ export function Inventory({
               ` · 已选 ${selection.length} 个，共 ${bytes(selection)}`}
           </span>
           <Button
-            danger={!filter.trash}
+            danger
             disabled={
               !selection.length || selection.length > 200 || busy || loading
             }
             onClick={() => open(selection)}
           >
-            {filter.trash ? "批量恢复" : "批量移入回收站"}
+            批量移入回收站
           </Button>
           {selection.length > 200 && <span>每次最多操作 200 个附件</span>}
         </div>
@@ -284,7 +276,7 @@ export function Inventory({
                   disabled={busy}
                   onClick={() => open([a])}
                 >
-                  {a.deleted ? "恢复附件" : "移入回收站"}
+                  移入回收站
                 </Button>
               ),
             },
@@ -292,10 +284,10 @@ export function Inventory({
         />
       </Card>
       <Modal
-        title={filter.trash ? "恢复附件" : "将附件移入回收站？"}
+        title="将附件移入用户回收站？"
         open={pending.length > 0}
-        okText={filter.trash ? "确认恢复" : "确认移入"}
-        okButtonProps={{ danger: !filter.trash }}
+        okText="确认移入"
+        okButtonProps={{ danger: true }}
         confirmLoading={busy}
         onCancel={() => {
           if (!busy) setPending([]);
@@ -304,9 +296,7 @@ export function Inventory({
       >
         <p>
           {pending.length} 个附件，共 {bytes(pending)}。
-          {filter.trash
-            ? "恢复后可重新访问。"
-            : "移入后原文件仍保留，占用空间可在存储概览查看。"}
+          用户可在笔记库的回收站恢复或彻底删除。
         </p>
         <ul className="gm-confirm-list">
           {pending.map((a) => (
