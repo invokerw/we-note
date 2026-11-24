@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { isMindMap, mindSuffix } from "./plugins/mindFile";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MarkdownView } from "./markdown/Markdown";
 import { noteLimit } from "./plugins/archive";
@@ -19,10 +20,11 @@ export type EntryCommand = {
   source: string;
   expected: Record<string, string>;
 };
+const MindCanvas = lazy(() => import("./plugins/MindCanvas"));
 const uploads = ["上传文件", "上传文件夹"];
 function copyName(path: string) {
   const name = entryName(path);
-  const ext = isFolder(path) ? -1 : name.lastIndexOf(".");
+  const ext = isFolder(path) ? -1 : isMindMap(name) ? name.length - mindSuffix.length : name.lastIndexOf(".");
   return ext < 1
     ? name + " 副本"
     : name.slice(0, ext) + " 副本" + name.slice(ext);
@@ -159,10 +161,10 @@ export function EntryDialog({
       } else if (format) {
         checkName(name);
         let path = container + name.trim();
-        const ext = formats[format].slice(formats[format].lastIndexOf("."));
+        const ext = formats[format].slice(formats[format].indexOf("."));
         if (ext && !path.toLowerCase().endsWith(ext)) path += ext;
         checkFree(path);
-        await io.write(path, newContent(path));
+        await io.write(path, await newContent(path));
         await io.refresh();
         onChange("", container);
         await io.openCreated(path);
@@ -281,7 +283,7 @@ export function EntryDialog({
           <section className="print-sheet">
             <h1>{entryName(source)}</h1>
             {preview !== null ? (
-              /\.(md|xmind)$/i.test(source) ? (
+              isMindMap(source) ? <Suspense fallback="正在载入导图…"><MindCanvas source={preview} /></Suspense> : /\.(md|xmind)$/i.test(source) ? (
                 <MarkdownView text={preview} io={{ image: io.image }} />
               ) : (
                 <pre>{preview}</pre>

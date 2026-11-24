@@ -12,12 +12,12 @@ import { createRoot } from "react-dom/client";
 import Manager from "./plugins/Manager";
 import { browserExport } from "./plugins/archive";
 import {
+  newContent,
   containsEntry,
   entryPath,
   marker,
   type EntryIO,
 } from "./libraryEntries";
-import { initialBytes } from "./plugins/xmind";
 import Editor, { AssetImage } from "./Editor";
 import { useMediaQuery } from "@mantine/hooks";
 import { PhoneIcon } from "./PhoneUI";
@@ -382,7 +382,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   const newNote = () =>
     run(async () => {
       const path = prompt("新笔记路径", (panes.folder || "") + "未命名.md");
-      if (path && leave()) await create(path, initialBytes(path));
+      if (path && leave()) await create(path, await newContent(path));
     });
   const byPath = new Map(files.map((f) => [f.path, f]));
   const openPath = (path: string) => {

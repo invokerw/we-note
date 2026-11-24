@@ -2,12 +2,12 @@ import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
-import { initialBytes } from "./plugins/xmind";
 import Manager from "./plugins/Manager";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { boardStrokes } from "./markdown/Whiteboard";
+import type { RichWriting } from "./markdown/crepeSource";
 import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
 import type { EditorView } from "@codemirror/view";
 import { Document, type Mode } from "./markdown/Markdown";
@@ -17,6 +17,7 @@ import { Resources, type ResourceClient, type Hit } from "./Resources";
 import { multipart, multipartThreshold } from "./multipart";
 import { base64 } from "./api";
 import {
+  newContent,
   containsEntry,
   entryPath,
   parentFolder,
@@ -68,6 +69,9 @@ function local<T>(
     operation: { action, ...args },
   });
 }
+function isAsset(src: string) {
+  return /^https?:\/\/[^/]+\/assets\/(?:asset_[\w-]+|\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{64})$/.test(src);
+}
 function LocalImage({
   binding,
   src,
@@ -81,7 +85,7 @@ function LocalImage({
   useEffect(() => {
     let live = true;
     set("");
-    if (/^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(src)) {
+    if (isAsset(src)) {
       binding
         .access()
         .catch(() => "")
@@ -143,12 +147,13 @@ function Workspace({
   );
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
+  const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     editor = useRef<EditorView | null>(null),
     picker = useRef<HTMLInputElement>(null);
   const vault = binding.vault,
     dirty = pluginDirty || text !== saved,
-    editing = mode === "live" || mode === "edit" || mode === "split";
+    editing = mode === "crepe" || mode === "live" || mode === "edit" || mode === "split";
   const markdownSettings = markdownPreferences(preferences);
   function updatePluginSetting(pluginId: string, settings: unknown) {
     const next = updatePluginPreferences(
@@ -404,11 +409,13 @@ function Workspace({
     }
   }
   async function save() {
+    await rich.current?.compositionEnd();
     formatBeforeSave();
+    const submitted = source.current.text;
     const raw = source.current.serialize();
     const hash = await local<string>(vault, "save", { path, base, text: raw });
     setBase(hash);
-    setSaved(source.current.text);
+    setSaved(submitted);
     await load();
     notify("已保存到本地目录");
   }
@@ -416,52 +423,54 @@ function Workspace({
     source.current.edit(next);
     setText(next);
   }
-  async function attach(input: File[]) {
-    const insertHere = captureInsertion(editor.current),
-      file = source.current;
+  async function uploadFile(f: File) {
     const token = await binding.access();
+    const transfer = async <T,>(
+      step: string,
+      args: Record<string, unknown> = {},
+    ) =>
+      local<T>(vault, "transfer", {
+        token: await binding.access(),
+        request: { step, ...args },
+      });
+    return f.size >= multipartThreshold
+        ? await multipart(
+            f,
+            [
+              localStorage.getItem("origin") || "",
+              vault,
+              (await transfer<{ id: string }>("user")).id,
+            ],
+            {
+              create: (meta, key) => transfer("create", { meta, key }),
+              parts: (id) => transfer("parts", { id }),
+              put: (id, number, range, hash, data) =>
+                transfer("put", {
+                  id,
+                  number,
+                  range,
+                  hash,
+                  data: base64(data),
+                }),
+              assemble: (id) => transfer("assemble", { id }),
+            },
+            notify,
+            (slot, complete) =>
+              local(vault, "upload_key", { slot, complete }),
+          )
+        : await local<string>(vault, "upload", {
+            token,
+            name: f.name,
+            media: f.type || "application/octet-stream",
+            data: base64(new Uint8Array(await f.arrayBuffer())),
+          });
+  }
+  async function attach(input: File[]) {
+    const insertHere = rich.current?.insertion() ?? captureInsertion(editor.current),
+      file = source.current;
     const links = [];
     for (const f of input) {
-      const transfer = async <T,>(
-        step: string,
-        args: Record<string, unknown> = {},
-      ) =>
-        local<T>(vault, "transfer", {
-          token: await binding.access(),
-          request: { step, ...args },
-        });
-      const url =
-        f.size >= multipartThreshold
-          ? await multipart(
-              f,
-              [
-                localStorage.getItem("origin") || "",
-                vault,
-                (await transfer<{ id: string }>("user")).id,
-              ],
-              {
-                create: (meta, key) => transfer("create", { meta, key }),
-                parts: (id) => transfer("parts", { id }),
-                put: (id, number, range, hash, data) =>
-                  transfer("put", {
-                    id,
-                    number,
-                    range,
-                    hash,
-                    data: base64(data),
-                  }),
-                assemble: (id) => transfer("assemble", { id }),
-              },
-              notify,
-              (slot, complete) =>
-                local(vault, "upload_key", { slot, complete }),
-            )
-          : await local<string>(vault, "upload", {
-              token,
-              name: f.name,
-              media: f.type || "application/octet-stream",
-              data: base64(new Uint8Array(await f.arrayBuffer())),
-            });
+      const url = await uploadFile(f);
       links.push(
         (f.type.startsWith("image/") ? "!" : "") +
           "[" +
@@ -626,7 +635,7 @@ function Workspace({
                 await local(vault, "save_bytes", {
                   path: newPath,
                   base: null,
-                  data: base64(initialBytes(newPath)),
+                  data: base64(await newContent(newPath)),
                 });
                 await open(newPath, true);
                 changeMode("edit");
@@ -685,7 +694,7 @@ function Workspace({
                       ? {
                           back,
                           dirty,
-                          edit: () => changeMode(writingMode(path, text)),
+                          edit: () => changeMode((markdownSettings.rememberNoteMode && loadNoteMode(vault, path)) === "crepe" || markdownSettings.defaultMode === "crepe" ? "crepe" : writingMode(path, text)),
                           finish: () =>
                             run(async () => {
                               if (text !== saved) await save();
@@ -779,6 +788,13 @@ function Workspace({
                     />
                     <div className="document-body" inert={busy}>
                       <Document
+                        writing={rich}
+                        upload={uploadFile}
+                        imageURL={async url => {
+                          if (!isAsset(url)) return url;
+                          const asset = await local<{ type: string; data: string }>(vault, "image", { url, token: await binding.access().catch(() => "") });
+                          return `data:${asset.type};base64,${asset.data}`;
+                        }}
                         key={path}
                         focusSource={phone && mode === "edit"}
                         attach={() => picker.current?.click()}

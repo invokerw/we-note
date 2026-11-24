@@ -1,6 +1,8 @@
 import { createPortal } from "react-dom";
 import { boardText, boardStrokes, Whiteboard } from "./Whiteboard";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import type { MindData } from "../plugins/mindFile";
+import type { RichWriting } from "./crepeSource";
+import { lazy, Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import SplitEditor from "./SplitEditor";
 import { inspect, taskCheckChange, type Branch } from "./document";
 import HeadingEditor from "./HeadingEditor";
@@ -47,7 +49,12 @@ function Branches({
     </ul>
   );
 }
-export type Mode = "read" | "split" | "edit" | "live" | "map";
+const CrepeEditor = lazy(() => import("./CrepeEditor"));
+const MindCanvas = lazy(() => import("../plugins/MindCanvas"));
+function headingNodes(items: Branch[]): MindData["nodeData"][] {
+  return items.map(n => ({ id: String(n.offset), topic: n.title, children: headingNodes(n.children) }));
+}
+export type Mode = "read" | "split" | "edit" | "live" | "crepe" | "map";
 const formats = [
   ["B", "加粗", "**", "**", "粗体"],
   ["I", "斜体", "*", "*", "斜体"],
@@ -68,6 +75,7 @@ export function Document({
   editor,
   markdown = true,
   focusSource = false,
+  writing, upload, imageURL,
   metadataHost,
   attach,
   preferences = defaultMarkdownPreferences,
@@ -81,6 +89,9 @@ export function Document({
   editor: RefObject<EditorView | null>;
   markdown?: boolean;
   focusSource?: boolean;
+  writing?: RefObject<RichWriting | null>;
+  upload?: (file: File) => Promise<string>;
+  imageURL?: (url: string) => Promise<string>;
   metadataHost?: HTMLElement | null;
   attach?: () => void;
   preferences?: MarkdownPreferences;
@@ -99,22 +110,22 @@ export function Document({
       jumpOffset.current = null;
     }
   }, [mode]);
-  function jump(n: Branch) {
+  function jump({ offset }: Pick<Branch, "offset">) {
     const cm = editor.current;
     if (cm) {
       cm.dispatch({
-        selection: { anchor: n.offset },
-        effects: EditorView.scrollIntoView(n.offset, { y: "center" }),
+        selection: { anchor: offset },
+        effects: EditorView.scrollIntoView(offset, { y: "center" }),
       });
       cm.focus();
       return;
     }
     if (mode === "read")
       root.current
-        ?.querySelector(`[data-block-start="${n.offset}"]`)
+        ?.querySelector(`[data-block-start="${offset}"]`)
         ?.scrollIntoView({ block: "center" });
     else {
-      jumpOffset.current = n.offset;
+      jumpOffset.current = offset;
       setMode("read");
     }
   }
@@ -139,11 +150,11 @@ export function Document({
     />
   );
   const strokes = markdown ? boardStrokes(text) : null;
-  if (strokes && (mode === "live" || mode === "read"))
+  if (strokes && (mode === "live" || mode === "crepe" || mode === "read"))
     return (
       <Whiteboard
         strokes={strokes}
-        change={mode === "live" ? (lines) => edit(boardText(lines)) : undefined}
+        change={mode !== "read" ? (lines) => edit(boardText(lines)) : undefined}
         activate={() => setMode("live")}
       />
     );
@@ -216,6 +227,7 @@ export function Document({
           )}
         </nav>
       )}
+      {mode === "crepe" && attach && <button onClick={attach}>插入附件</button>}
       {mode === "split" || mode === "edit" || mode === "live" ? (
         <SplitEditor
           editor={editor}
@@ -238,12 +250,14 @@ export function Document({
             <MarkdownView text={text} io={io} toggle={toggle} />
           )}
         </SplitEditor>
+      ) : mode === "crepe" ? (
+        <Suspense fallback="正在载入可视化编辑器…"><CrepeEditor text={text} edit={edit} writing={writing} upload={upload} imageURL={imageURL} sourceMode={() => setMode("edit")} /></Suspense>
       ) : mode === "map" ? (
         <>
           <HeadingEditor text={text} edit={edit} />
           <nav aria-label="标题树思维导图" className="mindmap">
             {info.outline.length ? (
-              <Branches items={info.outline} jump={jump} />
+              <Suspense fallback="正在载入导图…"><MindCanvas source={JSON.stringify({nodeData: {id:"root",topic:"笔记目录",children:headingNodes(info.outline)}})} select={id => { if (id !== "root") jump({ offset: Number(id) }); }} /></Suspense>
             ) : (
               <p>添加 Markdown 标题后即可生成思维导图。</p>
             )}

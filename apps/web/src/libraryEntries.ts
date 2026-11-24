@@ -1,3 +1,4 @@
+import { isMindMap, mindSuffix } from "./plugins/mindFile";
 import type { MarkdownIO } from "./markdown/Markdown";
 import { initialBytes, asMarkdown, openMap } from "./plugins/xmind";
 import { decodeText, type ExportFile } from "./plugins/archive";
@@ -43,10 +44,14 @@ export type EntryIO = {
 };
 export const formats = {
   Markdown: "未命名.md",
-  思维导图: "未命名.xmind",
+  思维导图: "未命名.mind.json",
 } as const;
 export type Format = keyof typeof formats;
-export function newContent(path: string) {
+export async function newContent(path: string) {
+  if (isMindMap(path)) {
+    const { default: MindElixir } = await import("mind-elixir");
+    return new TextEncoder().encode(JSON.stringify(MindElixir.new(entryName(path).slice(0, -mindSuffix.length) || "中心主题")));
+  }
   return initialBytes(path);
 }
 export function printableText(path: string, bytes: Uint8Array) {

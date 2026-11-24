@@ -41,6 +41,7 @@ export default function MarkdownSettings({
             update("defaultMode", e.target.value as MarkdownMode)
           }
         >
+          <option value="crepe">可视化编辑</option>
           <option value="live">所见即所得</option>
           <option value="split">分屏编辑</option>
           <option value="edit">源码</option>

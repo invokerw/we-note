@@ -82,3 +82,18 @@
 .android-phone .list-search input[type="search"] { font-size: 13px; }
 
 .layout:not(.android-phone) .xmind-plugin-document .toolbar { display: none; }
+
+.native-mind { width: 100%; min-width: 0; }
+.native-mind .mind-host { position: relative; height: clamp(20rem, 65dvh, 56rem); overflow: hidden; isolation: isolate; }
+.native-mind .mind-actions { display: flex; flex-wrap: wrap; gap: .25rem; }
+.mode-crepe { min-width: 0; overflow: auto; }
+.mode-crepe .milkdown .editor { padding: 2rem clamp(1rem, 5vw, 4rem); min-height: 48dvh; }
+@media print { .native-mind .mind-actions, .native-mind .mind-elixir-toolbar { display: none; } }
+@media (max-width: 640px) {
+  .native-mind .mind-actions { flex-wrap: nowrap; overflow-x: auto; }
+  .native-mind .mind-actions button { flex: none; }
+  .native-mind .mind-host { height: clamp(12rem, 52dvh, 32rem); }
+}
+/* Keep node text reachable where a relationship arrow meets the node. */
+.native-mind .map-container .me-parent,
+.native-mind .map-container .me-root { z-index: 30; }

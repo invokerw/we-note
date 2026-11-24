@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { TextFile } from "../markdown/textFile";
 import { decodeText, utf8, type ExportFile } from "./archive";
 import { handler, invoke } from "./registry";
@@ -12,6 +12,8 @@ import {
   writeMap,
   type Workbook,
 } from "./xmind";
+
+const MindCanvas = lazy(() => import("./MindCanvas"));
 
 export function MarkdownExport({
   path,
@@ -67,6 +69,7 @@ export function PluginEditor({
     [book, setBook] = useState<Workbook | null>(null),
     [index, switchSheet] = useState(0),
     [modified, setModified] = useState(false);
+  const originalMindText = useRef("");
   const file = useRef(new TextFile("")),
     savedText = useRef(""),
     original = useRef(bytes),
@@ -85,6 +88,7 @@ export function PluginEditor({
         const doc = new TextFile(decodeText(data));
         if (active) {
           file.current = doc;
+          originalMindText.current = doc.text;
           savedText.current = doc.text;
           setText(doc.text);
         }
@@ -109,6 +113,7 @@ export function PluginEditor({
     mark(value !== savedText.current);
   }
   async function encoded() {
+    if (id === "com.wenote.mind.json") return file.current.text === savedText.current ? original.current : utf8.encode(file.current.serialize());
     if (!modified) return original.current;
     if (book) return writeMap(book);
     if (id === "com.wenote.json") jsonTree(text);
@@ -129,13 +134,14 @@ export function PluginEditor({
     }
   }
   async function persist() {
+    const submitted = file.current.text;
     const data = await encoded();
     if (!live.current) return;
     await save(data);
     if (live.current) {
       original.current = data;
-      savedText.current = text;
-      mark(false);
+      savedText.current = submitted;
+      mark(file.current.text !== submitted);
     }
   }
   const name = path.split("/").at(-1)!;
@@ -146,7 +152,8 @@ export function PluginEditor({
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
           e.preventDefault();
           e.stopPropagation();
-          if (ready && modified && caps.includes("serialize"))
+          if (id === "com.wenote.mind.json" && e.target instanceof HTMLElement && e.target.isContentEditable) e.target.blur();
+          if (ready && (modified || file.current.text !== savedText.current) && caps.includes("serialize"))
             void run(persist);
         }
       }}
@@ -156,8 +163,8 @@ export function PluginEditor({
           {ready && caps.includes("serialize") && (
             <button
               className="primary"
-              disabled={!modified}
-              onClick={() => run(persist)}
+              disabled={!modified && id !== "com.wenote.mind.json"}
+              onClick={() => { if (modified || file.current.text !== savedText.current) void run(persist); }}
             >
               保存
             </button>
@@ -205,6 +212,8 @@ export function PluginEditor({
               }}
               theme={xmindTheme}
             />
+          ) : id === "com.wenote.mind.json" ? (
+            <Suspense fallback="正在载入导图…"><MindCanvas source={originalMindText.current} change={edit} /></Suspense>
           ) : id === "com.wenote.json" ? (
             <JsonEditor text={text} edit={edit} />
           ) : (

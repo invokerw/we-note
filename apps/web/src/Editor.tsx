@@ -4,6 +4,7 @@ import { browserExport } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import type { RichWriting } from "./markdown/crepeSource";
 import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
 import type { EditorView } from "@codemirror/view";
 import { Document, type Mode } from "./markdown/Markdown";
@@ -164,6 +165,7 @@ export default function Editor({
   const [panelOpen, setPanelOpen] = useState(false);
   const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
+  const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     saved = useRef("");
   const assetPicker = useRef<HTMLInputElement>(null);
@@ -239,6 +241,7 @@ export default function Editor({
     }
   }
   async function save() {
+    await rich.current?.compositionEnd();
     formatBeforeSave();
     const submitted = source.current.text;
     const value = source.current.serialize();
@@ -267,7 +270,8 @@ export default function Editor({
     };
   }, []);
   async function insert(files: File[]) {
-    const insertHere = captureInsertion(editor.current);
+    const fileAtStart = source.current;
+    const insertHere = rich.current?.insertion() ?? captureInsertion(editor.current);
     const parts = [];
     for (const file of files) {
       const url = await uploadAsset(token, vault, file, notify);
@@ -280,14 +284,14 @@ export default function Editor({
           ")",
       );
     }
-    if (!alive.current) return;
+    if (!alive.current || source.current !== fileAtStart) return;
     const inserted = "\n" + parts.join("\n") + "\n";
     if (!insertHere?.(inserted)) {
       edit(source.current.text + inserted);
       setMode("edit");
     }
   }
-  const editing = mode === "edit" || mode === "live" || mode === "split";
+  const editing = mode === "crepe" || mode === "edit" || mode === "live" || mode === "split";
   function navigate(href: string, label: string) {
     if (href.startsWith(origin + "/assets/")) {
       run(() => download(token, new URL(href).pathname, label || "附件"));
@@ -346,7 +350,7 @@ export default function Editor({
         handset={phoneBack && {
           back: phoneBack,
           dirty: text !== saved.current,
-          edit: () => setMode(note.format === "md" ? "live" : "edit"),
+          edit: () => setMode(note.format === "md" ? ((markdownSettings.rememberNoteMode && loadNoteMode(vault, note.file_id)) === "crepe" || markdownSettings.defaultMode === "crepe" ? "crepe" : "live") : "edit"),
           finish: () => run(async () => {
             if (text !== saved.current) await save();
             if (source.current.text === saved.current) setMode("read");
@@ -514,6 +518,13 @@ export default function Editor({
         ) : special ? null : (
           <div className="note-content" inert={!base || busy}>
             <Document
+              writing={rich}
+              upload={file => uploadAsset(token, vault, file, notify)}
+              imageURL={async url => {
+                if (!url.startsWith(origin + "/assets/")) return url;
+                const blob = await (await request(token, new URL(url).pathname)).blob();
+                return URL.createObjectURL(blob);
+              }}
               metadataHost={panelOpen ? metadataHost : null}
               attach={() => assetPicker.current?.click()}
               markdown={note.format === "md"}

@@ -1,3 +1,4 @@
+import { isMindMap, mindSuffix } from "./mindFile";
 import { base64 } from "../api";
 import { decodeText, fromBase64, noteLimit, unpack } from "./archive";
 const key = "wenote-plugins-v1";
@@ -24,11 +25,11 @@ export type Plugin = {
   wasm?: string;
   enabled: boolean;
 };
-const formats = ["md", "txt", "json", "xmind"];
+const formats = ["md", "txt", "json", "xmind", "mind.json"];
 const builtin: Plugin[] = formats.map((format, i) => ({
   manifest: {
     id: "com.wenote." + format,
-    name: ["Markdown", "纯文本", "JSON", "XMind"][i],
+    name: ["Markdown", "纯文本", "JSON", "XMind", "Mind Elixir"][i],
     version: "1.0.0",
     api_version: "1",
     file_extensions: ["." + format],
@@ -51,7 +52,7 @@ export function plugins() {
   }));
 }
 export function handler(path: string) {
-  const ext = "." + path.split(".").at(-1)!.toLowerCase();
+  const ext = isMindMap(path) ? mindSuffix : "." + path.split(".").at(-1)!.toLowerCase();
   return plugins().find(
     (p) => p.enabled && p.manifest.file_extensions.includes(ext),
   );

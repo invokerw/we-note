@@ -108,6 +108,7 @@ export function Popup({
 const modeLabels = {
   split: "分屏编辑",
   live: "所见所得",
+  crepe: "可视化编辑",
   read: "预览模式",
   edit: "源码",
   map: "思维导图",

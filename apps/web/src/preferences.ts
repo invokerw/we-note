@@ -1,6 +1,6 @@
 import { normalizeXMindTheme, type XMindTheme } from "./plugins/xmindThemes";
 export type MarkdownTheme = "clean" | "paper" | "developer";
-export type MarkdownMode = "read" | "split" | "edit" | "live" | "map";
+export type MarkdownMode = "read" | "split" | "edit" | "live" | "crepe" | "map";
 export type MarkdownFontSize = "small" | "medium" | "large";
 
 export type MarkdownPreferences = {
@@ -75,6 +75,7 @@ function markdown(value: unknown): MarkdownPreferences {
       defaultMode === "read" ||
       defaultMode === "split" ||
       defaultMode === "edit" ||
+      defaultMode === "crepe" ||
       defaultMode === "live" ||
       defaultMode === "map"
         ? defaultMode
@@ -180,6 +181,7 @@ export function loadNoteMode(
   return mode === "read" ||
     mode === "split" ||
     mode === "edit" ||
+    mode === "crepe" ||
     mode === "live" ||
     mode === "map"
     ? mode
