@@ -116,7 +116,6 @@ func testMux(t *testing.T) http.Handler {
 	if err := database.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	enableOpenRegistration(t, database)
 	return NewMux(store.NewRepository(database))
 }
 

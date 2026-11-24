@@ -16,14 +16,12 @@ probe.listen(0, "127.0.0.1");
 await once(probe, "listening");
 const addr = "127.0.0.1:" + probe.address().port;
 await new Promise((r) => probe.close(r));
-const origin = "http://" + addr,
-  setup = randomUUID();
+const origin = "http://" + addr;
 const server = spawn(
   join(root, "dist/local/wenote-api"),
   ["-addr", addr, "-web-dir", join(root, "apps/web/dist")],
   {
     cwd: temp,
-    env: { ...process.env, WENOTE_SETUP_TOKEN: setup },
     stdio: "ignore",
   },
 );
@@ -55,9 +53,19 @@ try {
     i++
   )
     await delay(50);
-  await api("/admin/bootstrap", { email, password, setup_token: setup });
-  token = (await (await api("/auth/login", { email, password })).json())
-    .access_token;
+  const signup = await browser.newPage();
+  await signup.goto(origin);
+  await signup.getByRole("button", { name: "创建账户", exact: true }).click();
+  await signup.getByLabel("邮箱").fill(email);
+  await signup.getByLabel("密码").fill(password);
+  const [login] = await Promise.all([
+    signup.waitForResponse(origin + "/api/v1/auth/login"),
+    signup.getByRole("button", { name: "注册并登录" }).click(),
+  ]);
+  assert.equal(login.status(), 200);
+  token = (await login.json()).access_token;
+  await signup.getByRole("heading", { name: "创建你的第一个笔记库" }).waitFor();
+  await signup.close();
   await fetch(origin + "/api/v1/me/plugin-settings/com.wenote.md", {
     method: "PUT",
     headers: {

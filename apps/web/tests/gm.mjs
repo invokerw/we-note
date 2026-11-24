@@ -144,6 +144,9 @@ try {
     "mobile settings overflow",
   );
   await gm.setViewportSize({ width: 1280, height: 840 });
+  await gm.getByRole("combobox", { name: "注册模式" }).click();
+  await gm.getByText("仅邀请注册", { exact: true }).click();
+  await gm.getByText("必须验证邮箱", { exact: true }).check();
   await gm.getByLabel("主机", { exact: true }).fill("127.0.0.1");
   await gm.getByLabel("端口").fill(String(port));
   await gm.getByRole("combobox", { name: "安全方式" }).click();

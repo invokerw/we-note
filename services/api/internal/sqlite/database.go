@@ -285,8 +285,8 @@ CREATE TABLE IF NOT EXISTS backup_jobs (
 	}
 	_, err := db.ExecContext(ctx, `
 INSERT OR IGNORE INTO system_settings(key,value,updated_at) VALUES
-('registration_mode','invite_only',CURRENT_TIMESTAMP),
-('require_email_verification','true',CURRENT_TIMESTAMP),
+('registration_mode','open',CURRENT_TIMESTAMP),
+('require_email_verification','false',CURRENT_TIMESTAMP),
 ('backup_schedule','off',CURRENT_TIMESTAMP),('backup_root','./data/backups',CURRENT_TIMESTAMP)`)
 	return err
 }

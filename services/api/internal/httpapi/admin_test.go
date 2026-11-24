@@ -11,12 +11,18 @@ import (
 	"github.com/weifei/we-note/services/api/internal/store"
 )
 
-func TestAdminBootstrapEnablesInviteOnlyRegistration(t *testing.T) {
+func TestAdminBootstrapRespectsInviteOnlyRegistration(t *testing.T) {
 	db, err := sqlite.Open(context.Background(), ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
+	if err := db.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE system_settings SET value='invite_only' WHERE key='registration_mode'`); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +53,7 @@ func TestAdminBootstrapEnablesInviteOnlyRegistration(t *testing.T) {
 		"email": "user@example.com", "password": "user password",
 	})
 	if regular.Code != http.StatusForbidden {
-		t.Fatalf("open registration status = %d, want %d, body = %s", regular.Code, http.StatusForbidden, regular.Body.String())
+		t.Fatalf("invite-only registration status = %d, want %d, body = %s", regular.Code, http.StatusForbidden, regular.Body.String())
 	}
 	unauthorized := requestJSON(t, mux, http.MethodGet, "/api/v1/admin/users", "", nil)
 	if unauthorized.Code != http.StatusUnauthorized {
@@ -55,32 +61,18 @@ func TestAdminBootstrapEnablesInviteOnlyRegistration(t *testing.T) {
 	}
 }
 
-func TestAdminCannotBeAccessedByRegularUser(t *testing.T) {
-	db, err := sqlite.Open(context.Background(), ":memory:")
-	if err != nil {
-		t.Fatal(err)
+func TestDefaultRegistrationAndLoginWithoutAdmin(t *testing.T) {
+	mux := testMux(t)
+	user := registerUser(t, mux, "user@example.com", "user password")
+	if user.Role != "user" || user.EmailVerifiedAt != nil {
+		t.Fatalf("unexpected first account: %#v", user)
 	}
-	t.Cleanup(func() { db.Close() })
-	if err := db.Migrate(context.Background()); err != nil {
-		t.Fatal(err)
+	token := loginUser(t, mux, user.Email, "user password")
+	if got := requestJSON(t, mux, http.MethodGet, "/api/v1/vaults", token, nil); got.Code != http.StatusOK {
+		t.Fatalf("vaults status = %d, body = %s", got.Code, got.Body.String())
 	}
-	if _, err := db.Exec(`INSERT INTO system_settings(key,value,updated_at) VALUES('registration_mode','open',CURRENT_TIMESTAMP),('require_email_verification','false',CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`); err != nil {
-		t.Fatal(err)
-	}
-	repo := store.NewRepository(db)
-	mux := NewMux(repo)
-	t.Setenv("WENOTE_SETUP_TOKEN", "test-setup-token")
-	admin := requestJSON(t, mux, http.MethodPost, "/api/v1/admin/bootstrap", "", map[string]string{"setup_token": "test-setup-token",
-		"email": "owner@example.com", "password": "owner password",
-	})
-	if admin.Code != http.StatusCreated {
-		t.Fatalf("bootstrap status = %d, body = %s", admin.Code, admin.Body.String())
-	}
-	registerUser(t, mux, "user@example.com", "user password")
-	userToken := loginUser(t, mux, "user@example.com", "user password")
-	response := requestJSON(t, mux, http.MethodGet, "/api/v1/admin/users", userToken, nil)
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("regular user admin status = %d, want %d, body = %s", response.Code, http.StatusForbidden, response.Body.String())
+	if got := requestJSON(t, mux, http.MethodGet, "/api/v1/admin/users", token, nil); got.Code != http.StatusForbidden {
+		t.Fatalf("regular user admin status = %d, want 403", got.Code)
 	}
 }
 
@@ -91,6 +83,9 @@ func TestInvitationVerificationPasswordAndDisableFlow(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Close() })
 	if err := db.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE system_settings SET value='true' WHERE key='require_email_verification'`); err != nil {
 		t.Fatal(err)
 	}
 	repo := store.NewRepository(db)
@@ -205,6 +200,9 @@ func TestAdminBackupCanCreateVerifyAndStageRestore(t *testing.T) {
 	}
 	t.Cleanup(func() { db.Close() })
 	if err := db.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE system_settings SET value='invite_only' WHERE key='registration_mode'`); err != nil {
 		t.Fatal(err)
 	}
 	backupRoot := t.TempDir()
