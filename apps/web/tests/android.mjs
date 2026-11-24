@@ -202,6 +202,7 @@ try {
   await tap(button("笔记"));
   await tap(button("原稿.md 的操作"));
   await tap(item("新建"));
+  await item("Markdown").waitFor();
   systemBack();
   await item("复制").waitFor();
   systemBack();
@@ -297,11 +298,14 @@ try {
     }
   };
   await pickLocal(mapName);
+  const rootTopic = page.locator(".mindmap-node").first();
+  await rootTopic.dblclick();
   await page.getByLabel("主题标题").fill("手机离线导图");
+  await page.getByLabel("主题标题").press("Enter");
   await button("保存").click();
   await pickLocal("原稿.md");
   await pickLocal(mapName);
-  assert.equal(await page.getByLabel("主题标题").inputValue(), "手机离线导图");
+  await rootTopic.getByText("手机离线导图", { exact: true }).waitFor();
   await button("导出 Markdown").click();
   let picker = false;
   for (let i = 0; i < 30; i++) {
@@ -374,6 +378,7 @@ try {
   console.log(
     "Android offline XMind, document picker and installed WASM codec passed",
   );
+  await button("更多操作").click();
   await button("系统分享").click();
   for (let i = 0; i < 20; i++) {
     if (

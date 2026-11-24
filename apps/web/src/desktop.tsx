@@ -23,8 +23,8 @@ import {
   type EntryIO,
 } from "./libraryEntries";
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
-import AppearanceToggle from "./AppearanceToggle";
-import { useColorScheme } from "./appearance";
+import { AppShell } from "@mantine/core";
+import { WorkspaceShell } from "./WorkspaceShell";
 import { PhoneIcon, useAndroidPhone, useAndroidBack } from "./PhoneUI";
 import {
   loadLocalPreferences,
@@ -38,6 +38,7 @@ import {
 } from "./preferences";
 import "./style.css";
 import "./phone.css";
+import "./workspace.css";
 
 type Binding = {
   android?: boolean;
@@ -140,7 +141,6 @@ function Workspace({
   const [preferences, setPreferences] = useState<UserPreferences>(
     loadLocalPreferences,
   );
-  const [colorScheme, setColorScheme] = useColorScheme();
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const source = useRef(new TextFile("")),
@@ -294,7 +294,7 @@ function Workspace({
     const remembered = md && settings.rememberNoteMode
       ? loadNoteMode(vault, p)
       : undefined;
-    const nextMode = special
+    const nextMode = special || (phone && !writing)
       ? "read"
       : remembered ||
         (writing
@@ -478,7 +478,7 @@ function Workspace({
     }
   }
   return (
-    <div
+    <WorkspaceShell
       className={"layout local-layout" + (phone ? " android-phone" : "")}
       data-pane={panes.pane}
       data-columns={panes.columns}
@@ -563,7 +563,6 @@ function Workspace({
         }
         account={
           <div className="account-actions">
-            <AppearanceToggle scheme={colorScheme} onChange={setColorScheme} />
             <button
               disabled={busy}
               onClick={() => {
@@ -608,7 +607,7 @@ function Workspace({
           </>
         }
       />
-      <main className="workspace">
+      <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (
           <header className="phone-head">
             <button aria-label="返回笔记库工具" onClick={back}>
@@ -738,7 +737,7 @@ function Workspace({
                       {!phone && (
                         <button
                           onClick={() =>
-                            panes.setColumns(panes.columns === 1 ? 3 : 1)
+                            panes.toggleFocus()
                           }
                         >
                           {panes.columns === 1 ? "退出专注" : "专注模式"}
@@ -856,8 +855,8 @@ function Workspace({
             )}
           </article>
         )}
-      </main>
-    </div>
+      </AppShell.Main>
+    </WorkspaceShell>
   );
 }
 function EncryptedWorkspace({

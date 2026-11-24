@@ -192,8 +192,9 @@ try {
   const after = (await api(base + "/files")).files;
   assert(before.every((f) => after.some((g) => g.file_id === f.file_id)));
   await page.setViewportSize({ width: 360, height: 640 });
-  await button("目录").click();
-  const row = page.locator('.folder-row[data-library-path="参考/"]');
+  await button("返回笔记列表").click();
+  await button("文件夹").click();
+  const row = page.locator('.entry-row[data-library-path="参考/"]');
   const { x, y } = await row.boundingBox();
   await row.dispatchEvent("pointerdown", {
     pointerType: "touch",

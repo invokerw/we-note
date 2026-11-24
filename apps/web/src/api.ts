@@ -5,6 +5,7 @@ export type Note = {
   path: string;
   format: string;
   updated_at?: string;
+  current_content_size?: number;
   current_version_id: string;
   current_content_hash?: string;
 };

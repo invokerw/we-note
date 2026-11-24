@@ -3,14 +3,7 @@ import type {
   MarkdownFontSize,
   MarkdownMode,
   MarkdownPreferences,
-  MarkdownTheme,
 } from "../preferences";
-
-const themes = {
-  clean: { name: "清爽知识库", description: "蓝灰标题，浅灰代码底色。" },
-  paper: { name: "温暖纸张", description: "暖色纸面，衬线正文。" },
-  developer: { name: "开发者编辑器", description: "靛蓝标题，深色代码块。" },
-} satisfies Record<MarkdownTheme, { name: string; description: string }>;
 
 const sample = [
   "## 笔记索引",
@@ -36,24 +29,8 @@ export default function MarkdownSettings({
   ) => onChange({ [key]: next } as Partial<MarkdownPreferences>);
   return (
     <div className="settings-panel">
-      <label>
-        主题
-        <select
-          value={value.theme}
-          onChange={(e) =>
-            update("theme", e.target.value as MarkdownTheme)
-          }
-        >
-          {Object.entries(themes).map(([id, theme]) => (
-            <option key={id} value={id}>{theme.name}</option>
-          ))}
-        </select>
-      </label>
-      <figure className="document-mode theme-preview" data-markdown-theme={value.theme} data-markdown-font-size={value.fontSize}>
-        <figcaption aria-live="polite">
-          <strong>{themes[value.theme].name}预览</strong>
-          {themes[value.theme].description}
-        </figcaption>
+      <figure className="document-mode theme-preview" data-markdown-theme="clean" data-markdown-font-size={value.fontSize}>
+        <figcaption>正文字号预览</figcaption>
         <MarkdownView text={sample} io={{}} />
       </figure>
       <label>

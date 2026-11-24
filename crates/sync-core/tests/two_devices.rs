@@ -179,7 +179,14 @@ fn two_devices_and_web_converge() -> Result<()> {
     assert_eq!(fs::read(a.join(&copies[0]))?, second);
     let url = book.upload(&token, "tiny.bin", "application/octet-stream", "YWJj")?;
     assert_eq!(book.image(&url, "")?["data"], "YWJj");
-    let id = url.rsplit('/').next().unwrap();
+    let assets = book.catalog(&token, "/assets", None)?;
+    let id = assets
+        .as_array()
+        .context("asset list")?
+        .iter()
+        .find(|asset| asset["canonical_url"] == url)
+        .and_then(|asset| asset["asset_id"].as_str())
+        .context("uploaded asset ID")?;
     assert_eq!(book.asset(id, &token)?["data"], "YWJj");
     let dir = temp.path().join("downloads");
     let downloaded = book.download(&dir, &token, "asset", id)?;

@@ -371,7 +371,7 @@ export function EntryMenus({
               </MenuPanel>
             )}
           </>,
-          document.body,
+          menu.trigger.closest("dialog[open]") || document.body,
         )}
       {command && io && (
         <EntryDialog

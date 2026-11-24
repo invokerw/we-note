@@ -59,7 +59,8 @@ try {
     content: xmind.toString("base64"),
   });
 
-  const page = await browser.newPage();
+  const page = await browser.newPage({ viewport: { width: 1900, height: 1046 } });
+  await page.addInitScript(() => localStorage.setItem("wenote-color-scheme-v1", "dark"));
   page.setDefaultTimeout(12000);
   await page.goto(origin);
   const button = (name) => page.getByRole("button", { name, exact: true });
@@ -67,96 +68,49 @@ try {
   await page.getByLabel("密码").fill(credentials.password);
   await button("登录").click();
 
-  const lightToggle = button("切换到深色模式");
-  await lightToggle.waitFor();
-  assert.equal(await page.locator("html").getAttribute("data-color-scheme"), "light");
-  await page.getByRole("button", { name: "主题.md", exact: true }).click();
-  await page.locator('.document-mode[data-markdown-theme="clean"] .reading').waitFor();
-  const lightMarkdown = await page.locator('.document-mode[data-markdown-theme="clean"] .reading').evaluate((element) => ({
-    background: getComputedStyle(element).backgroundColor,
-    color: getComputedStyle(element).color,
+  await button("主题.md").click();
+  const reading = page.locator(".document-mode .reading");
+  await reading.waitFor();
+  const geometry = async () => Promise.all([".sidebar", ".note-list-pane", ".workspace"].map(async (selector) => {
+    const box = await page.locator(selector).boundingBox();
+    return box && [box.x, box.width];
   }));
-  assert.notEqual(lightMarkdown.background, "rgb(18, 24, 33)");
-  await lightToggle.click();
-  await button("切换到浅色模式").waitFor();
-  assert.equal(await page.locator("html").getAttribute("data-color-scheme"), "dark");
-  assert.equal(await page.evaluate(() => localStorage.getItem("wenote-color-scheme-v1")), "dark");
-  const darkMarkdown = await page.locator('.document-mode[data-markdown-theme="clean"] .reading').evaluate((element) => ({
-    background: getComputedStyle(element).backgroundColor,
-    color: getComputedStyle(element).color,
-    inlineCode: getComputedStyle(element.querySelector("code")).color,
-  }));
-  assert.equal(darkMarkdown.background, "rgb(18, 24, 33)");
-  assert.notEqual(darkMarkdown.color, "rgb(41, 52, 70)");
-  assert.notEqual(darkMarkdown.inlineCode, "rgb(40, 67, 108)");
-  for (const [theme, background] of [
-    ["clean", "rgb(18, 24, 33)"],
-    ["paper", "rgb(33, 28, 25)"],
-    ["developer", "rgb(17, 26, 44)"],
-  ]) {
-    await api("/api/v1/me/plugin-settings/com.wenote.md", "PUT", {
-      theme,
-      defaultMode: "read",
-    });
-    await page.reload();
-    await button("切换到浅色模式").waitFor();
-    await page.getByRole("button", { name: "主题.md", exact: true }).click();
-    const reading = page.locator(`.document-mode[data-markdown-theme="${theme}"] .reading`);
-    await reading.waitFor();
-    assert.equal(await reading.evaluate((element) => getComputedStyle(element).backgroundColor), background);
-  }
-
-  await api("/api/v1/me/plugin-settings/com.wenote.xmind", "PUT", {
-    theme: "classic",
-  });
-  await page.reload();
-  await button("切换到浅色模式").waitFor();
-  await page.getByRole("button", { name: "路线.xmind", exact: true }).click();
-  const darkMap = page.locator('.mindmap-stage[data-xmind-theme="classic"]');
-  await darkMap.waitFor();
-  const darkMapStyle = await darkMap.evaluate((element) => {
-    const node = element.querySelectorAll(".mindmap-node")[1];
-    return {
-      background: getComputedStyle(element).backgroundColor,
-      node: getComputedStyle(node.querySelector("rect")).fill,
-      text: getComputedStyle(node.querySelector(".mindmap-node-title")).fill,
-    };
-  });
-  assert.equal(darkMapStyle.background, "rgb(20, 27, 38)");
-  assert.equal(darkMapStyle.node, "rgb(35, 47, 62)");
-  assert.notEqual(darkMapStyle.text, "rgb(47, 58, 74)");
-  for (const theme of ["classic", "ocean", "forest", "midnight", "youdao"]) {
-    await api("/api/v1/me/plugin-settings/com.wenote.xmind", "PUT", { theme });
-    await page.reload();
-    await button("切换到浅色模式").waitFor();
-    await page.getByRole("button", { name: "路线.xmind", exact: true }).click();
-    const stage = page.locator(`.mindmap-stage[data-xmind-theme="${theme}"]`);
-    await stage.waitFor();
-    assert.notEqual(await stage.evaluate((element) => getComputedStyle(element).backgroundColor), "rgb(255, 255, 255)");
-  }
-
-  await api("/api/v1/me/plugin-settings/com.wenote.xmind", "PUT", {
-    theme: "classic",
-  });
-  await page.reload();
-  await button("切换到浅色模式").waitFor();
-  await page.getByRole("button", { name: "路线.xmind", exact: true }).click();
-  const lightClassicMap = page.locator('.mindmap-stage[data-xmind-theme="classic"]');
-  await lightClassicMap.waitFor();
-  await button("切换到浅色模式").click();
-  await button("切换到深色模式").waitFor();
-  const lightMapStyle = await lightClassicMap.evaluate((element) => {
-    const node = element.querySelectorAll(".mindmap-node")[1];
-    return {
-      background: getComputedStyle(element).backgroundColor,
-      node: getComputedStyle(node.querySelector("rect")).fill,
-      text: getComputedStyle(node.querySelector(".mindmap-node-title")).fill,
-    };
-  });
-  assert.equal(lightMapStyle.background, "rgb(255, 255, 255)");
-  assert.equal(lightMapStyle.node, "rgb(255, 255, 255)");
-  assert.equal(lightMapStyle.text, "rgb(47, 58, 74)");
-  console.log("Theme toggle browser test passed: persistence, Markdown and XMind themes in light and dark mode.");
+  assert.deepEqual(await geometry(), [[0, 202], [202, 313], [515, 1385]]);
+  const style = async (selector, property) => page.locator(selector).first().evaluate((el, key) => getComputedStyle(el)[key], property);
+  assert.equal(await style(".sidebar", "backgroundColor"), "rgb(249, 250, 251)");
+  assert.equal(await style(".reading", "fontSize"), "14px");
+  assert.equal(await style(".reading", "backgroundColor"), "rgb(255, 255, 255)");
+  assert.equal(await style(".reading h1", "fontSize"), "24px");
+  assert.equal(await style(".document-head", "height"), "75px");
+  assert.equal(await page.getByRole("button", { name: /切换到[深浅]色模式/ }).count(), 0);
+  await button("编辑模式").click();
+  await button("源码").click();
+  const editor = page.locator(".cm-content[contenteditable=true]");
+  await editor.focus();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.insertText("草稿位置");
+  await button("单栏布局").click();
+  await button("退出专注").click();
+  assert.match(await editor.innerText(), /草稿位置/);
+  await button("保存").click();
+  await button("已保存").waitFor();
+  await page.setViewportSize({ width: 800, height: 800 });
+  await button("打开目录").waitFor();
+  assert.deepEqual((await geometry()).slice(1), [[0, 240], [240, 560]]);
+  await button("打开目录").click();
+  await page.getByRole("button", {name:"我的文件夹",exact:true}).click({button:"right"});
+  await page.getByRole("menuitem", {name:"新建",exact:true}).focus();
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("role")), "menuitem");
+  await page.keyboard.press("Escape");
+  await button("全部笔记").click();
+  assert.equal(await page.locator(".sidebar").isVisible(), false);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await button("文件夹").click();
+  await button("笔记").click();
+  await button("路线.xmind").click();
+  await page.locator('.mindmap-stage[data-xmind-theme="classic"]').waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  console.log("Workspace geometry, light palette, draft, save and responsive navigation passed.");
 } finally {
   await browser.close();
 }

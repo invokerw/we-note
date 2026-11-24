@@ -169,7 +169,7 @@ export function Document({
     <div
       ref={root}
       className={"document-mode mode-" + mode}
-      data-markdown-theme={markdown ? preferences.theme : undefined}
+      data-markdown-theme={markdown ? "clean" : undefined}
       data-markdown-font-size={markdown ? preferences.fontSize : undefined}
       onKeyDownCapture={(e) => {
         if (

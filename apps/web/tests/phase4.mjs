@@ -96,9 +96,8 @@ try {
     ]);
     assert.equal(saved.status(), 204);
   }
-  for (const theme of ["clean", "developer", "paper"]) {
-    if (theme !== "clean") await setRule("主题", theme);
-    const preview = page.locator(`.theme-preview[data-markdown-theme="${theme}"]`);
+  {
+    const preview = page.locator('.theme-preview[data-markdown-theme="clean"]');
     await preview.locator(".md-keyword").waitFor();
     const contrast = await preview.evaluate((el) => {
       function luminance(color) {
@@ -113,7 +112,7 @@ try {
         return (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05);
       });
     });
-    assert.ok(contrast.every(ratio => ratio >= 4.5), `${theme}: ${contrast}`);
+    assert.ok(contrast.every(ratio => ratio >= 4.5), String(contrast));
   }
   await setRule("默认打开模式", "split");
   await click("XMind 设置");
@@ -122,7 +121,7 @@ try {
   await click("启用 Markdown");
   await page.reload();
   await click("自动格式化.md");
-  await page.locator('.document-mode.mode-split[data-markdown-theme="paper"]').waitFor();
+  await page.locator('.document-mode.mode-split[data-markdown-theme="clean"]').waitFor();
   await click("编辑模式");
   await click("源码");
   const messyMarkdown = [
@@ -170,7 +169,7 @@ try {
   await sourceEditor.press("ControlOrMeta+Shift+z");
   assert.deepEqual(await sourceLines(), formattedMarkdown.split("\n"));
   await click("设置验收.md");
-  await page.locator('.document-mode.mode-split[data-markdown-theme="paper"]').waitFor();
+  await page.locator('.document-mode.mode-split[data-markdown-theme="clean"]').waitFor();
   await page.locator('.split-preview [data-language="python"] .md-keyword').first().waitFor();
   await Promise.all([
     page.waitForResponse(r => r.url().endsWith("/me/plugin-settings/com.wenote.md") && r.status() === 204),
@@ -209,25 +208,16 @@ try {
       }));
     }, strip.toString("base64"));
   }
-  const carets = [];
-  for (const theme of ["clean", "developer", "paper"]) {
-    await click("插件");
-    await click("Markdown 设置");
-    await setRule("主题", theme);
-    await click("设置验收.md");
-    const live = page.locator(`.mode-live[data-markdown-theme="${theme}"]`);
-    await live.locator(".cm-line.live-h1").click();
-    const prose = await caretContrast();
-    await live.locator('.live-preview [data-language="python"] .md-keyword').first().click();
-    await live.locator('.live-fence .md-string').first().click();
-    carets.push({ theme, prose, code: await caretContrast() });
-  }
-  console.log("Caret contrast:", carets);
-  assert.ok(carets.every(({ prose, code }) => prose >= 4.5 && code >= 4.5), JSON.stringify(carets));
+  const live = page.locator('.mode-live[data-markdown-theme="clean"]');
+  await live.locator(".cm-line.live-h1").click();
+  assert.ok(await caretContrast() >= 4.5);
+  await live.locator('.live-preview [data-language="python"] .md-keyword').first().click();
+  await live.locator('.live-fence .md-string').first().click();
+  assert.ok(await caretContrast() >= 4.5);
   assert.equal(await button("Markdown 设置").count(), 0);
   await click("插件");
   await click("Markdown 设置");
-  assert.equal(await page.getByRole("combobox", { name: "主题" }).inputValue(), "paper");
+  assert.equal(await page.getByRole("combobox", { name: "主题" }).count(), 0);
   assert.equal(await page.getByLabel("分屏编辑同步滚动").isChecked(), false);
   await click("values.json");
   await click("格式化");

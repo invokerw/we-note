@@ -21,6 +21,7 @@ import {
 
 type Props = {
   actions: ReactNode;
+  phoneBack?: () => void;
   share: () => void;
   focused: boolean;
   toggleFocus: () => void;
@@ -127,6 +128,7 @@ function Backlinks({
 }
 export default function Editor({
   actions,
+  phoneBack,
   share,
   focused,
   toggleFocus,
@@ -147,7 +149,7 @@ export default function Editor({
   const [text, setText] = useState(""),
     [base, setBase] = useState(""),
     [mode, setMode] = useState<Mode | "history">(() => {
-      if (note.format !== "md") return "read";
+      if (phoneBack || note.format !== "md") return "read";
       return (
         (markdownSettings.rememberNoteMode
           ? loadNoteMode(vault, note.file_id)
@@ -238,11 +240,12 @@ export default function Editor({
   }
   async function save() {
     formatBeforeSave();
+    const submitted = source.current.text;
     const value = source.current.serialize();
     await saveBytes(new TextEncoder().encode(value));
     if (!alive.current) return;
-    saved.current = source.current.text;
-    dirty(false);
+    saved.current = submitted;
+    dirty(source.current.text !== submitted);
   }
   async function saveBytes(data: Uint8Array) {
     const out = await (
@@ -340,6 +343,15 @@ export default function Editor({
       }}
     >
       <NoteHeading
+        handset={phoneBack && {
+          back: phoneBack,
+          dirty: text !== saved.current,
+          edit: () => setMode(note.format === "md" ? "live" : "edit"),
+          finish: () => run(async () => {
+            if (text !== saved.current) await save();
+            if (source.current.text === saved.current) setMode("read");
+          }),
+        }}
         path={note.path}
         mode={mode}
         change={special ? undefined : changeMode}
@@ -392,9 +404,7 @@ export default function Editor({
         }
         more={
           <>
-            <button onClick={toggleFocus}>
-              {focused ? "退出专注" : "专注模式"}
-            </button>
+            {!phoneBack && <button onClick={toggleFocus}>{focused ? "退出专注" : "专注模式"}</button>}
             {mode === "history" && (
               <button onClick={() => setMode("read")}>返回文档</button>
             )}
@@ -536,6 +546,7 @@ export default function Editor({
           hidden={!panelOpen}
           aria-label="笔记信息"
         >
+          <button aria-label="关闭笔记信息" onClick={() => setPanelOpen(false)}>关闭</button>
           <div ref={setMetadataHost} />
           {panelOpen && (
             <Backlinks

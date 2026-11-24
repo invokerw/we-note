@@ -19,8 +19,10 @@ import {
 } from "./libraryEntries";
 import { initialBytes } from "./plugins/xmind";
 import Editor, { AssetImage } from "./Editor";
-import AppearanceToggle from "./AppearanceToggle";
-import { useColorScheme } from "./appearance";
+import { useMediaQuery } from "@mantine/hooks";
+import { PhoneIcon } from "./PhoneUI";
+import { AppShell } from "@mantine/core";
+import { WorkspaceShell } from "./WorkspaceShell";
 import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Share, Vault } from "./api";
 import { Cover, LibraryPanes, usePanes } from "./LibraryUI";
@@ -32,6 +34,8 @@ import {
   type UserPreferences,
 } from "./preferences";
 import "./style.css";
+import "./phone.css";
+import "./workspace.css";
 function Auth({ login }: { login: (s: string) => void }) {
   const [register, setRegister] = useState(false),
     [error, setError] = useState(""),
@@ -108,11 +112,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [origin, setOrigin] = useState(location.origin),
     [preferences, setPreferences] = useState<UserPreferences>(
       loadLocalPreferences,
-    ),
-    [colorScheme, setColorScheme] = useColorScheme();
+    );
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const panes = usePanes();
+  const phone = !!useMediaQuery("(max-width: 720px)");
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
   const encryptedIO = useCallback<EncryptedIO>(
@@ -364,12 +368,14 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     </button>
   );
   return (
-    <div className="layout" data-pane={panes.pane} data-columns={panes.columns}>
+    <WorkspaceShell className={phone ? "layout android-phone" : "layout"} data-pane={panes.pane} data-columns={panes.columns}>
       <LibraryPanes
         key={vault}
+        phone={phone}
         panes={panes}
         paths={paths}
         entries={vault ? entries : undefined}
+        sizes={new Map(files.map((f) => [f.path, f.current_content_size]))}
         dates={new Map(files.map((f) => [f.path, f.updated_at || ""]))}
         active={note?.path || ""}
         open={openPath}
@@ -428,7 +434,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         }
         account={
           <div className="account-actions">
-            <AppearanceToggle scheme={colorScheme} onChange={setColorScheme} />
             <button
               onClick={() => {
                 if (leave()) logout();
@@ -444,7 +449,12 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           </button>
         }
       />
-      <main className="workspace">
+      <AppShell.Main className="workspace">
+        {phone && (view !== "files" || !note) && (
+          <header className="phone-head">
+            <button aria-label="返回笔记列表" onClick={() => panes.setPane("list")}><PhoneIcon name="back" /></button>
+          </header>
+        )}
         <input
           ref={picker}
           hidden
@@ -476,8 +486,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               key={note.file_id + note.path}
               {...{
                 note,
-                toggleFocus: () =>
-                  panes.setColumns(panes.columns === 1 ? 3 : 1),
+                phoneBack: phone ? () => panes.setPane("list") : undefined,
+                toggleFocus: panes.toggleFocus,
                 focused: panes.columns === 1,
                 share: () => run(share),
                 actions: (
@@ -712,8 +722,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               ))}
           </article>
         )}
-      </main>
-    </div>
+      </AppShell.Main>
+    </WorkspaceShell>
   );
 }
 function App() {

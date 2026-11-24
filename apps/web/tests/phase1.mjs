@@ -78,6 +78,8 @@ try {
   await button(b, "导入快照").click();
   await b.getByText(/已导入/).waitFor();
   await button(b, "验收.md").click();
+  await button(b, "编辑模式").click();
+  await button(b, "预览模式").click();
   await b.getByRole("heading", { name: "浏览器快照" }).waitFor();
   await b.waitForFunction(
     () => document.querySelector("article img")?.naturalWidth === 1,

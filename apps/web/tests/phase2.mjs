@@ -100,10 +100,10 @@ try {
   await page.getByLabel("筛选笔记路径").fill("路线");
   await button("路线.md").waitFor();
   assert.equal(await button("目标.md").count(), 0);
-  await button("目录").click();
-  await button("工作").click();
+  await button("文件夹").click();
+  await page.getByRole("button", { name: /^工作.*篇笔记$/ }).click();
   await button("路线.md").click();
-  assert.equal(await button("正文").getAttribute("aria-pressed"), "true");
+  await button("返回笔记列表").waitFor();
   await page.setViewportSize(wide);
   await page.locator(".reading table td").first().waitFor();
   await page.locator(".reading .katex").waitFor();
@@ -123,7 +123,7 @@ try {
   await metadata.getByText("没有笔记链接到此处。", { exact: true }).waitFor();
   const panelBox = await metadata.boundingBox(),
     splitBox = await split.boundingBox();
-  assert.ok(Math.abs(panelBox.x - splitBox.x - splitBox.width) <= 1);
+  assert.ok(Math.abs(panelBox.x + panelBox.width - splitBox.x - splitBox.width) <= 1);
   await panelToggle.click();
   assert.equal(await metadata.isVisible(), false);
   const divider = split.getByRole("separator");
@@ -141,11 +141,12 @@ try {
   await page.setViewportSize({ width: 390, height: 800 });
   await split.locator('[aria-orientation="horizontal"]').waitFor();
   const narrow = await split.boundingBox();
+  await button("更多操作").click();
   await panelToggle.click();
   const drawer = await metadata.boundingBox();
   assert.equal((await split.boundingBox()).width, narrow.width);
   assert.ok(Math.abs(drawer.x + drawer.width - narrow.x - narrow.width) <= 1);
-  await panelToggle.click();
+  await button("关闭笔记信息").click();
   await divider.press("ArrowDown");
   assert.equal(await divider.getAttribute("aria-valuenow"), "55");
   await page.setViewportSize(wide);

@@ -1,3 +1,5 @@
+import { AppShell } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { PhoneIcon, PhoneSheet } from "./PhoneUI";
 import { EntryMenus } from "./EntryMenu";
 import {
@@ -7,6 +9,7 @@ import {
   type EntryIO,
 } from "./libraryEntries";
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -161,16 +164,7 @@ export function NoteHeading({
             {mode === "read" ? (handset.dirty ? "保存" : "编辑") : "完成"}
           </button>
         )}
-        {share && (
-          <button aria-label={share.label} onClick={share.run} disabled={busy}>
-            <PhoneIcon name="share" />
-          </button>
-        )}
-        {change && (
-          <button aria-label="更多操作" onClick={() => setSheet("more")}>
-            <PhoneIcon name="more" />
-          </button>
-        )}
+        <button aria-label="更多操作" onClick={() => setSheet("more")}><PhoneIcon name="more" /></button>
         {sheet && (
           <PhoneSheet
             title={sheet === "modes" ? "编辑模式" : "更多操作"}
@@ -193,8 +187,12 @@ export function NoteHeading({
                 ))
               ) : (
                 <>
-                  <button onClick={() => setSheet("modes")}>编辑模式</button>
-                  <div onClick={() => setSheet(null)}>{more}</div>
+                  {change && <button onClick={() => setSheet("modes")}>编辑模式</button>}
+                  <div onClick={() => setSheet(null)}>
+                    {endAction}
+                    {share && <button onClick={share.run} disabled={busy}>{share.label}</button>}
+                    {more}
+                  </div>
                 </>
               )}
             </div>
@@ -264,13 +262,37 @@ export function usePanes() {
   const [query, search] = useState("");
   const [folder, setFolder] = useState<string | null>(null),
     [pane, setPane] = useState<"nav" | "list" | "doc">("list"),
-    [columns, setColumns] = useState(3);
+    [columns, setColumns] = useState(() => {
+      try {
+        const stored = Number(localStorage.getItem("wenote-workspace-columns"));
+        return [1, 2].includes(stored) ? stored : 3;
+      } catch {
+        return 3;
+      }
+    });
+  const beforeFocus = useRef(3);
+  const chooseColumns = useCallback((next: number) => {
+    if (next !== 1) beforeFocus.current = next;
+    try {
+      localStorage.setItem("wenote-workspace-columns", String(next));
+      if (next !== 1) localStorage.setItem("wenote-workspace-expanded", String(next));
+    } catch { /* Storage can be disabled in a private browser. */ }
+    setColumns(next);
+  }, []);
+  function toggleFocus() {
+    if (columns !== 1) return chooseColumns(1);
+    let previous = beforeFocus.current;
+    try {
+      if (localStorage.getItem("wenote-workspace-expanded") === "2") previous = 2;
+    } catch { /* Use the layout remembered for this session. */ }
+    chooseColumns(previous);
+  }
   function browse(dir: string | null) {
     search("");
     setFolder(dir);
     setPane("list");
   }
-  return { query, search, folder, browse, pane, setPane, columns, setColumns };
+  return { query, search, folder, browse, pane, setPane, columns, setColumns: chooseColumns, toggleFocus };
 }
 type Panes = ReturnType<typeof usePanes>;
 type Folder = { prefix: string; children: Map<string, Folder> };
@@ -329,6 +351,7 @@ function FolderRows({
 export function LibraryPanes({
   paths,
   dates,
+  sizes,
   active,
   open,
   panes,
@@ -345,6 +368,7 @@ export function LibraryPanes({
   phone?: boolean;
   paths: string[];
   dates?: Map<string, string>;
+  sizes?: Map<string, number | undefined>;
   active: string;
   open: (path: string) => void;
   panes: Panes;
@@ -359,6 +383,14 @@ export function LibraryPanes({
 }) {
   const { folder, pane, columns, setPane, setColumns } = panes;
   const { query, search } = panes;
+  const tablet = useMediaQuery("(min-width: 721px) and (max-width: 1023px)") && !phone;
+  const drawer = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = drawer.current;
+    if (!dialog || !tablet || pane !== "nav") return;
+    dialog.showModal();
+    return () => dialog.close();
+  }, [tablet, pane]);
   const [reverse, sort] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const tree = useMemo(() => {
@@ -422,6 +454,60 @@ export function LibraryPanes({
       notes: notes.sort(compare),
     };
   }, [paths, q, folder, reverse]);
+  const sidebar = (
+    <AppShell.Navbar className="sidebar" aria-label="笔记库目录">
+      {phone ? (
+        <header className="phone-head">
+          <button aria-label="返回笔记列表" onClick={() => setPane("list")}>
+            <PhoneIcon name="back" />
+          </button>
+          <h1>笔记库工具</h1>
+        </header>
+      ) : (
+        <>
+          <span className="library-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-9 16-9 16 0" /></svg></span>
+          {vault}
+          {create}
+          <div className="side-files">
+            <button
+              aria-label="全部笔记"
+              className={"all-notes" + (folder === null ? " current" : "")}
+              onClick={() => pickFolder(null)}
+            >
+              ▦　全部笔记
+            </button>
+            <ul className="folders">
+              <FolderRows node={tree} active={folder} select={pickFolder} />
+            </ul>
+          </div>
+        </>
+      )}
+      {phone && vault}
+      <nav className="sections" aria-label="笔记库工具">
+        {tools}
+      </nav>
+      {phone && <div className="phone-library-actions">{listActions}</div>}
+      <div className="account">{account}</div>
+      {!phone && (
+        <div className="layout-options" aria-label="面板布局">
+          {[3, 2, 1].map((n) => (
+            <button
+              key={n}
+              aria-label={["", "单栏布局", "双栏布局", "三栏布局"][n]}
+              title={["", "单栏布局", "双栏布局", "三栏布局"][n]}
+              aria-pressed={columns === n}
+              onClick={() => {
+                setColumns(n);
+                setPane("doc");
+              }}
+            >
+              <i data-cols={n} />
+            </button>
+          ))}
+        </div>
+      )}
+    </AppShell.Navbar>
+  );
   return (
     <EntryMenus
       paths={paths}
@@ -434,7 +520,7 @@ export function LibraryPanes({
       }}
     >
       {!phone && columns < 3 && (
-        <button className="restore-layout" onClick={() => setColumns(3)}>
+        <button className="restore-layout" onClick={() => columns === 1 ? panes.toggleFocus() : setColumns(3)}>
           {columns === 1 ? "退出专注" : "展开目录"}
         </button>
       )}
@@ -471,7 +557,7 @@ export function LibraryPanes({
             aria-label="新建"
             data-phone-create
             data-library-path={folder || ""}
-            disabled={busy}
+            disabled={busy || !entries}
           >
             <i>
               <PhoneIcon name="new" />
@@ -487,56 +573,12 @@ export function LibraryPanes({
           </button>
         </nav>
       )}
-      <aside className="sidebar">
-        {phone ? (
-          <header className="phone-head">
-            <button aria-label="返回笔记列表" onClick={() => setPane("list")}>
-              <PhoneIcon name="back" />
-            </button>
-            <h1>笔记库工具</h1>
-          </header>
-        ) : (
-          <>
-            <Brand />
-            {vault}
-            {create}
-            <div className="side-files">
-              <button
-                className={"all-notes" + (folder === null ? " current" : "")}
-                onClick={() => pickFolder(null)}
-              >
-                ▦　全部笔记
-              </button>
-              <ul className="folders">
-                <FolderRows node={tree} active={folder} select={pickFolder} />
-              </ul>
-            </div>
-          </>
-        )}
-        <nav className="sections" aria-label="笔记库工具">
-          {tools}
-        </nav>
-        {phone && <div className="phone-library-actions">{listActions}</div>}
-        <div className="account">{account}</div>
-        {!phone && (
-          <div className="layout-options" aria-label="面板布局">
-            {[3, 2, 1].map((n) => (
-              <button
-                key={n}
-                aria-label={["", "单栏布局", "双栏布局", "三栏布局"][n]}
-                title={["", "单栏布局", "双栏布局", "三栏布局"][n]}
-                aria-pressed={columns === n}
-                onClick={() => {
-                  setColumns(n);
-                  setPane("doc");
-                }}
-              >
-                <i data-cols={n} />
-              </button>
-            ))}
-          </div>
-        )}
-      </aside>
+      {tablet ? (
+        <dialog ref={drawer} className="directory-drawer" aria-label="笔记库目录" onCancel={() => setPane("list")}>
+          <button type="button" onClick={() => setPane("list")}>关闭目录</button>
+          {sidebar}
+        </dialog>
+      ) : sidebar}
       <section className="note-list-pane" aria-label="笔记列表">
         {phone && (
           <header className="phone-head phone-library-head">
@@ -561,6 +603,7 @@ export function LibraryPanes({
           </header>
         )}
         <div className="list-search">
+          {tablet && <button aria-label="打开目录" onClick={() => setPane("nav")}><PhoneIcon name="folder" /></button>}
           <input
             ref={input}
             type="search"
@@ -643,6 +686,7 @@ export function LibraryPanes({
                   <small>
                     {dates?.get(path)?.slice(0, 10).replaceAll("-", ".") ||
                       libraryTitle}
+                    {sizes?.get(path) !== undefined && `　${formatSize(sizes.get(path)!)}`}
                     {(q || folder === null) && path.includes("/")
                       ? " · " + path.slice(0, path.lastIndexOf("/"))
                       : ""}
@@ -664,6 +708,11 @@ export function LibraryPanes({
       </section>
     </EntryMenus>
   );
+}
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 function EntryMore({ name }: { name: string }) {
   return (

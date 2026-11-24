@@ -1,0 +1,84 @@
+/* Library, file list and document share the same grid in both client entry points. */
+.layout {
+  --nav-width: 202px;
+  --list-width: 313px;
+  --paper: #fff;
+  --rail: #f9fafb;
+  --accent: #5b89fe;
+  --ink: #232d47;
+  --muted: #61718b;
+  --line: #f0f3f5;
+  --tint: #f4f6f7;
+  --reading-inset: 44px;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.layout .sidebar { position: static; width: auto; height: auto; z-index: auto; }
+.layout .workspace { padding: 0; min-height: 0; }
+.library-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  min-height: 52px;
+  margin: 4px auto;
+  background: white;
+  border-radius: 50%;
+  color: #56637b;
+}
+.library-avatar svg { width: 26px; height: 26px; }
+.layout .vault { align-self: center; max-width: 100%; }
+.layout .vault select { width: auto; min-width: 4em; }
+.layout .create-button { width: min(144px, 100%); align-self: center; }
+.layout .sidebar .current { background: #f0f3f5; color: #416bd2; }
+.layout .folder-icon { background: transparent; border: 1px solid #8491a5; }
+.layout .folder-icon::before { border-top: 1px solid #8491a5; }
+.layout .entry > span { font-size: 13px; font-weight: 600; }
+.layout .entry { min-height: 74px; }
+.layout .entry.current { color: var(--ink); background: var(--tint); }
+.layout .entry small { font-size: 12px; }
+.layout .file-icon { background: var(--accent); }
+.layout .document-head { min-height: 75px; padding-inline: 24px 16px; }
+.layout .document-head h1 { color: var(--ink); font-family: inherit; font-size: 20px; line-height: 1.5; font-weight: 600; }
+.layout .format-bar { min-height: 47px; padding-inline: 12px; }
+.layout .document-mode { --body-size: 14px; --md-ink: #494e58; --md-heading: #494e58; }
+.layout .document-mode[data-markdown-font-size="small"] { --body-size: 13px; }
+.layout .document-mode[data-markdown-font-size="large"] { --body-size: 18px; }
+.layout .document-mode .reading,
+.layout .document-mode.mode-live .source .cm-editor { font: normal var(--body-size)/1.68 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+.layout .document-mode > .reading, .layout .mode-live .cm-content {
+  width: 100%; max-width: none; margin: 0; padding: 20px var(--reading-inset) 48px;
+}
+.layout .document-mode .reading :is(h1,h2,h3), .layout .document-mode.mode-live .cm-line:is(.live-h1,.live-h2,.live-h3) {
+  padding: 0; border: 0; font-family: inherit; font-weight: 500; color: var(--md-heading);
+}
+.layout .document-mode .reading h1, .layout .mode-live .cm-line.live-h1 { font-size: calc(var(--body-size) * 12 / 7); }
+.layout .document-mode .reading h2, .layout .mode-live .cm-line.live-h2 { font-size: calc(var(--body-size) * 10 / 7); }
+.layout .document-mode .reading h3, .layout .mode-live .cm-line.live-h3 { font-size: calc(var(--body-size) * 8 / 7); }
+.layout .reading li > :is(ul,ol) { margin-block: 0; }
+.layout .reading li::marker { color: #8291a9; }
+.layout .metadata-panel {
+  position: absolute; inset-block: 0; inset-inline-end: 0; z-index: 3;
+  width: min(272px, 85%); background: #fff; box-shadow: -4px 0 16px #24385812;
+}
+.directory-drawer { margin: 0; padding: 0; border: 0; width: 240px; height: 100dvh; max-height: none; background: var(--rail); }
+.directory-drawer[open] { display: flex; flex-direction: column; }
+.directory-drawer::backdrop { background: #232d4729; }
+.layout .directory-drawer .sidebar { display: flex; flex: 1; }
+@media (max-width: 1279px) {
+  .layout { --nav-width: 176px; --list-width: 256px; --reading-inset: 24px; }
+}
+@media (min-width: 721px) and (max-width: 1023px) {
+  .layout:not(.android-phone):not([data-columns="1"]) { grid-template-columns: 240px minmax(0,1fr); }
+  .layout .directory-drawer .layout-options { display: none; }
+}
+@media (max-width: 720px) {
+  .layout { --reading-inset: 16px; }
+  .layout .document-head { min-height: 52px; padding-inline: 10px; }
+  .layout .document-head h1 { font-size: 14px; }
+  .layout .document-mode .reading h1, .layout .mode-live .cm-line.live-h1 { font-size: calc(var(--body-size) * 19 / 14); }
+  .layout .metadata-panel { inset: auto 0 0; width: 100%; max-height: 60%; border-top: 1px solid var(--line); }
+}
+.layout.android-phone { --reading-inset: 16px; }
+.android-phone .phone-head h1 { font-size: 14px; }
+.android-phone .list-search input[type="search"] { font-size: 13px; }
+
+.layout:not(.android-phone) .xmind-plugin-document .toolbar { display: none; }
