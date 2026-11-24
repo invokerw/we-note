@@ -1,6 +1,6 @@
 # 截图版笔记工作区
 
-2026-11-24 `IN_PROGRESS`，基线 `main` 的 `8e1774b`，分支 `codex/feature-note-workspace-20261124`，工作区 `.worktrees/note-workspace`。
+2026-11-24 `DELIVERED`，基线 `main` 的 `8e1774b`，分支 `codex/feature-note-workspace-20261124`，工作区 `.worktrees/note-workspace`。
 
 用户确认[设计稿](../笔记工作区设计.md)，要求按有道截图完成紧凑三栏、单一浅色、手机适配。验收以真实编辑器的三栏尺寸、文字、搜索和文件定位、打开保存、专注与窄屏导航为准。复用现有 Web 和本地存储、文件插件与入口。在任务工作区构建 Web 和 Tauri 前端并运行浏览器回归，验收服务端口 18324。
 
@@ -24,3 +24,5 @@
 | 手机端 | 加载 `/private/tmp/wenote-android/env`，以任务目录的 `target/android-build` 为 Cargo 目标目录运行 `npm --prefix apps/client run android -- --debug`。安装后 `ANDROID_SERIAL=emulator-5598 WENOTE_TEST_ORIGIN=http://127.0.0.1:18324 node apps/web/tests/android.mjs` 通过，覆盖断网重启、返回、打印、导图修改和导出、系统分享、后台同步、冲突副本、分片附件与便携 ZIP |
 
 自审时修复平板对话框内菜单拿不到焦点、触屏脑图缺少保存和导出入口的问题。同步测试改用附件目录中返回的真实 ID。用户验收期间保留任务分支、工作区、服务与构建产物。
+
+实现提交 `d1fb934` 已于 2026-11-24 快进合入本地 `main`。服务健康检查返回 `ok`。当前等待用户验收。
