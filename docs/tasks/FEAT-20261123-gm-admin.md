@@ -246,4 +246,4 @@
 | 浏览器 | `node apps/web/tests/gm.mjs` 退出 0，覆盖 GM 附件批量处理、个人回收站、恢复、取消彻底删除、清空回收站、账户永久删除和重试入口 |
 | 存储 | 临时本地、WebDAV、S3 协议存储覆盖账户隔离、旧布局迁移、失败重试和其他用户数据保留 |
 
-当前交付状态为 `DELIVERED`。验收实例运行在 `http://localhost:18080`，PID 10099，日志为 `dist/local/server.log`。停止命令为 `./scripts/local.py stop`。历史整机备份未自动删除，需后续在 GM 中增加明确的备份保留策略后再启用自动回收。
+用户已于 2026-11-24 完成验收，当前状态为 `ACCEPTED`，准备合并到 `main`。验收实例运行在 `http://localhost:18080`，PID 10099，日志为 `dist/local/server.log`。停止命令为 `./scripts/local.py stop`。历史整机备份未自动删除，需后续在 GM 中增加明确的备份保留策略后再启用自动回收。
