@@ -1,6 +1,6 @@
 # Crepe 编辑器与 Mind Elixir 导图
 
-2026-11-24 · feature · Web、桌面与 Android · `IN_PROGRESS`
+2026-11-24 · feature · Web、桌面与 Android · `DELIVERED`
 
 用户选择方式 2，在任务分支验收，通过后才合入 main。基线 `16d29c8`，设计提交 `6d11538`，分支 `codex/feature-crepe-mind-elixir-20261124`，worktree `/Users/weifei/code/we-note/.worktrees/native-editors`。
 
@@ -28,3 +28,5 @@
 - macOS 运行 `./dist/acceptance/WeNote`。Android 安装 `dist/acceptance/WeNote-arm64-debug.apk`；USB 调试时执行 `adb reverse tcp:18274 tcp:18274`，客户端服务地址填 `http://127.0.0.1:18274`。
 - 在笔记库新建 Markdown，切换「编辑模式 → 可视化编辑」，改一段后保存。在「编辑模式 → 思维导图」点击章节可跳回正文。
 - 从文件夹或文件的操作菜单选「新建 → 思维导图」，输入名称，创建 `.mind.json`。添加子主题、修改备注、撤销重做，保存后重新打开核对。Android 窄屏可横向滚动节点工具栏。
+
+2026-11-24 已在任务分支交付实现 `4876d60`。保留任务工作区、本地服务、模拟器与产物，待用户验收。
