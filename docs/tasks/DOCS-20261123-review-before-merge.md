@@ -21,3 +21,5 @@
 2026-11-24 `BLOCKED`。两种验收方式与返工路径已完成自审，任务模板也能记录尚未合入 main 的验收提交。技能校验 `quick_validate.py`、16 项相对链接和章节锚点检查、`git diff --check` 均通过。交付等待主工作区正在进行的 GM 管理后台合并结束。
 
 2026-11-24 `DELIVERED`。技能提交 `eef740f` 已随 `033925d` 合入本地 `main`。集成后已通过技能结构、文档链接与章节锚点、差异格式检查，`git merge-base --is-ancestor eef740f main` 返回 0。原任务 worktree 和分支保留，等待本轮主分支验收。
+
+2026-11-24 17:05（上海时间）`ACCEPTED` → `MERGED`。用户确认本地 `main` 上的 `973f1aa` 验收通过。已核对任务分支全部合入，清理了 `.worktrees/review-before-merge` 和对应本地分支。
