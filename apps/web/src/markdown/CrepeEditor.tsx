@@ -6,6 +6,7 @@ import { Slice, type Node as PMNode } from "@milkdown/kit/prose/model";
 import { $prose } from "@milkdown/kit/utils";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
+import "./crepe.css";
 import { parseMarkdown } from "./document";
 import { patchBlocks, type RichWriting, type Span } from "./crepeSource";
 
@@ -18,6 +19,24 @@ type Props = {
   imageURL?: (url: string) => Promise<string>;
 };
 const unsupported = "这篇笔记含有需要保留原文的语法，请使用源码编辑。";
+// Crepe adds a writable empty paragraph after a terminal list, quote or table.
+// It acquires a Markdown source range when the user starts typing into it.
+function markdownBlocks(doc: PMNode) {
+  const nodes = doc.content.content;
+  const last = nodes.at(-1);
+  const previous = nodes.at(-2);
+  if (
+    previous &&
+    previous.type.name !== "heading" &&
+    previous.type.name !== "paragraph" &&
+    last?.type.name === "paragraph" &&
+    last.content.size === 0
+  ) {
+    return nodes.slice(0, -1);
+  }
+  return nodes;
+}
+
 export default function CrepeEditor(props: Props) {
   const host = useRef<HTMLDivElement>(null);
   const latest = useRef(props);
@@ -110,8 +129,8 @@ export default function CrepeEditor(props: Props) {
                   latest.current.edit(initial);
                   return;
                 }
-                const before = prev.doc.content.content,
-                  after = view.state.doc.content.content;
+                const before = markdownBlocks(prev.doc),
+                  after = markdownBlocks(view.state.doc);
                 let first = 0,
                   oldEnd = before.length,
                   newEnd = after.length;
@@ -121,6 +140,7 @@ export default function CrepeEditor(props: Props) {
                   before[first] === after[first]
                 )
                   first++;
+                if (first === oldEnd && first === newEnd) return;
                 while (
                   oldEnd > first &&
                   newEnd > first &&
@@ -180,9 +200,10 @@ export default function CrepeEditor(props: Props) {
         editor.editor.action((ctx) => {
           const view = ctx.get(editorViewCtx);
           originalDoc = view.state.doc;
-          if (ranges.length !== view.state.doc.childCount)
+          const nodes = markdownBlocks(originalDoc);
+          if (ranges.length !== nodes.length)
             throw Error(unsupported);
-          view.state.doc.forEach((n, _offset, i) => {
+          nodes.forEach((n, i) => {
             const raw = initial.slice(...ranges[i]);
             originals.set(n, raw);
             if (/\[\[|^>\s*\[!|<\/?[a-z][^>]*>/im.test(raw))

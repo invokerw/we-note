@@ -18,6 +18,7 @@ export async function verifyAndroid(origin, email, password) {
     port: Number(process.env.ANDROID_ADB_SERVER_PORT || 5037),
   });
   const device = devices.find((d) => d.serial() === serial);
+  await Promise.all(devices.filter((d) => d !== device).map((d) => d.close()));
   assert.ok(device);
   let forward;
   async function launch() {

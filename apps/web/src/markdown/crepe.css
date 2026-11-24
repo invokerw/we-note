@@ -1,0 +1,63 @@
+.mode-crepe .milkdown {
+  --crepe-font-default: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --crepe-font-title: var(--crepe-font-default);
+  --crepe-base-font-size: 1rem;
+  --crepe-color-background: var(--md-bg);
+  --crepe-color-on-background: var(--md-ink);
+  --crepe-color-surface: var(--md-code-bg);
+  --crepe-color-surface-low: var(--md-inline-code-bg);
+  --crepe-color-on-surface: var(--md-heading);
+  --crepe-color-on-surface-variant: var(--md-comment);
+  --crepe-color-outline: var(--md-comment);
+  --crepe-color-primary: var(--md-accent);
+  --crepe-color-secondary: var(--md-line);
+  --crepe-color-on-secondary: var(--md-heading);
+  --crepe-color-inverse: var(--md-ink);
+  --crepe-color-on-inverse: var(--md-bg);
+  --crepe-color-inline-code: var(--md-inline-ink);
+  --crepe-color-inline-area: var(--md-inline-code-bg);
+  --crepe-color-hover: color-mix(in srgb, var(--md-accent) 10%, var(--md-bg));
+  --crepe-color-selected: color-mix(in srgb, var(--md-accent) 24%, var(--md-bg));
+}
+.mode-crepe[data-markdown-font-size="small"] .milkdown { --crepe-base-font-size: .875rem; }
+.mode-crepe[data-markdown-font-size="large"] .milkdown { --crepe-base-font-size: 1.125rem; }
+
+.mode-crepe .milkdown .ProseMirror {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 56rem;
+  min-height: 48dvh;
+  margin-inline: auto;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(4.5rem, 5vw, 5rem) 4rem;
+  caret-color: var(--md-cursor);
+  overflow-wrap: anywhere;
+}
+.mode-crepe .milkdown .ProseMirror p { line-height: 1.8; padding: 0; }
+.mode-crepe .milkdown .ProseMirror > p + p { margin-block-start: .65em; }
+.mode-crepe .milkdown .ProseMirror :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.45em 0 .45em;
+  padding: 0;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--md-heading);
+}
+.mode-crepe .milkdown .ProseMirror h1 { font-size: 1.85em; }
+.mode-crepe .milkdown .ProseMirror h2 { font-size: 1.4em; }
+.mode-crepe .milkdown .ProseMirror h3 { font-size: 1.18em; }
+.mode-crepe .milkdown .ProseMirror :is(h4, h5, h6) { font-size: 1em; }
+.mode-crepe .milkdown .ProseMirror > :first-child { margin-block-start: 0; }
+.mode-crepe .milkdown .ProseMirror blockquote {
+  margin: .9em 0;
+  padding: .55em 1em;
+  background: var(--md-quote-bg);
+  border-inline-start: 3px solid var(--md-accent);
+  border-radius: 0 .35em .35em 0;
+}
+.mode-crepe .milkdown .ProseMirror blockquote::before { content: none; }
+.mode-crepe .milkdown .ProseMirror :not(pre) > code { padding-inline: .32em; }
+.mode-crepe .milkdown .milkdown-code-block { margin-block: .9em; border-radius: .5rem; }
+
+@media (max-width: 720px) {
+  .mode-crepe .milkdown .ProseMirror { padding: 1.25rem 1rem 3rem 3.75rem; }
+  .mode-crepe .milkdown .milkdown-block-handle .operation-item { width: 26px; padding-inline: 1px; }
+}

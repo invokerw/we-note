@@ -94,6 +94,16 @@ try {
     }),
   );
   await create("普通.json", "{}");
+  const readingSource = [
+    "# 关于城市散步的读书手记",
+    "这周重读《街道的美学》。把书里谈到的观察方法记下来，周末带着这些问题，再走一次熟悉的街区。",
+    "## 从一条街开始",
+    "选一段每天路过的街道，慢一点走。先记下看到的细节，再写自己的判断。",
+    "> 同一条路，早晨和傍晚往往像两个地方。",
+    "## 下次散步时",
+    "- 在街口停五分钟，看看人们在哪里停留。\n- 用 `街区观察` 标记当天的笔记。",
+  ].join("\n\n");
+  const readingNote = await create("读书手记.md", readingSource);
   const page = await browser.newPage();
   page.setDefaultTimeout(9000);
   const errors = [];
@@ -106,6 +116,13 @@ try {
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await button("登录").click();
+  await button("读书手记.md").click();
+  await button("编辑模式").click();
+  await button("可视化编辑").click();
+  await (await import("./crepe-appearance.mjs")).verifyAppearance(page);
+  await page.locator(".mode-crepe .ProseMirror > p").last().click();
+  await page.keyboard.insertText("周日再读。");
+  assert.equal(await saveFile(readingNote), readingSource + "\n\n周日再读。");
   await button("笔记.md").click();
   await button("编辑模式").click();
   await button("可视化编辑").click();

@@ -46,3 +46,17 @@
 | 独立实例 | `./scripts/local.py start --port 18274` 重建并启动成功。`curl -fsS http://127.0.0.1:18274/api/v1/auth/registration` 返回 `open` 和 `false`，`/healthz` 返回 `ok` |
 
 自审已将依赖旧默认值的邀请和备份测试改为显式设置对应策略。普通账号浏览器验收覆盖了首页注册和已有账号登录两个入口。本轮按方式 2 交付。
+
+## 11 月 24 日验收反馈 · 可视化编辑排版
+
+用户希望了解可用模式并优化可视化编辑的外观。沿用方式 2，在 Web、桌面和 Android 共用的 Crepe 编辑器中调整中文排版、内容宽度与深色外观，通过浏览器检查字号偏好、标题比例和窄屏布局。
+
+| 验证 | 命令与结果 |
+| --- | --- |
+| 红阶段 | `node apps/web/tests/native-editors.mjs` 退出 1。旧版一级标题 42px、二级 36px、正文 16px。列表结尾的示例笔记因编辑器附加空段而隐藏正文 |
+| 视觉与保存 | `node apps/web/tests/native-editors.mjs` 退出 0。Chrome 检查标题层级、字号切换、宽屏行长、390px 窄屏、深色画布，并逐字比对列表后续写保存的 Markdown。示例截图 `dist/acceptance/crepe-typography.png` |
+| Web 和单元测试 | `npm run build --prefix apps/web`、`node --test apps/web/tests/*test.mjs` 退出 0，共 7 项单元测试。18274 验收服务实际返回的 Crepe 样式和脚本与本次构建逐字节一致 |
+| 客户端 | `npm run android --prefix apps/client -- --debug` 及 `cargo build --locked -p wenote-desktop --release` 退出 0。已更新 `dist/acceptance/WeNote` 和 `dist/acceptance/WeNote-arm64-debug.apk` |
+| Android | `ANDROID_SERIAL=emulator-5608 node apps/web/tests/native-editors.mjs --android` 退出 0。在独立只读模拟器验证登录、Crepe 保存、离线重开和同步。自审时补齐了同时连接多台模拟器时测试连接的释放 |
+
+本轮重新交付方式 2。Web 刷新后打开 Markdown 的「可视化编辑」验收。Apple Silicon 客户端完成构建，实际交互通过 Chrome 和 Android WebView 验证。

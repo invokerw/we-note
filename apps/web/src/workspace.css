@@ -86,8 +86,6 @@
 .native-mind { width: 100%; min-width: 0; }
 .native-mind .mind-host { position: relative; height: clamp(20rem, 65dvh, 56rem); overflow: hidden; isolation: isolate; }
 .native-mind .mind-actions { display: flex; flex-wrap: wrap; gap: .25rem; }
-.mode-crepe { min-width: 0; overflow: auto; }
-.mode-crepe .milkdown .editor { padding: 2rem clamp(1rem, 5vw, 4rem); min-height: 48dvh; }
 @media print { .native-mind .mind-actions, .native-mind .mind-elixir-toolbar { display: none; } }
 @media (max-width: 640px) {
   .native-mind .mind-actions { flex-wrap: nowrap; overflow-x: auto; }
