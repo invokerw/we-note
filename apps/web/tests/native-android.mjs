@@ -64,7 +64,10 @@ export async function verifyAndroid(origin, email, password) {
     await button("笔记.md").click();
     await button("更多操作").click();
     await button("编辑模式").click();
+    assert.deepEqual(await page.locator(".phone-choices button").allTextContents(), ["分屏编辑", "可视化编辑", "预览"]);
     await button("可视化编辑").click();
+    await page.locator(".mode-crepe .milkdown").waitFor();
+    assert.equal(await button("插入附件").count(), 0);
     await page
       .locator(".milkdown .ProseMirror p")
       .filter({ hasText: "编辑段落" })

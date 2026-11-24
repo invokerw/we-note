@@ -1,3 +1,4 @@
+import { markdownModes, type MarkdownMode } from "./markdown/modes";
 import { AppShell } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { PhoneIcon, PhoneSheet } from "./PhoneUI";
@@ -105,14 +106,7 @@ export function Popup({
   );
 }
 
-const modeLabels = {
-  split: "分屏编辑",
-  live: "所见所得",
-  crepe: "可视化编辑",
-  read: "预览模式",
-  edit: "源码",
-  map: "思维导图",
-} as const;
+const textModes = [["read", "预览模式"], ["edit", "源码"]] as const;
 export function NoteHeading({
   path,
   mode,
@@ -134,7 +128,7 @@ export function NoteHeading({
   };
   path: string;
   mode: string;
-  change?: (mode: keyof typeof modeLabels) => void;
+  change?: (mode: MarkdownMode | "edit") => void;
   markdown: boolean;
   save?: ReactNode;
   share?: { label: string; run: () => void };
@@ -142,9 +136,7 @@ export function NoteHeading({
   busy: boolean;
 }) {
   const [sheet, setSheet] = useState<"modes" | "more" | null>(null);
-  const modes = (
-    Object.entries(modeLabels) as [keyof typeof modeLabels, string][]
-  ).filter(([id]) => markdown || ["read", "edit"].includes(id));
+  const modes = markdown ? markdownModes : textModes;
   if (handset)
     return (
       <header className="phone-head phone-document-head">
@@ -212,7 +204,7 @@ export function NoteHeading({
             icon={
               <span className="mode-label">
                 <i className="mode-icon" aria-hidden="true" />
-                {modeLabels[mode as keyof typeof modeLabels] ?? "编辑模式"}
+                {modes.find(([id]) => id === mode)?.[1] ?? "编辑模式"}
                 <span aria-hidden="true">⌄</span>
               </span>
             }

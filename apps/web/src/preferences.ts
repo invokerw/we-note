@@ -1,6 +1,6 @@
 import { normalizeXMindTheme, type XMindTheme } from "./plugins/xmindThemes";
 export type MarkdownTheme = "clean" | "paper" | "developer";
-export type MarkdownMode = "read" | "split" | "edit" | "live" | "crepe" | "map";
+import { normalizeMarkdownMode, type MarkdownMode } from "./markdown/modes";
 export type MarkdownFontSize = "small" | "medium" | "large";
 
 export type MarkdownPreferences = {
@@ -29,7 +29,7 @@ export type UserPreferences = {
 
 export const defaultMarkdownPreferences: MarkdownPreferences = {
   theme: "clean",
-  defaultMode: "live",
+  defaultMode: "crepe",
   rememberNoteMode: true,
   splitRatio: 50,
   syncScroll: true,
@@ -66,20 +66,11 @@ function object(value: unknown): Record<string, unknown> {
 function markdown(value: unknown): MarkdownPreferences {
   const input = object(value);
   const theme = input.theme;
-  const defaultMode = input.defaultMode;
   const fontSize = input.fontSize;
   return {
     theme:
       theme === "paper" || theme === "developer" ? theme : "clean",
-    defaultMode:
-      defaultMode === "read" ||
-      defaultMode === "split" ||
-      defaultMode === "edit" ||
-      defaultMode === "crepe" ||
-      defaultMode === "live" ||
-      defaultMode === "map"
-        ? defaultMode
-        : "live",
+    defaultMode: normalizeMarkdownMode(input.defaultMode) ?? defaultMarkdownPreferences.defaultMode,
     rememberNoteMode: input.rememberNoteMode !== false,
     splitRatio:
       typeof input.splitRatio === "number"
@@ -162,12 +153,9 @@ export function mergeRemotePreferences(
   });
 }
 
-function noteModes(): Record<string, MarkdownMode> {
+function noteModes(): Record<string, unknown> {
   try {
-    return object(JSON.parse(localStorage.getItem(noteModeKey) || "null")) as Record<
-      string,
-      MarkdownMode
-    >;
+    return object(JSON.parse(localStorage.getItem(noteModeKey) || "null"));
   } catch {
     return {};
   }
@@ -177,15 +165,7 @@ export function loadNoteMode(
   vault: string,
   fileId: string,
 ): MarkdownMode | undefined {
-  const mode = noteModes()[vault + ":" + fileId];
-  return mode === "read" ||
-    mode === "split" ||
-    mode === "edit" ||
-    mode === "crepe" ||
-    mode === "live" ||
-    mode === "map"
-    ? mode
-    : undefined;
+  return normalizeMarkdownMode(noteModes()[vault + ":" + fileId]);
 }
 
 export function saveNoteMode(vault: string, fileId: string, mode: MarkdownMode) {

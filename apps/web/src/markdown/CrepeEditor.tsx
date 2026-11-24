@@ -13,12 +13,12 @@ import { patchBlocks, type RichWriting, type Span } from "./crepeSource";
 type Props = {
   text: string;
   edit: (value: string) => void;
-  sourceMode: () => void;
+  openSplit: () => void;
   writing?: RefObject<RichWriting | null>;
   upload?: (file: File) => Promise<string>;
   imageURL?: (url: string) => Promise<string>;
 };
-const unsupported = "这篇笔记含有需要保留原文的语法，请使用源码编辑。";
+const unsupported = "这篇笔记含有需要保留原文的语法，请在分屏编辑的源码栏修改。";
 // Crepe adds a writable empty paragraph after a terminal list, quote or table.
 // It acquires a Markdown source range when the user starts typing into it.
 function markdownBlocks(doc: PMNode) {
@@ -86,7 +86,7 @@ export default function CrepeEditor(props: Props) {
       featureConfigs: {
         [Crepe.Feature.ImageBlock]: {
           onUpload: (file) => {
-            if (!latest.current.upload) throw Error("请使用插入附件");
+            if (!latest.current.upload) throw Error("当前无法上传图片");
             return latest.current.upload(file);
           },
           async proxyDomURL(url) {
@@ -112,7 +112,7 @@ export default function CrepeEditor(props: Props) {
                   (n) => protectedBlocks.has(n) && !retained.has(n),
                 )
               ) {
-                report("此段包含笔记专用语法，请切换源码编辑此段。");
+                report("此段包含笔记专用语法，请在分屏编辑的源码栏修改此段。");
                 return false;
               }
               for (const pending of bookmarks)
@@ -261,7 +261,7 @@ export default function CrepeEditor(props: Props) {
     <section aria-label="可视化编辑器">
       {message && (
         <p role="status">
-          {message} <button onClick={props.sourceMode}>使用源码编辑</button>
+          {message} <button onClick={props.openSplit}>打开分屏编辑</button>
         </p>
       )}
       <div ref={host} />

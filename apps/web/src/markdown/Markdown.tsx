@@ -1,11 +1,10 @@
 import { createPortal } from "react-dom";
 import { boardText, boardStrokes, Whiteboard } from "./Whiteboard";
-import type { MindData } from "../plugins/mindFile";
+import type { MarkdownMode } from "./modes";
 import type { RichWriting } from "./crepeSource";
 import { lazy, Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import SplitEditor from "./SplitEditor";
 import { inspect, taskCheckChange, type Branch } from "./document";
-import HeadingEditor from "./HeadingEditor";
 import Source from "./Source";
 import { formatSelection } from "./format";
 import { EditorView } from "@codemirror/view";
@@ -50,11 +49,7 @@ function Branches({
   );
 }
 const CrepeEditor = lazy(() => import("./CrepeEditor"));
-const MindCanvas = lazy(() => import("../plugins/MindCanvas"));
-function headingNodes(items: Branch[]): MindData["nodeData"][] {
-  return items.map(n => ({ id: String(n.offset), topic: n.title, children: headingNodes(n.children) }));
-}
-export type Mode = "read" | "split" | "edit" | "live" | "crepe" | "map";
+export type Mode = MarkdownMode | "edit";
 const formats = [
   ["B", "加粗", "**", "**", "粗体"],
   ["I", "斜体", "*", "*", "斜体"],
@@ -98,7 +93,7 @@ export function Document({
   onPreferencesChange?: (patch: Partial<MarkdownPreferences>) => void;
 }) {
   const metadataText =
-    markdown && (mode === "map" || metadataHost !== null) ? text : "";
+    markdown && metadataHost !== null ? text : "";
   const info = useMemo(() => inspect(metadataText), [metadataText]);
   const root = useRef<HTMLDivElement>(null);
   const jumpOffset = useRef<number | null>(null);
@@ -141,24 +136,22 @@ export function Document({
   const sourcePane = (
     <Source
       editor={editor}
-      focus={mode === "live" || focusSource}
-      live={mode === "live"}
-      io={io}
-      label={mode === "live" ? "笔记正文" : "笔记源码"}
+      focus={focusSource}
+      label="笔记源码"
       text={text}
       onChange={edit}
     />
   );
   const strokes = markdown ? boardStrokes(text) : null;
-  if (strokes && (mode === "live" || mode === "crepe" || mode === "read"))
+  if (strokes && (mode === "crepe" || mode === "read"))
     return (
       <Whiteboard
         strokes={strokes}
         change={mode !== "read" ? (lines) => edit(boardText(lines)) : undefined}
-        activate={() => setMode("live")}
+        activate={() => setMode("crepe")}
       />
     );
-  const metadata = markdown && mode !== "map" && (
+  const metadata = markdown && (
     <>
       {!!info.outline.length && <Branches items={info.outline} jump={jump} />}
       <dl>
@@ -206,7 +199,7 @@ export function Document({
         }
       }}
     >
-      {(mode === "edit" || mode === "split" || mode === "live") && (
+      {(mode === "edit" || mode === "split") && (
         <nav className="format-bar" aria-label="编辑工具">
           {markdown &&
             formats.map(([symbol, label, before, after, sample]) => (
@@ -227,12 +220,11 @@ export function Document({
           )}
         </nav>
       )}
-      {mode === "crepe" && attach && <button onClick={attach}>插入附件</button>}
-      {mode === "split" || mode === "edit" || mode === "live" ? (
+      {mode === "split" || mode === "edit" ? (
         <SplitEditor
           editor={editor}
           source={sourcePane}
-          label={mode === "live" ? "正文编辑区" : "源码栏"}
+          label="源码栏"
           ratio={markdown ? preferences.splitRatio : undefined}
           linked={markdown ? preferences.syncScroll : undefined}
           onRatioChange={
@@ -251,18 +243,7 @@ export function Document({
           )}
         </SplitEditor>
       ) : mode === "crepe" ? (
-        <Suspense fallback="正在载入可视化编辑器…"><CrepeEditor text={text} edit={edit} writing={writing} upload={upload} imageURL={imageURL} sourceMode={() => setMode("edit")} /></Suspense>
-      ) : mode === "map" ? (
-        <>
-          <HeadingEditor text={text} edit={edit} />
-          <nav aria-label="标题树思维导图" className="mindmap">
-            {info.outline.length ? (
-              <Suspense fallback="正在载入导图…"><MindCanvas source={JSON.stringify({nodeData: {id:"root",topic:"笔记目录",children:headingNodes(info.outline)}})} select={id => { if (id !== "root") jump({ offset: Number(id) }); }} /></Suspense>
-            ) : (
-              <p>添加 Markdown 标题后即可生成思维导图。</p>
-            )}
-          </nav>
-        </>
+        <Suspense fallback="正在载入可视化编辑器…"><CrepeEditor text={text} edit={edit} writing={writing} upload={upload} imageURL={imageURL} openSplit={() => setMode("split")} /></Suspense>
       ) : markdown ? (
         <MarkdownView text={text} io={io} />
       ) : (

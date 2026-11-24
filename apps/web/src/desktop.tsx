@@ -1,3 +1,4 @@
+import { markdownWritingMode } from "./markdown/modes";
 import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
@@ -6,7 +7,6 @@ import Manager from "./plugins/Manager";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createRoot } from "react-dom/client";
-import { boardStrokes } from "./markdown/Whiteboard";
 import type { RichWriting } from "./markdown/crepeSource";
 import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
 import type { EditorView } from "@codemirror/view";
@@ -113,9 +113,6 @@ function LocalImage({
     <span>{alt}</span>
   );
 }
-function writingMode(path: string, text: string): Mode {
-  return /\.md$/i.test(path) && boardStrokes(text) ? "live" : "edit";
-}
 function Workspace({
   binding,
   close,
@@ -153,7 +150,7 @@ function Workspace({
     picker = useRef<HTMLInputElement>(null);
   const vault = binding.vault,
     dirty = pluginDirty || text !== saved,
-    editing = mode === "crepe" || mode === "live" || mode === "edit" || mode === "split";
+    editing = mode === "crepe" || mode === "edit" || mode === "split";
   const markdownSettings = markdownPreferences(preferences);
   function updatePluginSetting(pluginId: string, settings: unknown) {
     const next = updatePluginPreferences(
@@ -168,7 +165,7 @@ function Workspace({
   function changeMode(next: Mode) {
     setMode(next);
     if (
-      /\.md$/i.test(path) &&
+      next !== "edit" && /\.md$/i.test(path) &&
       markdownPreferences(preferencesRef.current).rememberNoteMode
     )
       saveNoteMode(vault, path, next);
@@ -299,16 +296,10 @@ function Workspace({
     const remembered = md && settings.rememberNoteMode
       ? loadNoteMode(vault, p)
       : undefined;
-    const nextMode = special || (phone && !writing)
-      ? "read"
-      : remembered ||
-        (writing
-          ? md
-            ? writingMode(p, source.current.text)
-            : "edit"
-          : md
-            ? settings.defaultMode
-            : "read");
+    const preferred = remembered ?? settings.defaultMode;
+    let nextMode: Mode = "read";
+    if (!special && writing) nextMode = md ? markdownWritingMode(remembered, settings.defaultMode) : "edit";
+    else if (!special && !phone && md) nextMode = preferred;
     setMode(nextMode);
     notify("");
   }
@@ -483,7 +474,7 @@ function Workspace({
     const value = "\n" + links.join("\n") + "\n";
     if (file === source.current && !insertHere?.(value)) {
       edit(file.text + value);
-      changeMode("edit");
+      changeMode(/\.md$/i.test(path) ? "split" : "edit");
     }
   }
   return (
@@ -637,8 +628,7 @@ function Workspace({
                   base: null,
                   data: base64(await newContent(newPath)),
                 });
-                await open(newPath, true);
-                changeMode("edit");
+                await open(newPath, true, true);
                 setNewPath(null);
                 await load();
               });
@@ -694,11 +684,14 @@ function Workspace({
                       ? {
                           back,
                           dirty,
-                          edit: () => changeMode((markdownSettings.rememberNoteMode && loadNoteMode(vault, path)) === "crepe" || markdownSettings.defaultMode === "crepe" ? "crepe" : writingMode(path, text)),
+                          edit: () => changeMode(/\.md$/i.test(path) ? markdownWritingMode(
+                            markdownSettings.rememberNoteMode ? loadNoteMode(vault, path) : undefined,
+                            markdownSettings.defaultMode,
+                          ) : "edit"),
                           finish: () =>
                             run(async () => {
                               if (text !== saved) await save();
-                              changeMode("read");
+                              setMode("read");
                             }),
                         }
                       : undefined
@@ -796,7 +789,7 @@ function Workspace({
                           return `data:${asset.type};base64,${asset.data}`;
                         }}
                         key={path}
-                        focusSource={phone && mode === "edit"}
+                        focusSource={phone && (mode === "edit" || mode === "split")}
                         attach={() => picker.current?.click()}
                         markdown={/\.md$/i.test(path)}
                         text={text}

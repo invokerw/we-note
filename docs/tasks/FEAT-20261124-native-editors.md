@@ -26,7 +26,7 @@
 - Web 服务 `http://127.0.0.1:18274`，PID `31963`，日志 `dist/local/server.log`，数据目录 `services/api/data`。在本工作区执行 `./scripts/local.py status` 查看状态，`./scripts/local.py stop` 停止服务。
 - 打开 Web 首页，选择「创建账户」，填写邮箱和至少 8 位密码，点击「注册并登录」。创建第一个笔记库后，桌面端和 Android 可用同一账号登录此服务。
 - macOS 运行 `./dist/acceptance/WeNote`。Android 安装 `dist/acceptance/WeNote-arm64-debug.apk`；USB 调试时执行 `adb reverse tcp:18274 tcp:18274`，客户端服务地址填 `http://127.0.0.1:18274`。
-- 在笔记库新建 Markdown，切换「编辑模式 → 可视化编辑」，改一段后保存。在「编辑模式 → 思维导图」点击章节可跳回正文。
+- 在笔记库新建 Markdown，切换「编辑模式 → 可视化编辑」，改一段后保存。切换到「分屏编辑」核对 Markdown 源码，再切换「预览」查看正文。
 - 从文件夹或文件的操作菜单选「新建 → 思维导图」，输入名称，创建 `.mind.json`。添加子主题、修改备注、撤销重做，保存后重新打开核对。Android 窄屏可横向滚动节点工具栏。
 
 2026-11-24 已在任务分支交付实现 `4876d60`。保留任务工作区、本地服务、模拟器与产物，待用户验收。
@@ -60,3 +60,17 @@
 | Android | `ANDROID_SERIAL=emulator-5608 node apps/web/tests/native-editors.mjs --android` 退出 0。在独立只读模拟器验证登录、Crepe 保存、离线重开和同步。自审时补齐了同时连接多台模拟器时测试连接的释放 |
 
 本轮重新交付方式 2。Web 刷新后打开 Markdown 的「可视化编辑」验收。Apple Silicon 客户端完成构建，实际交互通过 Chrome 和 Android WebView 验证。
+
+## 11 月 24 日验收反馈 · 精简 Markdown 模式
+
+沿用方式 2。Markdown 菜单和默认模式设置保留分屏编辑、可视化编辑和预览。移除可视化编辑的「插入附件」按钮。检查旧偏好、手机编辑和独立导图文件。
+
+| 项目 | 验证结果 |
+| --- | --- |
+| 红阶段 | `node apps/web/tests/native-editors.mjs` 在原代码上分别复现多余的三个菜单项和可视化编辑中的附件按钮，退出 1 |
+| 单元 | `node --test apps/web/tests/*test.mjs` 退出 0，8 项通过。旧值 `live`、`edit`、`map` 分别映射为可视化编辑、分屏编辑和预览 |
+| Chrome | `node apps/web/tests/native-editors.mjs` 退出 0。验证菜单与设置一致、旧账号和单篇笔记模式迁移、可视化编辑无附件按钮、分屏保留附件、特殊语法切换分屏及独立导图保存重开 |
+| Android | `ANDROID_SERIAL=emulator-5608 node apps/web/tests/native-editors.mjs --android` 退出 0。已验证手机菜单、可视化编辑保存、同步与离线重开 |
+| 构建及交付 | `npm run build --prefix apps/web`、`npm run android --prefix apps/client -- --debug`、`cargo build --locked -p wenote-desktop --release` 退出 0。Web 首页与静态编辑器脚本已核对，任务工作区的 APK 和 macOS 客户端已更新 |
+
+本轮自审核对了手机编辑和新建笔记的入口、普通文本的编辑模式以及 Crepe 遇到专用语法时的分屏入口。默认 Markdown 编辑器采用 Crepe，手机浏览笔记先进入预览。按方式 2 在原分支交付。

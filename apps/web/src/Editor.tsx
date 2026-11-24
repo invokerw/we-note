@@ -1,3 +1,4 @@
+import { markdownWritingMode } from "./markdown/modes";
 import { NoteHeading } from "./LibraryUI";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { browserExport } from "./plugins/archive";
@@ -206,7 +207,7 @@ export default function Editor({
   }
   function changeMode(next: Mode) {
     setMode(next);
-    if (note.format === "md" && markdownSettings.rememberNoteMode)
+    if (next !== "edit" && note.format === "md" && markdownSettings.rememberNoteMode)
       saveNoteMode(vault, note.file_id, next);
   }
   function changeMarkdownSettings(
@@ -288,10 +289,10 @@ export default function Editor({
     const inserted = "\n" + parts.join("\n") + "\n";
     if (!insertHere?.(inserted)) {
       edit(source.current.text + inserted);
-      setMode("edit");
+      setMode(note.format === "md" ? "split" : "edit");
     }
   }
-  const editing = mode === "crepe" || mode === "edit" || mode === "live" || mode === "split";
+  const editing = mode === "crepe" || mode === "edit" || mode === "split";
   function navigate(href: string, label: string) {
     if (href.startsWith(origin + "/assets/")) {
       run(() => download(token, new URL(href).pathname, label || "附件"));
@@ -337,7 +338,7 @@ export default function Editor({
       }}
       onKeyDown={(e) => {
         if (
-          (editing || mode === "map") &&
+          editing &&
           (e.ctrlKey || e.metaKey) &&
           e.key === "s"
         ) {
@@ -350,7 +351,10 @@ export default function Editor({
         handset={phoneBack && {
           back: phoneBack,
           dirty: text !== saved.current,
-          edit: () => setMode(note.format === "md" ? ((markdownSettings.rememberNoteMode && loadNoteMode(vault, note.file_id)) === "crepe" || markdownSettings.defaultMode === "crepe" ? "crepe" : "live") : "edit"),
+          edit: () => setMode(note.format === "md" ? markdownWritingMode(
+            markdownSettings.rememberNoteMode ? loadNoteMode(vault, note.file_id) : undefined,
+            markdownSettings.defaultMode,
+          ) : "edit"),
           finish: () => run(async () => {
             if (text !== saved.current) await save();
             if (source.current.text === saved.current) setMode("read");

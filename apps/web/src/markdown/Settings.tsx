@@ -1,7 +1,7 @@
+import { markdownModes, type MarkdownMode } from "./modes";
 import { MarkdownView } from "./MarkdownView";
 import type {
   MarkdownFontSize,
-  MarkdownMode,
   MarkdownPreferences,
 } from "../preferences";
 
@@ -41,12 +41,7 @@ export default function MarkdownSettings({
             update("defaultMode", e.target.value as MarkdownMode)
           }
         >
-          <option value="crepe">可视化编辑</option>
-          <option value="live">所见即所得</option>
-          <option value="split">分屏编辑</option>
-          <option value="edit">源码</option>
-          <option value="read">预览模式</option>
-          <option value="map">思维导图</option>
+          {markdownModes.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>
       </label>
       <label>

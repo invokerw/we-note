@@ -72,7 +72,7 @@ try {
       Authorization: "Bearer " + token,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ autoFormatOnSave: false, defaultMode: "read" }),
+    body: JSON.stringify({ autoFormatOnSave: false, defaultMode: "live" }),
   });
   const { id } = await (await api("/vaults", { name: "原生编辑验收" })).json();
   const folder = "/vaults/" + id + "/files";
@@ -94,6 +94,7 @@ try {
     }),
   );
   await create("普通.json", "{}");
+  await create("引用.md", "[首页][home]\n\n[home]: /home");
   const readingSource = [
     "# 关于城市散步的读书手记",
     "这周重读《街道的美学》。把书里谈到的观察方法记下来，周末带着这些问题，再走一次熟悉的街区。",
@@ -117,13 +118,24 @@ try {
   await page.getByLabel("密码").fill(password);
   await button("登录").click();
   await button("读书手记.md").click();
+  await page.locator(".mode-crepe .milkdown").waitFor();
   await button("编辑模式").click();
+  const modeNames = await page.locator(".popup-list button").allTextContents();
   await button("可视化编辑").click();
   await (await import("./crepe-appearance.mjs")).verifyAppearance(page);
+  assert.equal(await button("插入附件").count(), 0);
+  assert.deepEqual(modeNames, ["分屏编辑", "可视化编辑", "预览"]);
   await page.locator(".mode-crepe .ProseMirror > p").last().click();
   await page.keyboard.insertText("周日再读。");
   assert.equal(await saveFile(readingNote), readingSource + "\n\n周日再读。");
+  await page.evaluate(({ vault, file }) => {
+    const key = "wenote-note-modes-v1";
+    const modes = JSON.parse(localStorage.getItem(key) || "{}");
+    modes[vault + ":" + file] = "map";
+    localStorage.setItem(key, JSON.stringify(modes));
+  }, { vault: id, file: md.file_id });
   await button("笔记.md").click();
+  await page.locator(".mode-read .reading h2").waitFor();
   await button("编辑模式").click();
   await button("可视化编辑").click();
   const para = page
@@ -144,8 +156,11 @@ try {
   }
   assert.equal(await saveFile(md), source.replace("编辑段落", "编辑段落完成"));
   await button("编辑模式").click();
-  await button("思维导图").click();
-  await page.locator(".me-tpc").filter({ hasText: "章节" }).click();
+  await button("分屏编辑").click();
+  await button("插入附件").waitFor();
+  assert.match(await page.getByLabel("笔记源码").innerText(), /编辑段落完成/);
+  await button("编辑模式").click();
+  await button("预览").click();
   await page.locator(".reading h2").waitFor();
   await button("路线.mind.json").click();
   const branch = page.locator(".me-tpc").filter({ hasText: "调研" });
@@ -194,6 +209,12 @@ try {
   await dialog.getByRole("button", { name: "创建", exact: true }).click();
   await page.locator(".me-tpc").filter({ hasText: "第二张" }).waitFor();
   await button("第二张.mind.json").waitFor();
+  await button("引用.md").click();
+  await button("打开分屏编辑").click();
+  assert.match(await page.getByLabel("笔记源码").innerText(), /\[home\]: \/home/);
+  await button("插件").click();
+  await button("Markdown 设置").click();
+  assert.deepEqual(await page.getByLabel("默认打开模式").locator("option").allTextContents(), modeNames);
   if (process.argv.includes("--android")) {
     await (
       await import("./native-android.mjs")
@@ -207,7 +228,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    "Crepe edit/save, heading navigation, native diagram save/reopen and JSON dispatch passed",
+    "Three Markdown modes, Crepe edit/save, native diagram save/reopen and JSON dispatch passed",
   );
 } finally {
   await browser?.close();
