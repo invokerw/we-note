@@ -3,7 +3,7 @@
 - feature，Web / 桌面 / Android 共用笔记工作区。
 - 用户需求：「需要添加白天黑夜主题切换功能，支持设置自动切换，你看应该加到哪里，并设计实现功能」。
 - 验收方式 2。基线 `main` 的 `d676b0b`，分支 `codex/feature-appearance-schedule-20261125`，工作树 `.worktrees/appearance-schedule`。
-- 状态 `DELIVERED`。客户端功能，本地专用 Web 服务用于交互验收。
+- 状态 `MERGED`。客户端功能，本地专用 Web 服务用于交互验收。
 
 ## 验收条件
 
@@ -34,3 +34,9 @@
 - 访问 `http://localhost:19527`，凭据在 `dist/local/验收账号.txt`。笔记库「主题体验」包含 Markdown、XMind 和原生脑图。点头像 → 个人设置 → 外观，选择模式。如需快速测试定时，把下一次切换设到下一分钟，关闭设置后继续编辑。
 - 专用服务启动命令 `./scripts/local.py start --port 19527`，PID `23543`，日志 `dist/local/server.log`，数据目录 `services/api/data`，停止命令 `./scripts/local.py stop`。
 - macOS 使用 `./target/release/wenote-desktop`，同步地址填写 `http://localhost:19527` 并选择本地目录，打开笔记编辑器体验。
+
+## 验收与合入
+
+2026-11-25 用户确认验收完毕，状态转为 `ACCEPTED`。本地 `main` 快进至 `70dc308`，已用 `git merge-base --is-ancestor` 核实交付提交和受测功能提交 `c0d103c` 均已合入。在主工作区执行 `node --test apps/web/tests/appearance.test.mjs`，两项测试均通过。
+
+20:56（北京时间）完成清理，状态转为 `MERGED`。19527 端口的专用服务已停止，任务 worktree 和本地分支已删除。Web 和客户端构建、验收数据、截图与日志归档在 `dist/acceptance/FEAT-20261125-appearance-schedule-c0d103c/`。
