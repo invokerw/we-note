@@ -6,9 +6,9 @@
 | 登记日期 / 影响面 | 2026-11-25 / 开发流程 |
 | 基线 | `main`，`c6f8589` |
 | 本轮编辑与交付分支 | `main` |
-| 首轮登记 worktree（验收期间保留） | `/Users/weifei/code/we-note/.worktrees/requirement-worktrees-20261125` |
+| 首轮登记 worktree（已清理） | `/Users/weifei/code/we-note/.worktrees/requirement-worktrees-20261125` |
 | 验收方式 | 1 · 主分支验收 |
-| 状态 | `DELIVERED` |
+| 状态 | `MERGED` |
 
 ## 原始需求
 
@@ -29,3 +29,5 @@
 在 `main` 核对开发技能、仓库指令、README、开发工作流、账本和任务模板，按新需求登记、已有需求修订、独立技能或文档更新三个场景验收。
 
 `quick_validate.py .codex/skills/wenote-development` 退出 0。24 个相对链接和关联章节检查通过，`git diff --check` 退出 0。
+
+2026-11-25 21:23（上海时间），用户确认本地 `main` 上的 `ae28675` 验收通过，记为 `ACCEPTED`。已核对该提交包含在 `main` 中，并清理首轮登记 worktree 和本地分支 `codex/docs-requirement-worktrees-20261125`，最终状态为 `MERGED`。
