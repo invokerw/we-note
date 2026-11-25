@@ -36,7 +36,8 @@ fn two_devices_and_web_converge() -> Result<()> {
     fs::create_dir(&b)?;
     let state_root = temp.path().join("state-a");
     let sync_a = || synchronize(&origin, &token, vault, &a, &state_root.join(vault));
-    let sync_b = || synchronize(&origin, &token, vault, &b, &temp.path().join("state-b"));
+    let state_b = temp.path().join("state-b");
+    let sync_b = || synchronize(&origin, &token, vault, &b, &state_b.join(vault));
     let path = "daily/早安.md";
     let original = b"# title\r\n\r\none\r\ntwo\r\nthree\r\nfour\r\nfive\r\n";
     fs::write(a.join(path), original)?;
@@ -190,6 +191,11 @@ fn two_devices_and_web_converge() -> Result<()> {
     assert!(final_note.contains(&format!("/{vault}/")));
     assert_eq!(fs::read_to_string(a.join(draft_path))?, final_note);
     let url = book.upload(&token, note, "tiny.png", "image/png", png)?;
+    assert_eq!(url.rsplit('/').next().unwrap().len(), 16);
+    assert_eq!(
+        Notebook::open(&state_b, vault)?.image(&url, &token)?["data"],
+        png
+    );
     assert_eq!(book.image(&url, "")?["data"], png);
     let assets = book.catalog(&token, "/assets", None)?;
     let id = assets

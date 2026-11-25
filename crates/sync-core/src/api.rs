@@ -221,10 +221,11 @@ impl Api {
             parts => parts,
         };
         if parts.len() == 4 {
+            let short_key = route_parts.len() == 6 && parts[3].len() == 16;
             if parts[0].len() != 4
                 || parts[1].len() != 2
                 || parts[2].len() != 2
-                || parts[3].len() != 64
+                || (!short_key && parts[3].len() != 64)
                 || !parts[0].bytes().all(|b| b.is_ascii_digit())
                 || !parts[1].bytes().all(|b| b.is_ascii_digit())
                 || !parts[2].bytes().all(|b| b.is_ascii_digit())
@@ -246,8 +247,18 @@ impl Api {
                 .filter(|value| !value.is_empty())
                 .unwrap_or("application/octet-stream")
                 .to_owned();
+            let expected = if short_key {
+                response
+                    .headers()
+                    .get("X-Content-Hash")
+                    .and_then(|value| value.to_str().ok())
+                    .context("图片响应缺少 SHA-256")?
+                    .to_owned()
+            } else {
+                format!("sha256:{}", parts[3])
+            };
             let bytes = response.bytes()?.to_vec();
-            if super::digest(&bytes) != format!("sha256:{}", parts[3]) {
+            if super::digest(&bytes) != expected {
                 bail!("附件校验失败")
             }
             return Ok((media, bytes));

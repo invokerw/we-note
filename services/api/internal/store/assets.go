@@ -14,8 +14,10 @@ import (
 
 const assetDateLayout = "2006/01/02"
 
-func canonicalAssetURL(publicBase, owner, vault string, createdAt time.Time, contentHash string) string {
-	return strings.TrimRight(publicBase, "/") + "/assets/" + owner + "/" + vault + "/" + createdAt.UTC().Format(assetDateLayout) + "/" + strings.TrimPrefix(contentHash, "sha256:")
+var shortAssetKey = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+func canonicalAssetURL(publicBase, owner, vault string, createdAt time.Time, urlKey string) string {
+	return strings.TrimRight(publicBase, "/") + "/assets/" + owner + "/" + vault + "/" + createdAt.UTC().Format(assetDateLayout) + "/" + urlKey
 }
 
 func (r *Repository) SetPublicBase(raw string) error {
@@ -48,13 +50,16 @@ type Asset struct {
 	ReferenceURLs []string  `json:"reference_urls,omitempty"`
 }
 
-const assetSelect = `SELECT a.id,a.vault_id,a.name,a.media_type,u.status,u.content_hash,u.content_size,u.id,a.created_at,u.storage_key,v.owner_user_id FROM assets a JOIN vaults v ON v.id=a.vault_id JOIN upload_sessions u ON u.id=a.upload_id AND u.vault_id=a.vault_id `
+const assetSelect = `SELECT a.id,a.vault_id,a.name,a.media_type,u.status,u.content_hash,u.content_size,u.id,
+ a.created_at,u.storage_key,v.owner_user_id,COALESCE(k.url_key,substr(u.content_hash,8))
+ FROM assets a JOIN vaults v ON v.id=a.vault_id JOIN upload_sessions u ON u.id=a.upload_id AND u.vault_id=a.vault_id
+ LEFT JOIN asset_url_keys k ON k.vault_id=a.vault_id AND k.day=substr(a.created_at,1,10) AND k.content_hash=u.content_hash `
 
 func (r *Repository) scanAsset(row scanner) (Asset, error) {
 	var a Asset
-	var createdAt, owner string
+	var createdAt, owner, urlKey string
 	var storageKey sql.NullString
-	err := row.Scan(&a.ID, &a.Vault, &a.Name, &a.Type, &a.Status, &a.Hash, &a.Size, &a.Upload, &createdAt, &storageKey, &owner)
+	err := row.Scan(&a.ID, &a.Vault, &a.Name, &a.Type, &a.Status, &a.Hash, &a.Size, &a.Upload, &createdAt, &storageKey, &owner, &urlKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -69,9 +74,35 @@ func (r *Repository) scanAsset(row scanner) (Asset, error) {
 		a.StorageKey = storageKey.String
 	}
 	a.LegacyURL = r.publicBase + "/assets/" + a.ID
-	a.URL = canonicalAssetURL(r.publicBase, owner, a.Vault, a.CreatedAt, a.Hash)
+	a.URL = canonicalAssetURL(r.publicBase, owner, a.Vault, a.CreatedAt, urlKey)
 	return a, nil
 }
+
+// Keep the reservation in the same transaction as the asset metadata.
+func reserveAssetURLKey(ctx context.Context, tx *sql.Tx, vault string, createdAt time.Time, hash string) error {
+	day := createdAt.UTC().Format(time.DateOnly)
+	if !syncHashPattern.MatchString(hash) {
+		return errors.New("invalid asset content hash")
+	}
+	var reserved bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM asset_url_keys WHERE vault_id=? AND day=? AND content_hash=?)`, vault, day, hash).Scan(&reserved); err != nil || reserved {
+		return err
+	}
+	var candidate any = strings.TrimPrefix(hash, "sha256:")[:16]
+	for attempt := 0; attempt < 8; attempt++ {
+		res, err := tx.ExecContext(ctx, `INSERT INTO asset_url_keys(vault_id,day,content_hash,url_key) VALUES(?,?,?,COALESCE(?,lower(hex(randomblob(8))))) ON CONFLICT(vault_id,day,url_key) DO NOTHING`, vault, day, hash, candidate)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil || n == 1 {
+			return err
+		}
+		candidate = nil // The digest prefix is occupied; try another 64-bit key.
+	}
+	return errors.New("could not allocate a unique image URL key")
+}
+
 func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaType, hash, key string, size int64) (Asset, error) {
 	return r.createAsset(ctx, user, vault, "", name, mediaType, hash, key, size)
 }
@@ -135,11 +166,15 @@ func (r *Repository) createAsset(ctx context.Context, user, vault, note, name, m
 	if err != nil {
 		return a, err
 	}
-	now := formatTime(time.Now().UTC())
+	createdAt := time.Now().UTC()
+	now := formatTime(createdAt)
 	if _, err = tx.ExecContext(ctx, `INSERT INTO upload_sessions(id,vault_id,content_hash,content_size,status,created_at) VALUES(?,?,?,?,'pending',?)`, upload, vault, hash, size, now); err != nil {
 		return a, err
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO assets(id,vault_id,name,media_type,upload_id,created_at,operation_key,fingerprint) VALUES(?,?,?,?,?,?,NULLIF(?,''),?)`, id, vault, name, mt, upload, now, key, fingerprint); err != nil {
+		return a, err
+	}
+	if err = reserveAssetURLKey(ctx, tx, vault, createdAt, hash); err != nil {
 		return a, err
 	}
 	if note != "" {
@@ -220,19 +255,30 @@ func (r *Repository) assetForReference(ctx context.Context, queryer interface {
 		args = append(args, assetPath)
 	} else {
 		parts := strings.Split(assetPath, "/")
-		if len(parts) == 6 {
+		scoped := len(parts) == 6
+		if scoped {
 			where += ` AND v.owner_user_id=? AND a.vault_id=?`
 			args = append(args, parts[0], parts[1])
 			parts = parts[2:]
 		}
-		if len(parts) != 4 || len(parts[0]) != 4 || len(parts[1]) != 2 || len(parts[2]) != 2 || !syncHashPattern.MatchString("sha256:"+parts[3]) {
+		if len(parts) != 4 || len(parts[0]) != 4 || len(parts[1]) != 2 || len(parts[2]) != 2 {
 			return Asset{}, ErrNotFound
 		}
 		if _, err := time.Parse(assetDateLayout, strings.Join(parts[:3], "/")); err != nil {
 			return Asset{}, ErrNotFound
 		}
-		where += ` AND substr(a.created_at,1,10)=? AND u.content_hash=?`
-		args = append(args, strings.Join(parts[:3], "-"), "sha256:"+parts[3])
+		where += ` AND substr(a.created_at,1,10)=?`
+		args = append(args, strings.Join(parts[:3], "-"))
+		switch {
+		case scoped && shortAssetKey.MatchString(parts[3]):
+			where += ` AND k.url_key=?`
+			args = append(args, parts[3])
+		case syncHashPattern.MatchString("sha256:" + parts[3]):
+			where += ` AND u.content_hash=?`
+			args = append(args, "sha256:"+parts[3])
+		default:
+			return Asset{}, ErrNotFound
+		}
 	}
 	if vault != "" {
 		where += ` AND a.vault_id=?`
@@ -258,7 +304,10 @@ func (r *Repository) DeleteAsset(ctx context.Context, user, vault, id string) er
 
 // Only canonical links on this instance form dependencies. External links survive imports verbatim.
 func (r *Repository) assetReferences(content []byte) []string {
-	pattern := regexp.MustCompile(regexp.QuoteMeta(r.publicBase+"/assets/") + `((?:[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/)?[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9a-f]{64}|asset_[a-zA-Z0-9_-]+)`)
+	const scope = `[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/`
+	const date = `[0-9]{4}/[0-9]{2}/[0-9]{2}/`
+	const paths = `(` + scope + date + `[0-9a-f]{16}\b|(?:` + scope + `)?` + date + `[0-9a-f]{64}\b|asset_[a-zA-Z0-9_-]+)`
+	pattern := regexp.MustCompile(regexp.QuoteMeta(r.publicBase+"/assets/") + paths)
 	seen := map[string]bool{}
 	refs := []string{}
 	for _, match := range pattern.FindAllSubmatch(content, -1) {

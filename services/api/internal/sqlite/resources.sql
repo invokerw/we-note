@@ -271,3 +271,10 @@ END;
 CREATE TRIGGER IF NOT EXISTS pin_share_publications_images AFTER INSERT ON share_publications BEGIN
  UPDATE image_lifetimes SET orphan_since=NULL WHERE asset_id IN (SELECT json_extract(value,'$.asset_id') FROM json_each(NEW.snapshot,'$.assets'));
 END;
+
+-- A published URL key remains reserved for its content for the lifetime of the vault.
+CREATE TABLE IF NOT EXISTS asset_url_keys (
+ vault_id TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+ day TEXT NOT NULL, content_hash TEXT NOT NULL, url_key TEXT NOT NULL CHECK(length(url_key)=16),
+ PRIMARY KEY(vault_id,day,content_hash), UNIQUE(vault_id,day,url_key)
+);

@@ -63,7 +63,9 @@ func (r *Repository) noteUsesAsset(ctx context.Context, q interface {
 			return false, err
 		}
 		refs := r.assetReferences(data)
-		if slices.Contains(refs, asset.URL) || slices.Contains(refs, asset.LegacyURL) || slices.Contains(refs, r.publicBase+"/assets/"+asset.CreatedAt.UTC().Format(assetDateLayout)+"/"+strings.TrimPrefix(asset.Hash, "sha256:")) {
+		digest := strings.TrimPrefix(asset.Hash, "sha256:")
+		scopedFullURL := asset.URL[:strings.LastIndexByte(asset.URL, '/')+1] + digest
+		if slices.Contains(refs, asset.URL) || slices.Contains(refs, asset.LegacyURL) || slices.Contains(refs, scopedFullURL) || slices.Contains(refs, r.publicBase+"/assets/"+asset.CreatedAt.UTC().Format(assetDateLayout)+"/"+digest) {
 			return true, nil
 		}
 	}

@@ -27,6 +27,8 @@ func (r *Repository) writeExportSnapshot(ctx context.Context, z *zip.Writer, vau
 			if i := strings.Index(a.URL, "/assets/"); i >= 0 {
 				p := strings.Split(a.URL[i+len("/assets/"):], "/")
 				if len(p) == 6 {
+					p[5] = strings.TrimPrefix(a.Hash, "sha256:")
+					targets[a.URL[:i]+"/assets/"+strings.Join(p, "/")] = a.Path
 					targets[a.URL[:i]+"/assets/"+strings.Join(p[2:], "/")] = a.Path
 				}
 			}

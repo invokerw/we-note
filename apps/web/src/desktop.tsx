@@ -73,7 +73,7 @@ function local<T>(
   });
 }
 function isAsset(src: string) {
-  return src.startsWith("https://wenote-draft.invalid/assets/") || /^https?:\/\/[^/]+\/assets\/(?:asset_[\w-]+|(?:[\w-]+\/[\w-]+\/)?\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{64})$/.test(src);
+  return src.startsWith("https://wenote-draft.invalid/assets/") || /^https?:\/\/[^/]+\/assets\/(?:asset_[\w-]+|(?:[\w-]+\/[\w-]+\/)?\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{64}|[\w-]+\/[\w-]+\/\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{16})$/.test(src);
 }
 function LocalImage({
   binding,

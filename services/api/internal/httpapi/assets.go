@@ -111,6 +111,7 @@ func (a *API) asset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Content-Hash", asset.Hash)
 	w.Header().Set("Content-Type", asset.Type)
 	disposition := "attachment"
 	if strings.HasPrefix(asset.Type, "image/") && asset.Type != "image/svg+xml" {

@@ -183,6 +183,9 @@ func (r *Repository) CloseShare(ctx context.Context, user, id string, revoke boo
 }
 func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a Asset) (string, error) {
 	now := time.Now().UTC()
+	if err := reserveAssetURLKey(ctx, tx, target, now, a.Hash); err != nil {
+		return "", err
+	}
 	if PictureType(a.Type) {
 		existing, err := r.scanAsset(tx.QueryRowContext(ctx, assetSelect+` WHERE a.vault_id=? AND a.is_deleted=0 AND u.status='completed' AND substr(a.created_at,1,10)=? AND u.content_hash=? ORDER BY a.id LIMIT 1`, target, now.Format("2006-01-02"), a.Hash))
 		if err == nil {

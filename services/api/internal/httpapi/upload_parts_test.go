@@ -104,13 +104,16 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 	if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), data) {
 		t.Fatal("wrong assembled bytes", w.Code)
 	}
-	wantURL := "https://localhost:8443/assets/" + alice.ID + "/" + v.ID + "/" + asset.CreatedAt.UTC().Format("2006/01/02") + "/" + strings.TrimPrefix(asset.Hash, "sha256:")
+	wantURL := "https://localhost:8443/assets/" + alice.ID + "/" + v.ID + "/" + asset.CreatedAt.UTC().Format("2006/01/02") + "/" + strings.TrimPrefix(asset.Hash, "sha256:")[:16]
 	if asset.URL != wantURL {
 		t.Fatalf("asset URL = %q, want %q", asset.URL, wantURL)
 	}
 	newURL := strings.TrimPrefix(asset.URL, "https://localhost:8443")
 	if w = requestJSON(t, mux, http.MethodGet, newURL, token, nil); w.Code != 200 || !bytes.Equal(w.Body.Bytes(), data) {
 		t.Fatalf("wrong date-hash URL bytes: %d %q", w.Code, w.Body.Bytes())
+	}
+	if w.Header().Get("X-Content-Hash") != asset.Hash {
+		t.Fatal("missing full download digest")
 	}
 	var storageKey string
 	if err := db.QueryRow(`SELECT storage_key FROM upload_sessions WHERE id=?`, asset.Upload).Scan(&storageKey); err != nil {
