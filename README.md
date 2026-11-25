@@ -110,6 +110,8 @@ APK 位于 `apps/client/src-tauri/gen/android/app/build/outputs/apk/`。登录 H
 
 ## 开发协作
 
+需求文档可以在当前分支持续编写。用户验收后，在该分支提交已确认的文档改动。用户点名某项需求并要求开发时，再启动下述流程。
+
 开发任务按功能开发、Bug 修复、重构、测试、文档和工程维护分类，登记在 [开发账本](docs/开发账本.md)，详细执行方式见 [开发工作流](docs/开发工作流.md)。具体实现使用独立 Git worktree 和 `codex/` 分支，按 TDD 先写失败测试，再实现和回归验证。服务端任务使用独立端口和运行目录，客户端任务从任务 worktree 构建。
 
 开工前由用户选择本任务的验收方式。测试、自审并提交后，按选择先合入本地 `main` 再验收，或先在任务 worktree 验收、通过后再合入。返工沿用原 worktree 和本任务的验收方式。用户确认通过后清理 worktree 和任务分支。Codex 需要执行仓库流程时读取 [WeNote 开发流程 skill](.codex/skills/wenote-development/SKILL.md)。
