@@ -1,6 +1,6 @@
 # FEAT-20261125-personal-settings · 个人设置与侧栏入口
 
-- 类型 `feature`，影响 server、Web、桌面、Android。状态 `DELIVERED`。
+- 类型 `feature`，影响 server、Web、桌面、Android。状态 `MERGED`。
 - 依据为 `main` 的 `b4d5cc5` 中的[已验收需求](../个人设置与侧栏入口需求.md)。验收条件见文档八个场景。
 - 用户选择方式 2，任务分支验收后再合入。分支 `codex/feature-personal-settings-20261125`，工作区 `.worktrees/personal-settings-20261125`。
 - 实现账户头像、密码、设置分类、库工具重排及邮箱收发下线。独立服务端使用本工作区的数据和日志。
@@ -76,3 +76,9 @@
 - `go -C services/api test ./...`、`go -C services/api vet ./...`、`cargo test --locked -p wenote-sync --lib`、`node --test apps/web/tests/*test.mjs` 和 `git diff --check` 通过。Web 构建、`npm run build:desktop --prefix apps/web` 和 `cargo build --locked -p wenote-desktop --release` 通过。
 - 在 `http://localhost:19486` 运行 `apps/web/tests/trash.mjs` 和 `phase1.mjs` 均退出 0。覆盖原目录仍存在、仅父级或相似目录存在、右键和预览恢复全程无弹窗、同名冲突，以及恢复后重新打开正文。
 - 按方式 2 重新交付，专用服务 PID `21807`，数据与账号沿用上轮。刷新网页，打开回收站即可验收。macOS 客户端为本工作区 `target/release/wenote-desktop`，Android 真机待验。
+
+## 验收与合入
+
+2026-11-25 19:11（北京时间）按方式 2 完成收尾。用户确认任务分支版本 `867fe8c` 验收通过（`ACCEPTED`）。本地 `main` 快进至该提交，`git merge-base --is-ancestor 867fe8c main` 验证通过。
+
+已停止 19486 端口的验收服务，清理任务工作区及对应的本地分支，状态更新为 `MERGED`。验收数据、日志和 macOS 客户端保存在主工作区的 `dist/acceptance/FEAT-20261125-personal-settings-867fe8c/`。
