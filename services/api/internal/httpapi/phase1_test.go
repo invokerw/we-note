@@ -30,8 +30,6 @@ func TestSnapshotImportIsAtomicIsolatedAndReplayable(t *testing.T) {
 	mux := NewMux(repo)
 	alice := registerUser(t, mux, "alice@test.invalid", "alice password")
 	bob := registerUser(t, mux, "bob@test.invalid", "bob password")
-	aliceToken := loginUser(t, mux, alice.Email, "alice password")
-	bobToken := loginUser(t, mux, bob.Email, "bob password")
 	a, err := repo.CreateVault(ctx, alice.ID, "Source")
 	if err != nil {
 		t.Fatal(err)
@@ -61,13 +59,11 @@ func TestSnapshotImportIsAtomicIsolatedAndReplayable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	accept := "/api/v1/shares/" + share.ID + "/accept"
-	body := map[string]string{"vault_id": b.ID}
-	if got := requestJSON(t, mux, http.MethodPost, accept, aliceToken, body); got.Code != 404 {
-		t.Fatalf("sender accepted as recipient: %d", got.Code)
+	if _, err := repo.AcceptShare(ctx, alice.ID, share.ID, b.ID, ""); err == nil {
+		t.Fatal("sender accepted as recipient")
 	}
-	if got := requestJSON(t, mux, http.MethodPost, accept, bobToken, body); got.Code != 409 {
-		t.Fatalf("path collision = %d %s", got.Code, got.Body.String())
+	if _, err := repo.AcceptShare(ctx, bob.ID, share.ID, b.ID, ""); err == nil {
+		t.Fatal("expected path collision")
 	}
 	files, err := repo.ListFiles(ctx, b.ID)
 	if err != nil || len(files) != 1 {
@@ -76,10 +72,13 @@ func TestSnapshotImportIsAtomicIsolatedAndReplayable(t *testing.T) {
 	if _, err := repo.WriteFile(ctx, bob.ID, b.ID, existing.FileID, "delete_file", "trash", store.FileWrite{BaseVersion: existing.Version}); err != nil {
 		t.Fatal(err)
 	}
-	first := requestJSON(t, mux, http.MethodPost, accept, bobToken, body)
-	again := requestJSON(t, mux, http.MethodPost, accept, bobToken, body)
-	if first.Code != 200 || again.Code != 200 || first.Body.String() != again.Body.String() {
-		t.Fatalf("accept/replay = %s / %s", first.Body.String(), again.Body.String())
+	first, err := repo.AcceptShare(ctx, bob.ID, share.ID, b.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := repo.AcceptShare(ctx, bob.ID, share.ID, b.ID, "")
+	if err != nil || !reflect.DeepEqual(first, again) {
+		t.Fatal("import replay", err)
 	}
 	files, err = repo.ListFiles(ctx, b.ID)
 	if err != nil || len(files) != 2 {

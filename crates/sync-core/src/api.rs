@@ -134,6 +134,27 @@ impl Api {
         }
         Ok(checked(req.send()?)?.json()?)
     }
+    pub fn profile(&self, action: &str, body: Option<Value>) -> Result<Value> {
+        let (method, path) = match action {
+            "me" => (Method::GET, "/api/v1/me"),
+            "avatar" => (Method::GET, "/api/v1/me/avatar"),
+            "saveAvatar" => (Method::PUT, "/api/v1/me/avatar"),
+            "password" => (Method::POST, "/api/v1/auth/password/change"),
+            _ => anyhow::bail!("unknown profile action"),
+        };
+        let mut req = self
+            .client
+            .request(method, format!("{}{path}", self.origin))
+            .bearer_auth(&self.token);
+        if let Some(data) = body {
+            req = req.json(&data);
+        }
+        let response = checked(req.send()?)?;
+        if response.status().as_u16() == 204 {
+            return Ok(Value::Null);
+        }
+        Ok(response.json()?)
+    }
     pub fn encrypted_vault(&self, id: Option<&str>, envelope: Option<Value>) -> Result<Value> {
         let mut route = String::from("/api/v1/encrypted-vaults");
         if let Some(id) = id {

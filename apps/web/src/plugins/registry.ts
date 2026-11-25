@@ -57,6 +57,10 @@ export function handler(path: string) {
     (p) => p.enabled && p.manifest.file_extensions.includes(ext),
   );
 }
+export function handlerKey(path: string) {
+  const plugin = handler(path);
+  return plugin ? `${plugin.manifest.id}:${plugin.hash || plugin.manifest.version}` : "disabled";
+}
 export function usesPluginEditor(path: string) {
   const p = handler(path);
   return (

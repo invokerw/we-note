@@ -351,7 +351,9 @@ export function LibraryPanes({
   vault,
   create,
   tools,
-  account,
+  avatar,
+  searchAction,
+  allNotes,
   listActions,
   entries,
   busy = false,
@@ -368,7 +370,9 @@ export function LibraryPanes({
   vault?: ReactNode;
   create: ReactNode;
   tools: ReactNode;
-  account: ReactNode;
+  avatar: ReactNode;
+  searchAction: ReactNode;
+  allNotes?: () => boolean;
   listActions?: ReactNode;
   entries?: EntryIO;
   busy?: boolean;
@@ -458,17 +462,19 @@ export function LibraryPanes({
         </header>
       ) : (
         <>
-          <span className="library-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-9 16-9 16 0" /></svg></span>
+          {avatar}
           {vault}
+          <details className="vault-tools" onClick={e => {if ((e.target as HTMLElement).closest("button")) e.currentTarget.open = false;}}><summary aria-label="笔记库菜单">库工具 ▾</summary>{tools}</details>
           {create}
           <div className="side-files">
-            <button
+            <div className="library-browse-actions"><button
               aria-label="全部笔记"
               className={"all-notes" + (folder === null ? " current" : "")}
-              onClick={() => pickFolder(null)}
+              onClick={() => { if (!allNotes || allNotes()) pickFolder(null); }}
             >
               ▦　全部笔记
             </button>
+            {searchAction}</div>
             <ul className="folders">
               <FolderRows node={tree} active={folder} select={pickFolder} />
             </ul>
@@ -476,11 +482,8 @@ export function LibraryPanes({
         </>
       )}
       {phone && vault}
-      <nav className="sections" aria-label="笔记库工具">
-        {tools}
-      </nav>
+      {phone && <nav className="sections" aria-label="笔记库工具">{searchAction}{tools}</nav>}
       {phone && <div className="phone-library-actions">{listActions}</div>}
-      <div className="account">{account}</div>
       {!phone && (
         <div className="layout-options" aria-label="面板布局">
           {[3, 2, 1].map((n) => (
@@ -540,7 +543,7 @@ export function LibraryPanes({
         <nav className="phone-tabs" aria-label="笔记库导航">
           <button
             aria-current={folder === null ? "page" : undefined}
-            onClick={() => pickFolder(null)}
+            onClick={() => {if(!allNotes || allNotes()) pickFolder(null);}}
           >
             <PhoneIcon name="notes" />
             笔记
@@ -575,6 +578,7 @@ export function LibraryPanes({
       <section className="note-list-pane" aria-label="笔记列表">
         {phone && (
           <header className="phone-head phone-library-head">
+            {avatar}
             {folder && (
               <button
                 aria-label="上一级目录"

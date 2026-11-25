@@ -297,6 +297,12 @@ try {
       await tap(button("笔记库工具"));
     }
   };
+  async function openSettings(section) {
+    await openTools();
+    await tap(button("返回笔记列表"));
+    await button("打开个人设置").click();
+    await button(section).click();
+  }
   await pickLocal(mapName);
   const rootTopic = page.locator(".mindmap-node").first();
   await rootTopic.dblclick();
@@ -350,8 +356,7 @@ try {
     await delay(200);
   }
   assert.match(exported, /# 手机离线导图/);
-  await openTools();
-  await button("插件").click();
+  await openSettings("编辑与插件");
   const sample = await pack(
     fileURLToPath(new URL("../plugin-sdk/example", import.meta.url)),
   );
@@ -368,8 +373,7 @@ try {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, Buffer.from(sample).toString("base64"));
   await button("授权并安装").click();
-  await openTools();
-  await tap(button("返回笔记列表"));
+  await button("关闭个人设置").click();
   await pickLocal("插件.txt");
   assert.equal(await page.getByLabel("插件文档").inputValue(), "离线插件");
   await page.getByLabel("插件文档").fill("离线保存成功");
@@ -391,7 +395,7 @@ try {
     await delay(150);
   }
   adb("shell", "input", "keyevent", "KEYCODE_BACK");
-  await openTools();
+  await openSettings("设备与同步");
   await button("返回同步").click();
   await api(base + "/files/" + note.file_id + "/content", "PUT", {
     base_version_id: note.version_id,
@@ -473,7 +477,7 @@ try {
   const portableRow = page.locator(".row").filter({ hasText: "离线便携" });
   await portableRow.getByRole("button", { name: "下载 ZIP" }).click();
   await page.getByText(/已保存到 .*\.zip/).waitFor();
-  await openTools();
+  await openSettings("设备与同步");
   await button("返回同步").click();
   await button("退出账户").click();
   await button("登录").waitFor();

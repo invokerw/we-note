@@ -93,7 +93,9 @@ try {
   await button(guest, "确认保存").click();
   await guest.getByRole("link", { name: "打开已保存的笔记" }).click();
   await guest.getByRole("heading", { name: "验收.md" }).waitFor();
-  await button(a, "分享管理").click();
+  await button(a, "打开个人设置").click();
+  await button(a, "我的分享").click();
+  a.once("dialog", d => d.accept());
   await button(a, "撤销链接").click();
   const expired = await chrome.newPage();
   await expired.goto(link);
@@ -114,6 +116,7 @@ try {
   b.once("dialog", (d) => d.accept());
   await button(b, "更多操作").click();
   await button(b, "移入回收站").click();
+  await b.getByLabel("笔记库菜单").click();
   await button(b, "回收站").click();
   b.once("dialog", (d) => d.accept("恢复.md"));
   await button(b, "恢复").click();

@@ -12,9 +12,7 @@ func (a *API) securityRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/encrypted-vaults", a.security)
 	m.HandleFunc("GET /api/v1/encrypted-vaults/{id}", a.security)
 	m.HandleFunc("PUT /api/v1/encrypted-vaults/{id}", a.security)
-	for _, route := range []string{"POST /api/v1/shares/{id}/publish", "GET /api/v1/shares/{id}/copies", "GET /api/v1/shares/{id}/copies/{file}", "POST /api/v1/shares/{id}/copies/{file}"} {
-		m.HandleFunc(route, a.security)
-	}
+
 }
 func (a *API) security(w http.ResponseWriter, r *http.Request) {
 	u, ok := a.authenticatedUser(w, r)
@@ -48,19 +46,7 @@ func (a *API) security(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		out, err = a.repository.SaveEncrypted(ctx, u.ID, id, q)
-	case "POST /api/v1/shares/{id}/publish":
-		err = a.repository.PublishShare(ctx, u.ID, id)
-	case "GET /api/v1/shares/{id}/copies":
-		out, err = a.repository.ShareCopies(ctx, u.ID, id)
-	case "GET /api/v1/shares/{id}/copies/{file}":
-		out, err = a.repository.CopyDiff(ctx, u.ID, id, r.PathValue("file"))
-	case "POST /api/v1/shares/{id}/copies/{file}":
-		var q store.UpdateCopyRequest
-		if err = decodeJSON(w, r, &q); err != nil {
-			writeError(w, 400, "INVALID_REQUEST", err.Error())
-			return
-		}
-		out, err = a.repository.UpdateCopy(ctx, u.ID, id, r.PathValue("file"), q)
+
 	}
 	if err != nil {
 		resourceError(w, err)

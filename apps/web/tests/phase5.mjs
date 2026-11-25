@@ -80,7 +80,8 @@ try {
       content: bytes(body),
     })
   ).json();
-  await button(a.page, "分享管理").click();
+  await a.page.getByLabel("笔记库菜单").click();
+  await button(a.page, "批量分享").click();
   await a.page.getByLabel("文件或目录，每行一个").fill("项目/");
 
   await a.page.getByLabel("分享密码（可选）").fill("phase5-link");
@@ -103,76 +104,12 @@ try {
     await api(b.token, `/api/v1/vaults/${b.vault}/assets`)
   ).json();
   assert.equal(copyAssets.length, 1);
-  await a.page.getByLabel("分享方式").selectOption("account");
-  await a.page.getByLabel("接收者邮箱").fill(b.email);
-  await button(a.page, "发送到收件箱").click();
-  await a.page.getByText("快照已发送").waitFor();
-  await b.page.goto(origin);
-  await button(b.page, "收件箱").click();
-  b.page.once("dialog", (d) => d.accept("账户"));
-  await button(b.page, "导入快照").click();
-  await button(b.page, "查看来源与更新").click();
-  await b.page.getByText("已是发布版本").waitFor();
-  const imported = (await (await api(b.token, dest)).json()).files.find(
-    (v) => v.path === "账户/项目/记录.md",
-  );
-  const update = (token, path, base, text) =>
-    api(token, path + "/content", "PUT", {
-      base_version_id: base,
-      content: bytes(text),
-    });
-  await update(
-    b.token,
-    dest + "/" + imported.file_id,
-    imported.current_version_id,
-    "接收者草稿",
-  );
-  await update(
-    a.token,
-    files + "/" + file.file_id,
-    file.version_id,
-    "来源第二版 " + asset.canonical_url,
-  );
-  await button(a.page, "已发送").click();
-  await button(a.page, "发布来源更新").click();
-  await a.page.getByText("已发布当前文件版本").waitFor();
-  await button(b.page, "查看来源与更新").click();
-  await button(b.page, "对比版本").click();
-  await b.page.getByText("接收者草稿", { exact: true }).waitFor();
-  await b.page
-    .getByText("来源第二版 " + asset.canonical_url, { exact: true })
-    .waitFor();
-  const newLocal = await (
-    await api(b.token, dest + "/" + imported.file_id)
-  ).json();
-  await update(
-    b.token,
-    dest + "/" + imported.file_id,
-    newLocal.current_version_id,
-    "期间保存",
-  );
-  await button(b.page, "采用来源版本").click();
-  await b.page.getByText(/版本已变化/).waitFor();
-  await button(b.page, "查看来源与更新").click();
-  await button(b.page, "对比版本").click();
-  await b.page.getByText("期间保存", { exact: true }).waitFor();
-  await button(b.page, "采用来源版本").click();
-  await b.page.getByText("副本已更新").waitFor();
-  const result = await (
-    await api(b.token, dest + "/" + imported.file_id + "/content")
-  ).text();
-  assert.ok(result.startsWith("来源第二版 "));
-  assert.ok(!result.includes(asset.asset_id));
-  assert.equal(
-    (await (await api(b.token, `/api/v1/vaults/${b.vault}/assets`)).json())
-      .length,
-    1,
-  );
-  await button(a.page, "审计日志").click();
-  await a.page
-    .getByRole("cell", { name: "share.publish", exact: true })
-    .waitFor();
   const p = a.page;
+  await button(p,"打开个人设置").click();
+  await p.getByText("账户活动",{exact:true}).click();
+  await p.getByRole("heading",{name:"账户审计日志"}).waitFor();
+  await button(p,"关闭个人设置").click();
+  await p.getByLabel("笔记库菜单").click();
   await button(p, "加密笔记库").click();
   await button(p, "新建加密笔记库").click();
   const key = await p.getByLabel("恢复密钥", { exact: true }).inputValue();
@@ -213,7 +150,7 @@ try {
     "只在本机解密的内容",
   );
   console.log(
-    "Phase 5 browser acceptance passed shared links, batch assets, copy conflicts, audit and encrypted vaults.",
+    "Phase 5 browser acceptance passed shared links, batch assets, audit and encrypted vaults.",
   );
 } finally {
   await browser.close();

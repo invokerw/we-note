@@ -74,7 +74,8 @@ try {
   await click("登录");
   await create("设置验收.md", '# 设置验收\n\n`answer`\n\n```python\nanswer = "ok" if True else 0\n```');
   const formatId = await create("自动格式化.md", "占位");
-  await click("插件");
+  await click("打开个人设置");
+  await click("编辑与插件");
   await click("禁用 Markdown");
   await click("Markdown 设置");
   for (const label of [
@@ -215,10 +216,12 @@ try {
   await live.locator('.live-fence .md-string').first().click();
   assert.ok(await caretContrast() >= 4.5);
   assert.equal(await button("Markdown 设置").count(), 0);
-  await click("插件");
+  await click("打开个人设置");
+  await click("编辑与插件");
   await click("Markdown 设置");
   assert.equal(await page.getByRole("combobox", { name: "主题" }).count(), 0);
   assert.equal(await page.getByLabel("分屏编辑同步滚动").isChecked(), false);
+  await click("关闭个人设置");
   await click("values.json");
   await click("格式化");
   await page.getByLabel("JSON Pointer", { exact: true }).fill("/a~1b/~0key");
@@ -374,8 +377,10 @@ try {
     (x) => x.path === "旧版.xmind",
   ).file_id;
   assert.deepEqual(await content(legacyId), legacy);
-  await click("插件");
+  await click("打开个人设置");
+  await click("编辑与插件");
   await click("禁用 XMind");
+  await click("关闭个人设置");
   await click("路线.xmind");
   await page.getByText(/此格式的插件已禁用/).waitFor();
   assert.deepEqual(await exportBytes("下载原文件"), await content(mapId));
@@ -390,7 +395,8 @@ try {
       mimeType: "application/zip",
       buffer: Buffer.from(bytes),
     });
-  await click("插件");
+  await click("打开个人设置");
+  await click("编辑与插件");
   await install(
     zipSync({
       ...entries,
@@ -411,13 +417,16 @@ try {
   await page.getByRole("alert").filter({ hasText: "权限不受支持" }).waitFor();
   await install(withCaps(["parse"]));
   await click("授权并安装");
+  await click("关闭个人设置");
   await click("prefixed.txt");
   await page.getByLabel("插件文档").waitFor();
   assert.equal(await page.getByLabel("插件文档").isEditable(), false);
   assert.equal(await button("保存").count(), 0);
-  await click("插件");
+  await click("打开个人设置");
+  await click("编辑与插件");
   await install(sample);
   await click("授权并安装");
+  await click("关闭个人设置");
   await click("prefixed.txt");
   assert.equal(await page.getByLabel("插件文档").inputValue(), "磁盘字节");
   await page.getByLabel("插件文档").fill("修改后");
@@ -427,8 +436,10 @@ try {
   await page.reload();
   await click("prefixed.txt");
   assert.equal(await page.getByLabel("插件文档").inputValue(), "修改后");
-  await click("插件");
+  await click("打开个人设置");
+  await click("编辑与插件");
   await click("禁用 带标记的文本");
+  await click("关闭个人设置");
   await click("prefixed.txt");
   await page.locator("article pre").getByText("WN1").waitFor();
   assert.deepEqual(errors, []);

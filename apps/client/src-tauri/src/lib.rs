@@ -86,6 +86,11 @@ async fn logout(origin: String, token: String) -> Result<(), String> {
 #[derive(serde::Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 enum LocalAction {
+    Profile {
+        token: String,
+        operation: String,
+        body: Option<serde_json::Value>,
+    },
     UploadKey {
         slot: String,
         complete: Option<String>,
@@ -181,6 +186,11 @@ async fn notebook(
         use base64::{engine::general_purpose::STANDARD, Engine};
         use LocalAction::*;
         match operation {
+            Profile {
+                token,
+                operation,
+                body,
+            } => Api::new(book.origin(), &token).and_then(|api| api.profile(&operation, body)),
             UploadKey { slot, complete } => book.upload_key(&slot, complete.as_deref()),
             Transfer { token, request } => {
                 Api::new(book.origin(), &token).and_then(|api| api.transfer(&vault, request))

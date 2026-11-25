@@ -75,7 +75,8 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 		mux.HandleFunc("GET /api/v1/vaults/{vault_id}/"+route, api.knowledge)
 	}
 	api.exportRoutes(mux)
-	api.shareRoutes(mux)
+	mux.HandleFunc("GET /api/v1/me/avatar", api.avatar)
+	mux.HandleFunc("PUT /api/v1/me/avatar", api.avatar)
 	api.linkRoutes(mux)
 	api.securityRoutes(mux)
 	api.adminRoutes(mux)

@@ -1,7 +1,7 @@
 import { download } from "./Resources";
 import { MarkdownView } from "./markdown/Markdown";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { base64, request, type Share, type Vault } from "./api";
+import { base64, request, type Vault } from "./api";
 
 type Asset = {
   canonical_url: string;
@@ -13,6 +13,7 @@ type Asset = {
 };
 type Link = {
   id: string;
+  title: string;
   expires: number;
   downloads: number;
   max_downloads: number;
@@ -74,10 +75,9 @@ export function prepareNoteLink(token: string, vault: string, path: string) {
   });
 }
 
-export function Sharing({ token, vault }: { token: string; vault: string }) {
+export function Sharing({ token, vault, manage = false }: { token: string; vault: string; manage?: boolean }) {
   const [links, setLinks] = useState<Link[]>([]),
-    [url, setUrl] = useState(""),
-    [kind, setKind] = useState("link");
+    [url, setUrl] = useState("");
   const { message, setMessage, busy, run } = useAction();
   const endpoint = "/api/v1/share-links";
   const pending = useRef<{
@@ -96,12 +96,12 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
   }
   useEffect(() => {
     void run(async () => {
-      await refresh();
+      if (manage) await refresh();
     });
-  }, [token, vault]);
+  }, [token, vault, manage]);
   return (
     <article className="security-panel">
-      <h1>分享管理</h1>
+      {!manage && <><h1>批量分享</h1>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -114,14 +114,6 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
                 .map((v) => v.trim())
                 .filter(Boolean),
             };
-            if (kind === "account") {
-              await request(token, "/api/v1/shares", "POST", {
-                ...selection,
-                recipient: form.get("email"),
-              });
-              setMessage("快照已发送");
-              return;
-            }
             const options = {
               ...selection,
               expires: Math.floor(
@@ -141,35 +133,14 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
             }
             setUrl(await pending.current.create());
             pending.current = null;
-            await refresh();
           });
         }}
       >
         <fieldset disabled={busy}>
           <label>
-            分享方式
-            <select
-              value={kind}
-              onChange={(e) => {
-                setKind(e.target.value);
-                setUrl("");
-              }}
-            >
-              <option value="link">分享链接</option>
-              <option value="account">账户收件箱</option>
-            </select>
-          </label>
-          <label>
             文件或目录，每行一个
             <textarea name="paths" rows={3} placeholder="项目/会议记录" />
           </label>
-          {kind === "account" ? (
-            <label>
-              接收者邮箱
-              <input type="email" required name="email" />
-            </label>
-          ) : (
-            <>
               <label>
                 分享密码（可选）
                 <input
@@ -212,11 +183,7 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
                 <input type="checkbox" name="import" />
                 允许导入笔记库
               </label>
-            </>
-          )}
-          <button>
-            {kind === "account" ? "发送到收件箱" : "生成分享链接"}
-          </button>
+          <button>生成分享链接</button>
         </fieldset>
       </form>
       {url && (
@@ -225,11 +192,12 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
           <input readOnly value={url} onFocus={(e) => e.target.select()} />
         </label>
       )}
+      </>}
       <p role="status">{message}</p>
-      <h2>已创建的链接</h2>
+      {manage && <><h4>已创建的链接</h4>{!busy && !message && !links.length && <p>暂无分享链接</p>}
       {links.map((l) => (
         <section key={l.id} className="share">
-          <strong>{new Date(l.expires * 1000).toLocaleString()} 到期</strong>
+          <strong>{l.title}</strong><p>{new Date(l.expires * 1000).toLocaleString()} 到期</p>
           <p>
             {l.password_required ? "有密码 · " : ""}已用 {l.downloads} /{" "}
             {l.max_downloads || "不限"} 次 ·{" "}
@@ -246,6 +214,7 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
               disabled={busy}
               onClick={() =>
                 run(async () => {
+                  if (!confirm(`撤销「${l.title}」的分享链接？已保存的副本可继续使用。`)) return;
                   await request(token, endpoint + "/" + l.id, "DELETE");
                   if (url.includes(l.id)) setUrl("");
                   await refresh();
@@ -256,138 +225,8 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
             </button>
           )}
         </section>
-      ))}
+      ))}</>}
     </article>
-  );
-}
-
-type State = {
-  file_id: string;
-  source_file_id: string;
-  source_path: string;
-  path: string;
-  base_source_version: string;
-  base_local_version: string;
-  local_version: string;
-  source_version: string;
-  local_deleted: boolean;
-  Base?: string;
-  Local?: string;
-  Published?: string;
-};
-export function CopyUpdates({
-  token,
-  share,
-  sent,
-  changed,
-}: {
-  token: string;
-  share: Share;
-  sent: boolean;
-  changed: () => Promise<void>;
-}) {
-  const { message, setMessage, busy, run } = useAction();
-  const [copies, setCopies] = useState<State[]>(),
-    [diff, setDiff] = useState<State>();
-  const path = "/api/v1/shares/" + share.share_id;
-  async function load() {
-    setCopies(await (await request(token, path + "/copies")).json());
-  }
-  return (
-    <div>
-      {sent ? (
-        <button
-          disabled={busy}
-          onClick={() =>
-            run(async () => {
-              await request(token, path + "/publish", "POST");
-              setMessage("已发布当前文件版本");
-            })
-          }
-        >
-          发布来源更新
-        </button>
-      ) : (
-        <button disabled={busy} onClick={() => run(load)}>
-          查看来源与更新
-        </button>
-      )}
-      {copies?.map((c) => (
-        <div className="share" key={c.file_id}>
-          <strong>{c.path}</strong>
-          <p>
-            来源 {share.sender} · {c.source_path}
-          </p>
-          <small>
-            {c.source_file_id} · {c.base_source_version}
-          </small>
-          <p>
-            {c.local_deleted
-              ? "本地副本已移入回收站"
-              : !c.source_version
-                ? "来源文件已移除"
-                : c.base_source_version === c.source_version
-                  ? "已是发布版本"
-                  : "来源有新版本"}
-            {c.base_local_version !== c.local_version ? " · 本地已修改" : ""}
-          </p>
-          {c.source_version &&
-            c.base_source_version !== c.source_version &&
-            !c.local_deleted && (
-              <button
-                disabled={busy}
-                onClick={() =>
-                  run(async () =>
-                    setDiff(
-                      await (
-                        await request(token, path + "/copies/" + c.file_id)
-                      ).json(),
-                    ),
-                  )
-                }
-              >
-                对比版本
-              </button>
-            )}
-        </div>
-      ))}
-      {diff && (
-        <section className="copy-diff">
-          <h3>{diff.path}</h3>
-          {[
-            ["上次导入", diff.Base, diff.base_local_version],
-            ["本地内容", diff.Local, diff.local_version],
-            ["来源更新", diff.Published, diff.source_version],
-          ].map(([title, content, version]) => (
-            <details key={title} open>
-              <summary>{title}</summary>
-              <pre>{content ?? version}</pre>
-            </details>
-          ))}
-          <button disabled={busy} onClick={() => setDiff(undefined)}>
-            保留本地内容
-          </button>
-          <button
-            disabled={busy}
-            onClick={() =>
-              run(async () => {
-                await request(token, path + "/copies/" + diff.file_id, "POST", {
-                  source_version: diff.source_version,
-                  local_version: diff.local_version,
-                });
-                setDiff(undefined);
-                await load();
-                await changed();
-                setMessage("副本已更新");
-              })
-            }
-          >
-            采用来源版本
-          </button>
-        </section>
-      )}
-      <span role="status">{message}</span>
-    </div>
   );
 }
 

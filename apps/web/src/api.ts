@@ -14,13 +14,6 @@ export type Version = {
   created_at: string;
   vault_revision: number;
 };
-export type Share = {
-  share_id: string;
-  sender: string;
-  recipient: string;
-  status: string;
-  snapshot: { files: { path: string }[]; assets?: { name: string }[] };
-};
 type Session = {
   access_token: string;
   refresh_token: string;

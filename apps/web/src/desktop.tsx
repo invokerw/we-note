@@ -4,8 +4,8 @@ import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
 import { isMindMap } from "./plugins/mindFile";
-import { usesPluginEditor } from "./plugins/registry";
-import Manager from "./plugins/Manager";
+import { handlerKey, usesPluginEditor } from "./plugins/registry";
+import PersonalSettings, { SettingsButton, useAccountProfile, type ProfileRequest } from "./PersonalSettings";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo, useCallback, useId } from "react";
 import { createRoot } from "react-dom/client";
@@ -137,6 +137,11 @@ function Workspace({
   );
   const panes = usePanes();
   const phone = useAndroidPhone(!!binding.android);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const profileRequest = useCallback<ProfileRequest>(async (action, body) => local(binding.vault, "profile", {token: await binding.access(), operation: action, body}), [binding]);
+  const profile = useAccountProfile(profileRequest);
+  const originalHandler = useRef("");
+  const [localHandler, setLocalHandler] = useState("");
   const [view, setView] = useState("笔记"),
     [newPath, setNewPath] = useState<string | null>(null),
     [links, setLinks] = useState<Hit[]>([]);
@@ -283,6 +288,7 @@ function Workspace({
       special ? "read_bytes" : "read",
       { path: p },
     );
+    setLocalHandler(handlerKey(p));
     setPluginBytes(special ? fromBase64(result.data!) : null);
     setPluginDirty(false);
     source.current = new TextFile(result.text || "");
@@ -500,7 +506,7 @@ function Workspace({
   )) : <p>没有笔记链接到此处。</p>;
   const fileContent = pluginBytes ? (
     <PluginEditor
-      key={path}
+      key={path + localHandler}
       path={path}
       bytes={pluginBytes}
       save={savePlugin}
@@ -638,49 +644,10 @@ function Workspace({
             ＋　新建笔记
           </button>
         }
-        tools={
-          <>
-            {" "}
-            {["笔记", "搜索", "导出", "插件"]
-              .filter((v) => !phone || v !== "笔记")
-              .map((v) => (
-                <button
-                  key={v}
-                  className={v === view ? "on" : ""}
-                  aria-current={v === view ? "page" : undefined}
-                  disabled={busy}
-                  onClick={() => {
-                    if (
-                      (v === "笔记" && v === view && path) ||
-                      (v !== view && (pluginBytes || v === "插件"))
-                    ) {
-                      if (!leave()) return;
-                      choose("");
-                      setPluginBytes(null);
-                      setPluginDirty(false);
-                      setSaved(text);
-                    }
-                    setView(v);
-                    panes.setPane(v === "笔记" ? "list" : "doc");
-                  }}
-                >
-                  {v}
-                </button>
-              ))}
-          </>
-        }
-        account={
-          <div className="account-actions">
-            <button
-              disabled={busy}
-              onClick={() => {
-                if (leave()) close();
-              }}
-            >
-              返回同步
-            </button>
-          </div>
-        }
+        avatar={<SettingsButton avatar={profile.avatar} open={() => {originalHandler.current = handlerKey(path);setSettingsOpen(true);}}/>}
+        allNotes={() => {if (!leave()) return false; setView("笔记");choose("");setPluginBytes(null);setPluginDirty(false);setSaved(text);return true;}}
+        searchAction={<button disabled={busy} onClick={() => {if(leave()){setView("搜索");panes.setPane("doc");}}}>搜索</button>}
+        tools={<button disabled={busy} onClick={() => {if(leave()){setView("导出");panes.setPane("doc");}}}>导出</button>}
         listActions={
           <>
             {" "}
@@ -715,6 +682,7 @@ function Workspace({
           </>
         }
       />
+      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
       <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (
           <header className="phone-head">
@@ -762,9 +730,7 @@ function Workspace({
             {message}
           </p>
         )}
-        {view === "插件" ? (
-          <Manager preferences={preferences} updatePluginSetting={updatePluginSetting} />
-        ) : view !== "笔记" ? (
+        {view !== "笔记" ? (
           <Resources
             key={view}
             client={client}

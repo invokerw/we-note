@@ -100,11 +100,14 @@ export default function Editor({
   const [shareURL, setShareURL] = useState("");
   const pendingShare = useRef<ReturnType<typeof prepareNoteLink> | null>(null);
   const shareDialog = useRef<HTMLDialogElement>(null);
-  async function share() {
+  const [draftShare, setDraftShare] = useState(false);
+  const [pluginDirty, setPluginDirty] = useState(false);
+  async function generateLink() {
     pendingShare.current ??= prepareNoteLink(token, vault, note.path);
     setShareURL(await pendingShare.current());
     pendingShare.current = null;
-    shareDialog.current?.showModal();
+    setDraftShare(false);
+    if (!shareDialog.current?.open) shareDialog.current?.showModal();
   }
   const markdownSettings = markdownPreferences(preferences);
   const [text, setText] = useState(""),
@@ -120,7 +123,7 @@ export default function Editor({
     [versions, setVersions] = useState<Version[]>([]),
     [history, setHistory] = useState(""),
     [busy, setBusy] = useState(false);
-  const special = usesPluginEditor(note.path);
+  const [special] = useState(() => usesPluginEditor(note.path));
   const panelId = useId();
   const [panelOpen, setPanelOpen] = useState(false);
   const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
@@ -318,7 +321,10 @@ export default function Editor({
     >
       <dialog ref={shareDialog} className="note-share-dialog" aria-labelledby="share-title">
         <h2 id="share-title">分享 {note.path.split("/").at(-1)}</h2>
-        <p>持链接者可在 7 天内查看、保存或下载这个版本。</p>
+        {draftShare ? <><p>将分享上次保存的版本。</p>
+          <button disabled={busy} onClick={()=>run(generateLink)}>分享已保存版本</button>
+          {special ? <button onClick={()=>shareDialog.current?.close()}>返回编辑器保存</button> : <button disabled={busy} onClick={()=>run(async()=>{await save();await generateLink();})}>先保存再分享</button>}
+          <button onClick={()=>shareDialog.current?.close()}>取消</button></> : <><p>持链接者可在 7 天内查看、保存或下载这个版本。</p>
         <input aria-label="分享链接" readOnly value={shareURL} onFocus={e => e.target.select()} />
         <form method="dialog">
           <button type="button" onClick={() => run(async () => {
@@ -327,7 +333,7 @@ export default function Editor({
             shareDialog.current?.close(); notify("分享链接已复制");
           })}>复制链接</button>
           <button aria-label="关闭链接">关闭</button>
-        </form>
+        </form></>}
       </dialog>
       <NoteHeading
         handset={phoneBack && {
@@ -350,7 +356,7 @@ export default function Editor({
         endAction={
           <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />
         }
-        share={{ label: "分享", run: () => run(share) }}
+        share={{ label: "分享", run: () => {if (pluginDirty || text !== saved.current) { setDraftShare(true);shareDialog.current?.showModal(); } else void run(generateLink); } }}
         save={
           !special && (
             <button
@@ -434,7 +440,7 @@ export default function Editor({
               bytes={bytes}
               save={saveBytes}
               output={browserExport}
-              dirty={dirty}
+              dirty={value => { setPluginDirty(value); dirty(value); }}
               notify={notify}
               xmindTheme={xmindPreferences(preferences).theme}
             />

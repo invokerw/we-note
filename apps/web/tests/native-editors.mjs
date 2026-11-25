@@ -286,7 +286,8 @@ try {
   await button("引用.md").click();
   await button("打开分屏编辑").click();
   assert.match(await page.getByLabel("笔记源码").innerText(), /\[home\]: \/home/);
-  await button("插件").click();
+  await button("打开个人设置").click();
+  await button("编辑与插件").click();
   await button("Markdown 设置").click();
   assert.deepEqual(await page.getByLabel("默认打开模式").locator("option").allTextContents(), modeNames);
   if (process.argv.includes("--android")) {

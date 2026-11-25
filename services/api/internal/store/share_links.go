@@ -28,6 +28,7 @@ type LinkOptions struct {
 	Import       bool     `json:"allow_import"`
 }
 type ShareLink struct {
+	Title        string `json:"title"`
 	ID           string `json:"id"`
 	Expires      int64  `json:"expires"`
 	MaxDownloads int    `json:"max_downloads"`
@@ -38,11 +39,11 @@ type ShareLink struct {
 	Protected    bool   `json:"password_required"`
 }
 
-const linkColumns = `id,expires,max_downloads,downloads,allow_download,allow_import,revoked,password_hash<>''`
+const linkColumns = `id,expires,max_downloads,downloads,allow_download,allow_import,revoked,password_hash<>'',coalesce(json_extract(snapshot,'$.files[0].path'),json_extract(snapshot,'$.assets[0].name'),'分享') || CASE WHEN json_array_length(snapshot,'$.files')>1 THEN ' 等 ' || json_array_length(snapshot,'$.files') || ' 篇笔记' ELSE '' END`
 
 func scanLink(row scanner) (ShareLink, error) {
 	var l ShareLink
-	err := row.Scan(&l.ID, &l.Expires, &l.MaxDownloads, &l.Downloads, &l.Download, &l.Import, &l.Revoked, &l.Protected)
+	err := row.Scan(&l.ID, &l.Expires, &l.MaxDownloads, &l.Downloads, &l.Download, &l.Import, &l.Revoked, &l.Protected, &l.Title)
 	return l, err
 }
 func ownedVaultTx(ctx context.Context, tx *sql.Tx, user, vault string) error {

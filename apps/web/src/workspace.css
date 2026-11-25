@@ -91,3 +91,40 @@
 /* Keep node text reachable where a relationship arrow meets the node. */
 .native-mind .map-container .me-parent,
 .native-mind .map-container .me-root { z-index: 30; }
+
+.library-avatar { padding: 0; overflow: hidden; aspect-ratio: 1; flex-shrink: 0; }
+.library-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.phone-library-head .library-avatar { width: 38px; min-height: 38px; margin: 0; }
+.vault-tools { width: 100%; text-align: center; }
+.vault-tools summary, .personal-settings summary { cursor: pointer; padding: 8px; }
+.vault-tools button, .vault-tools .vault { margin: 2px auto; }
+.vault-tools[open] > button { display: block; }
+.personal-settings { box-sizing: border-box; width: min(760px, 94vw); max-height: 88dvh; padding: 0; border: 1px solid #dadfe7; border-radius: 14px; color: #232d47; background: white; box-shadow: 0 24px 80px #17284630; }
+.personal-settings::backdrop { background: #1a253c55; }
+.personal-settings header, .profile-heading { display: flex; align-items: center; gap: 14px; }
+.personal-settings header { justify-content: space-between; padding: 14px 22px; border-bottom: 1px solid #e5e9ef; }
+.personal-settings header h2 { margin: 0; font-size: 20px; }
+.settings-layout { display: flex; height: min(570px, 70dvh); }
+.settings-layout nav { flex: 0 0 145px; padding: 12px; background: #f6f8fb; }
+.settings-layout nav :is(button,a) { display: block; margin: 3px 0; padding: 9px 12px; width: 100%; text-align: left; }
+.settings-layout nav [aria-current=page] { background: #e4edff; color: #2a51a4; }
+.settings-detail { overflow: auto; padding: 16px 22px; flex: 1; min-width: 0; }
+.settings-detail h3 { margin: 0 0 15px; }
+.settings-detail .library-avatar { margin: 0; background: #f4f6fa; }
+.settings-detail label { display: block; margin: 10px 0; }
+.settings-detail input:not([type=checkbox]), .settings-detail select { display: block; max-width: 100%; }
+.settings-detail fieldset { margin: 12px 0; padding: 6px 0; border: 0; }
+.settings-detail article { padding: 0; min-width: 0; }
+@media (max-width: 720px) { .settings-layout nav { flex: 1; } .personal-settings { width: 96vw; } }
+
+.library-browse-actions { display: flex; align-items: center; gap: 4px; }
+.library-browse-actions > :last-child { flex-shrink: 0; }
+
+.profile-heading { padding: 12px 0; }
+.profile-heading strong { overflow-wrap: anywhere; }
+.settings-detail .choose-avatar { position: relative; display: inline-flex; align-items: center; margin: 0; padding: 6px 14px; border: 1px solid #cfdae8; border-radius: 6px; cursor: pointer; }
+.choose-avatar input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.choose-avatar:focus-within { outline: 2px solid #416bd2; }
+.settings-detail > .profile-action, .settings-detail > details { display: block; width: 100%; margin-top: 8px; border-top: 1px solid #e5e9ef; border-radius: 0; text-align: left; }
+.settings-detail > .profile-action, .settings-detail > details > summary { padding: 12px 0; }
+.settings-detail .profile-logout { margin-top: 20px; color: #984145; }

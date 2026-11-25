@@ -455,6 +455,7 @@ try {
   await button("#例会 · 1").click();
   await button("工作/路线.md").click();
   await page.locator(".reading").getByText("新的正文。").waitFor();
+  await page.getByLabel("笔记库菜单").click();
   await button("导出").click();
   await button("创建导出").click();
   const wait = page.waitForEvent("download");

@@ -2,14 +2,14 @@ import { lazy, Suspense, useCallback } from "react";
 import {
   Sharing,
   Audit,
-  CopyUpdates,
   PublicShare,
   readShareLocation,
 } from "./Sharing";
 import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import Manager from "./plugins/Manager";
+import { handlerKey } from "./plugins/registry";
+import PersonalSettings, { SettingsButton, useAccountProfile, type ProfileRequest } from "./PersonalSettings";
 import { browserExport } from "./plugins/archive";
 import {
   newContent,
@@ -24,7 +24,7 @@ import { PhoneIcon } from "./PhoneUI";
 import { AppShell } from "@mantine/core";
 import { WorkspaceShell } from "./WorkspaceShell";
 import { LibraryResources } from "./Resources";
-import { rememberSession, base64, Note, request, Share, Vault } from "./api";
+import { rememberSession, base64, Note, request, Vault } from "./api";
 import { Cover, LibraryPanes, usePanes } from "./LibraryUI";
 import {
   loadLocalPreferences,
@@ -147,23 +147,34 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       items: TrashItem[];
       can_manage: boolean;
     }>({ files: [], items: [], can_manage: false }),
-    [shares, setShares] = useState<Share[]>([]),
+    [settingsOpen, setSettingsOpen] = useState(false),
+    [shareVault, setShareVault] = useState(""),
     [message, msg] = useState(""),
     [origin, setOrigin] = useState(location.origin),
     [preferences, setPreferences] =
       useState<UserPreferences>(loadLocalPreferences);
   const initialLocation = useRef(new URLSearchParams(location.search));
+  const [editorRevision, setEditorRevision] = useState(0);
+  const originalHandler = useRef("");
+  function openSettings() {
+    originalHandler.current = note ? handlerKey(note.path) : "";
+    setShareVault(vault);
+    setSettingsOpen(true);
+  }
+  function closeSettings() {
+    setSettingsOpen(false);
+    if (note && !dirty.current && originalHandler.current !== handlerKey(note.path)) setEditorRevision(n => n + 1);
+  }
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const panes = usePanes();
   const phone = !!useMediaQuery("(max-width: 720px)");
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    request(token, "/api/v1/me")
-      .then((r) => r.json())
-      .then((u) => setIsAdmin(u.role === "system_admin"))
-      .catch(() => setIsAdmin(false));
+  const profileRequest = useCallback<ProfileRequest>(async (action, body) => {
+    const paths = {me:"/api/v1/me",avatar:"/api/v1/me/avatar",saveAvatar:"/api/v1/me/avatar",password:"/api/v1/auth/password/change"};
+    const response = await request(token, paths[action], action === "password" ? "POST" : body ? "PUT" : "GET", body);
+    return response.status === 204 ? {} : response.json();
   }, [token]);
+  const profile = useAccountProfile(profileRequest);
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
   const encryptedIO = useCallback<EncryptedIO>(
@@ -286,10 +297,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     setNote(null);
     if (s === "trash")
       setTrash(await (await request(token, base + "/trash")).json());
-    if (s === "inbox" || s === "sent")
-      setShares(
-        (await (await request(token, "/api/v1/shares/" + s)).json()).shares,
-      );
     if (s === "files") await list();
     setView(s);
     panes.setPane("doc");
@@ -435,7 +442,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   const goToSection = (id: string, label: string) => (
     <button
       key={id}
-      disabled={!vault && !["encrypted", "audit", "inbox", "sent"].includes(id)}
+      disabled={!vault && id !== "encrypted"}
       aria-current={view === id ? "page" : undefined}
       className={view === id ? "on" : ""}
       onClick={() => run(() => section(id))}
@@ -489,56 +496,18 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
             ＋　新建笔记
           </button>
         }
-        tools={
-          <>
-            {goToSection("搜索", "搜索")}
-            {Object.entries({
-              inbox: "收件箱",
-              sent: "已发送",
-              sharing: "分享管理",
-              encrypted: "加密笔记库",
-              导出: "导出",
-              插件: "插件",
-              audit: "审计日志",
-              trash: "回收站",
-            }).map(([id, label]) => goToSection(id, label))}
-          </>
-        }
-        account={
-          <div className="account-actions">
-            {isAdmin && (
-              <a
-                href="/gm"
-                onClick={(e) => {
-                  if (!leave()) e.preventDefault();
-                }}
-              >
-                服务端管理
-              </a>
-            )}
-            <a
-              href="/#change"
-              onClick={(e) => {
-                if (!leave()) e.preventDefault();
-              }}
-            >
-              修改密码
-            </a>
-            <button
-              onClick={() => {
-                if (leave()) logout();
-              }}
-            >
-              退出登录
-            </button>
-          </div>
-        }
+        avatar={<SettingsButton avatar={profile.avatar} open={openSettings}/>}
+        searchAction={goToSection("搜索", "搜索")}
+        tools={<>{goToSection("导出", "导出")}{goToSection("trash", "回收站")}{goToSection("sharing", "批量分享")}{goToSection("encrypted", "加密笔记库")}</>}
         listActions={
           <button disabled={!vault} onClick={() => picker.current?.click()}>
             上传笔记
           </button>
         }
       />
+      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={() => !dirty.current || confirm("放弃尚未保存的编辑？")} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
+        audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
+        shares={vaults.length ? <><label>笔记库<select value={shareVault} onChange={e=>setShareVault(e.target.value)}>{vaults.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><Sharing key={shareVault} manage token={token} vault={shareVault}/></> : <p>暂无笔记库</p>}/>}
       <AppShell.Main className="workspace">
         {phone && (view !== "files" || !note) && (
           <header className="phone-head">
@@ -573,7 +542,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         {view === "files" && note ? (
           <>
             <Editor
-              key={note.file_id + note.path}
+              key={JSON.stringify([note.file_id, note.path, editorRevision])}
               {...{
                 note,
                 phoneBack: phone ? () => panes.setPane("list") : undefined,
@@ -659,15 +628,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           </article>
         ) : view === "sharing" ? (
           <Sharing key={vault} token={token} vault={vault} />
-        ) : view === "audit" ? (
-          <Audit token={token} />
         ) : view === "encrypted" ? (
           <EncryptedVaults io={encryptedIO} dirty={encryptedDirty} />
-        ) : view === "插件" ? (
-          <Manager
-            preferences={preferences}
-            updatePluginSetting={updatePluginSetting}
-          />
         ) : ["搜索", "导出"].includes(view) ? (
           <LibraryResources
             key={vault + view}
@@ -679,13 +641,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           />
         ) : (
           <article>
-            <h1>
-              {view === "trash"
-                ? "回收站"
-                : view === "inbox"
-                  ? "收件箱"
-                  : "已发送"}
-            </h1>
+            <h1>回收站</h1>
             {view === "trash" &&
               (trash.items.length ? (
                 <>
@@ -734,97 +690,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 </>
               ) : (
                 <p>回收站为空。</p>
-              ))}
-            {(view === "inbox" || view === "sent") &&
-              (shares.length ? (
-                shares.map((s) => (
-                  <section className="share" key={s.share_id}>
-                    <strong>
-                      {[
-                        ...s.snapshot.files.map((f) => f.path),
-                        ...(s.snapshot.assets || []).map((a) => a.name),
-                      ].join("、")}
-                    </strong>
-                    <p>
-                      {view === "inbox" ? s.sender : s.recipient} ·{" "}
-                      {
-                        (
-                          {
-                            pending: "等待接收",
-                            accepted: "已导入",
-                            rejected: "已拒绝",
-                            revoked: "已撤销",
-                          } as Record<string, string>
-                        )[s.status]
-                      }
-                    </p>
-                    {s.status === "accepted" && (
-                      <CopyUpdates
-                        token={token}
-                        share={s}
-                        sent={view === "sent"}
-                        changed={list}
-                      />
-                    )}
-                    {s.status === "pending" &&
-                      (view === "inbox" ? (
-                        <>
-                          <button
-                            onClick={() =>
-                              run(async () => {
-                                const folder = prompt(
-                                  "导入当前笔记库的目录（留空为根目录）",
-                                  "",
-                                );
-                                if (folder === null) return;
-                                await request(
-                                  token,
-                                  "/api/v1/shares/" + s.share_id + "/accept",
-                                  "POST",
-                                  { vault_id: vault, folder },
-                                );
-                                await list();
-                                await section(view);
-                              })
-                            }
-                          >
-                            导入快照
-                          </button>
-                          <button
-                            onClick={() =>
-                              run(async () => {
-                                await request(
-                                  token,
-                                  "/api/v1/shares/" + s.share_id + "/reject",
-                                  "POST",
-                                );
-                                await section(view);
-                              })
-                            }
-                          >
-                            拒绝
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() =>
-                            run(async () => {
-                              await request(
-                                token,
-                                "/api/v1/shares/" + s.share_id,
-                                "DELETE",
-                              );
-                              await section(view);
-                            })
-                          }
-                        >
-                          撤销
-                        </button>
-                      ))}
-                  </section>
-                ))
-              ) : (
-                <p>暂无分享。</p>
               ))}
           </article>
         )}

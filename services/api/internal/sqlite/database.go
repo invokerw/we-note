@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS users (
     deleted_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS user_avatars (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    avatar TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS vaults (
     id TEXT PRIMARY KEY,
     owner_user_id TEXT NOT NULL REFERENCES users(id),

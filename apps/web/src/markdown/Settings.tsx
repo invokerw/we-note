@@ -1,9 +1,6 @@
 import { markdownModes, type MarkdownMode } from "./modes";
 import { MarkdownView } from "./MarkdownView";
-import type {
-  MarkdownFontSize,
-  MarkdownPreferences,
-} from "../preferences";
+import type { MarkdownFontSize, MarkdownPreferences } from "../preferences";
 
 const sample = [
   "## 笔记索引",
@@ -16,7 +13,7 @@ const sample = [
   "```",
 ].join("\n");
 
-export default function MarkdownSettings({
+export function BasicMarkdownSettings({
   value,
   onChange,
 }: {
@@ -28,11 +25,7 @@ export default function MarkdownSettings({
     next: MarkdownPreferences[K],
   ) => onChange({ [key]: next } as Partial<MarkdownPreferences>);
   return (
-    <div className="settings-panel">
-      <figure className="document-mode theme-preview" data-markdown-theme="clean" data-markdown-font-size={value.fontSize}>
-        <figcaption>正文字号预览</figcaption>
-        <MarkdownView text={sample} io={{}} />
-      </figure>
+    <>
       <label>
         默认打开模式
         <select
@@ -41,7 +34,11 @@ export default function MarkdownSettings({
             update("defaultMode", e.target.value as MarkdownMode)
           }
         >
-          {markdownModes.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          {markdownModes.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
         </select>
       </label>
       <label>
@@ -65,6 +62,31 @@ export default function MarkdownSettings({
         />
         记住每篇笔记上次打开的模式
       </label>
+    </>
+  );
+}
+
+export default function MarkdownSettings({
+  value,
+  onChange,
+}: {
+  value: MarkdownPreferences;
+  onChange: (patch: Partial<MarkdownPreferences>) => void;
+}) {
+  const update = <K extends keyof MarkdownPreferences>(
+    key: K,
+    next: MarkdownPreferences[K],
+  ) => onChange({ [key]: next } as Partial<MarkdownPreferences>);
+  return (
+    <div className="settings-panel">
+      <figure
+        className="document-mode theme-preview"
+        data-markdown-theme="clean"
+        data-markdown-font-size={value.fontSize}
+      >
+        <figcaption>正文字号预览</figcaption>
+        <MarkdownView text={sample} io={{}} />
+      </figure>
       <label className="settings-check">
         <input
           type="checkbox"
