@@ -32,13 +32,11 @@ export function LibraryResources({
   view,
   base,
   token,
-  open,
   notify,
 }: {
   view: string;
   base: string;
   token: string;
-  open: (id: string) => void;
   notify: (s: string) => void;
 }) {
   const client = useMemo<ResourceClient>(
@@ -68,7 +66,6 @@ export function LibraryResources({
     <Resources
       view={view}
       client={client}
-      open={(h) => open(h.file_id)}
       notify={notify}
     />
   );
@@ -116,19 +113,13 @@ const scopes: Record<string, string> = {
 export function Resources({
   view,
   client,
-  open,
   notify,
 }: {
   view: string;
   client: ResourceClient;
-  open: (hit: Hit) => void;
   notify: (s: string) => void;
 }) {
-  const [q, query] = useState(""),
-    [tag, setTag] = useState(""),
-    [tags, setTags] = useState<Record<string, number>>({}),
-    [hits, setHits] = useState<Hit[]>([]),
-    [assets, setAssets] = useState<Asset[]>([]),
+  const [assets, setAssets] = useState<Asset[]>([]),
     [picked, pick] = useState(""),
     [jobs, setJobs] = useState<Job[]>([]),
     [scope, setScope] = useState("all"),
@@ -140,16 +131,7 @@ export function Resources({
     let timer: ReturnType<typeof setTimeout>;
     const json = client.json;
     async function load() {
-      if (view === "搜索") {
-        const [results, counts] = await Promise.all([
-          json("/search?" + new URLSearchParams({ q, tag })),
-          json("/tags"),
-        ]);
-        if (live) {
-          setHits(results);
-          setTags(counts);
-        }
-      } else if (view === "附件") {
+      if (view === "附件") {
         const result = await json("/assets");
         if (live) setAssets(result);
       } else {
@@ -166,51 +148,17 @@ export function Resources({
         load().catch((e) => {
           if (live) notify(String(e));
         }),
-      view === "搜索" ? 120 : 0,
+      0,
     );
     return () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [view, client, q, tag, revision]);
+  }, [view, client, revision]);
   return (
     <article>
       <h1>{view}</h1>
-      {view === "搜索" ? (
-        <>
-          <label>
-            全文搜索
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => query(e.target.value)}
-              placeholder="输入正文或文件路径"
-            />
-          </label>
-          <div className="taglist">
-            <button aria-pressed={!tag} onClick={() => setTag("")}>
-              全部标签
-            </button>
-            {Object.entries(tags).map(([t, n]) => (
-              <button
-                key={t}
-                aria-pressed={tag === t}
-                onClick={() => setTag(t)}
-              >
-                #{t} · {n}
-              </button>
-            ))}
-          </div>
-          <ul>
-            {hits.map((h) => (
-              <li key={h.file_id}>
-                <button onClick={() => open(h)}>{h.path}</button>
-              </li>
-            ))}
-          </ul>
-          {!hits.length && <p>没有匹配的笔记。</p>}
-        </>
-      ) : view === "附件" ? (
+      {view === "附件" ? (
         <>
           {assets.length === 0 && <p>笔记库中还没有附件。</p>}
           {assets.map((a) => (

@@ -384,6 +384,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       const path = prompt("新笔记路径", (panes.folder || "") + "未命名.md");
       if (path && leave()) await create(path, await newContent(path));
     });
+  const searchContent = useCallback(async (query: string) => {
+    if (!vault) return [];
+    const hits: {path:string}[] = await (await request(token, base + "/search?" + new URLSearchParams({q:query}))).json();
+    return hits.map(hit => hit.path);
+  },[base,token,vault,files]);
   const byPath = new Map(files.map((f) => [f.path, f]));
   const openPath = (path: string) => {
     const file = byPath.get(path);
@@ -497,7 +502,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           </button>
         }
         avatar={<SettingsButton avatar={profile.avatar} open={openSettings}/>}
-        searchAction={goToSection("搜索", "搜索")}
+        searchContent={searchContent}
+        historyKey={vault}
         tools={<>{goToSection("导出", "导出")}{goToSection("trash", "回收站")}{goToSection("sharing", "批量分享")}{goToSection("encrypted", "加密笔记库")}</>}
         listActions={
           <button disabled={!vault} onClick={() => picker.current?.click()}>
@@ -630,13 +636,12 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           <Sharing key={vault} token={token} vault={vault} />
         ) : view === "encrypted" ? (
           <EncryptedVaults io={encryptedIO} dirty={encryptedDirty} />
-        ) : ["搜索", "导出"].includes(view) ? (
+        ) : view === "导出" ? (
           <LibraryResources
             key={vault + view}
             view={view}
             base={base}
             token={token}
-            open={open}
             notify={msg}
           />
         ) : (

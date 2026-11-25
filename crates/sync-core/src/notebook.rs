@@ -230,6 +230,39 @@ impl Notebook {
         };
         disk::local_path(&self.root, path)
     }
+    pub fn search_notes(&self, query: &str, paths: &[String]) -> Result<Vec<String>> {
+        let term = query.trim().to_lowercase();
+        let mut matches = Vec::new();
+        if term.is_empty() {
+            return Ok(matches);
+        }
+        for path in paths {
+            if path.to_lowercase().ends_with(".xmind") {
+                continue;
+            }
+            let location = self.path(path)?;
+            match fs::metadata(&location) {
+                Ok(meta) if meta.is_file() && meta.len() <= 16 << 20 => (),
+                Ok(_) => continue,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(e.into()),
+            }
+            match fs::read_to_string(location) {
+                Ok(text) if text.to_lowercase().contains(&term) => matches.push(path.clone()),
+                Ok(_) => (),
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::InvalidData | std::io::ErrorKind::NotFound
+                    ) =>
+                {
+                    ()
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(matches)
+    }
     pub fn read(&self, path: &str) -> Result<Value> {
         let dest = self.path(path)?;
         if fs::metadata(&dest)?.len() > 16 << 20 {
@@ -473,6 +506,28 @@ impl Notebook {
 mod entry_tests {
     use super::*;
 
+    #[test]
+    fn search_saved_text_without_a_server() -> Result<()> {
+        let data = tempfile::tempdir()?;
+        let book = Notebook {
+            root: data.path().to_owned(),
+            state_dir: data.path().join("state"),
+            vault: "test".into(),
+            origin: String::new(),
+        };
+        fs::write(book.root.join("本地.md"), "这是 LiNuX 的本地笔记")?;
+        fs::write(book.root.join("配置.json"), r#"{"说明":"其他内容"}"#)?;
+        fs::write(book.root.join("图.xmind"), b"Linux")?;
+        let paths = vec![
+            "本地.md".into(),
+            "配置.json".into(),
+            "图.xmind".into(),
+            "已删除.txt".into(),
+        ];
+        assert_eq!(book.search_notes("linux", &paths)?, vec!["本地.md"]);
+        assert_eq!(book.search_notes("其他内容", &paths)?, vec!["配置.json"]);
+        Ok(())
+    }
     #[test]
     fn folder_changes_check_snapshot_and_keep_original_bytes() -> Result<()> {
         let data = tempfile::tempdir()?;

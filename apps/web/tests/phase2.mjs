@@ -97,7 +97,7 @@ try {
   await button("登录").click();
   const wide = page.viewportSize();
   await page.setViewportSize({ width: 360, height: 800 });
-  await page.getByLabel("筛选笔记路径").fill("路线");
+  await page.getByLabel("搜索笔记").fill("路线");
   await button("路线.md").waitFor();
   assert.equal(await button("目标.md").count(), 0);
   await button("文件夹").click();
@@ -450,10 +450,8 @@ try {
   await page.getByText("已保存新版本").waitFor();
   await switchMode("预览");
   await page.waitForFunction(() => document.querySelector('img[alt="剪贴板.png"]')?.naturalWidth === 1);
-  await button("搜索").click();
-  await page.getByLabel("全文搜索").fill("新的正文");
-  await button("#例会 · 1").click();
-  await button("工作/路线.md").click();
+  await page.getByRole("searchbox", {name:"搜索笔记"}).fill("新的正文");
+  await button("路线.md").click();
   await page.locator(".reading").getByText("新的正文。").waitFor();
   await page.getByLabel("笔记库菜单").click();
   await button("导出").click();

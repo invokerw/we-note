@@ -27,3 +27,15 @@
 - macOS ARM64 构建 `cargo build --locked -p wenote-desktop --release` 退出 0。运行本工作区的 `target/release/wenote-desktop`，服务地址填写 `http://localhost:19486`，选择专用本地目录同步后打开编辑器。
 - Android 与桌面共用的前端产物位于 `apps/client/dist/`。`npm run android --prefix apps/client -- --debug` 退出 1，本机 SDK 目录为空，缺少 Android 命令行工具和 NDK。手机布局已使用 Chrome 验证，APK 与真机交互待验证。
 - 已按方式 2 保留工作区、分支和服务，等待用户验收。
+
+## 第二轮 · 笔记列表搜索
+
+用户要求删除左栏独立搜索，将路径与正文关键词检索合并到第二栏。参照两张截图，显示最近搜索、目录范围和命中高亮。沿用方式 2，在同一工作区返工。
+
+- 本轮同步 `main` 的 `c574a1a`，保留已验收的分享弹窗、目录树及个人设置入口。用户反馈后记为 `CHANGES_REQUESTED`，复测通过后重新交付。
+- 红阶段 `WENOTE_TEST_ORIGIN=http://localhost:19486 node apps/web/tests/library-search.mjs` 退出 1。第二栏输入 `linux` 后找不到正文包含 `LiNuX` 的「命令.md」。
+- 绿阶段同命令退出 0，覆盖文件和目录名称、已保存正文、当前目录与全库切换、最近搜索复用和清空、结果和正文高亮。旧独立搜索页及导航已移除。
+- 自审发现搜索选项可能遮住第一条结果，改为在输入框下方占用列表空间，保留点击结果和键盘操作。复测 1280 px 与 390 px 宽度，截图位于 `dist/local/search-desktop.png` 和 `dist/local/search-mobile.png`。
+- 最终执行 `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo build --locked -p wenote-desktop --release`、`cargo test --locked -p wenote-sync --lib`、`go test ./...`（`services/api`）和 `git diff --check`，均退出 0。本地库回归覆盖断网时从 Markdown 和 JSON 内容命中，并跳过二进制脑图。
+- 在已重建服务运行 `apps/web/tests/` 下的 `library-search.mjs`、`personal-settings.mjs`、`phase1.mjs` 和 `phase5.mjs`，四项浏览器回归均退出 0。
+- 方式 2 验收地址仍为 `http://localhost:19486`，新 PID `13173`。原示例账号选「个人笔记」，从第二栏输入 `linux` 即可打开 `工作/终端笔记.md` 并看到正文高亮。macOS 可执行程序已更新；Android 验证限于共用前端构建和手机宽度，SDK 条件见上轮记录。

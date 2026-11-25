@@ -135,6 +135,10 @@ enum LocalAction {
     },
     List,
     Library,
+    SearchNotes {
+        query: String,
+        paths: Vec<String>,
+    },
     ChangeEntry {
         operation: String,
         source: String,
@@ -222,6 +226,9 @@ async fn notebook(
                     .and_then(|bytes| book.export_bytes(&dir, &name, &bytes))
                     .map(serde_json::Value::String)
             }
+            SearchNotes { query, paths } => book
+                .search_notes(&query, &paths)
+                .map(|hits| serde_json::json!(hits)),
             Library => book.library().map(|v| serde_json::json!(v)),
             ChangeEntry {
                 operation,

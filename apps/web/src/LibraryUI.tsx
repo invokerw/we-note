@@ -1,3 +1,4 @@
+import { MatchText, SearchField, useDocumentMatches, useRecentSearches } from "./LibrarySearch";
 import { markdownModes, type MarkdownMode } from "./markdown/modes";
 import { AppShell } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
@@ -380,7 +381,8 @@ export function LibraryPanes({
   create,
   tools,
   avatar,
-  searchAction,
+  searchContent,
+  historyKey,
   allNotes,
   listActions,
   entries,
@@ -399,7 +401,8 @@ export function LibraryPanes({
   create: ReactNode;
   tools: ReactNode;
   avatar: ReactNode;
-  searchAction: ReactNode;
+  searchContent: (query: string) => Promise<string[]>;
+  historyKey: string;
   allNotes?: () => boolean;
   listActions?: ReactNode;
   entries?: EntryIO;
@@ -436,13 +439,33 @@ export function LibraryPanes({
     return () => window.removeEventListener("keydown", key);
   }, [setColumns, setPane]);
   const q = query.trim().toLocaleLowerCase();
+  const history = useRecentSearches(historyKey);
+  const [currentOnly, setCurrentOnly] = useState(false);
+  const [result, setResult] = useState<{ query: string; hits: Set<string>; error?: string }>();
+  useDocumentMatches(query,active);
+  useEffect(() => {
+    if (!q) {setResult(undefined);return;}
+    let live = true;
+    const timer = setTimeout(async () => {
+      try {const paths = await searchContent(q); if (live) setResult({query:q,hits:new Set(paths)});}
+      catch(e) {if(live) setResult({query:q,hits:new Set(),error:String(e)});}
+    },150);
+    return () => {live = false;clearTimeout(timer);};
+  },[q,searchContent]);
   const { directories, notes } = useMemo(() => {
     const counts = new Map<string, number>();
     const notes: string[] = [];
     for (const path of paths) {
       if (q) {
-        if (!isFolder(path) && path.toLocaleLowerCase().includes(q))
-          notes.push(path);
+        if (currentOnly && folder && !path.startsWith(folder)) continue;
+        const lowerPath = path.toLocaleLowerCase();
+        if (!isFolder(path) && (lowerPath.includes(q) || (result?.query === q && result.hits.has(path)))) notes.push(path);
+        let slash = path.indexOf("/");
+        while (slash >= 0) {
+          const dir = path.slice(0, slash + 1);
+          if ((!currentOnly || !folder || (dir.startsWith(folder) && dir !== folder)) && entryName(dir).toLocaleLowerCase().includes(q)) counts.set(dir,(counts.get(dir) || 0) + (isFolder(path) ? 0 : 1));
+          slash = path.indexOf("/",slash+1);
+        }
         continue;
       }
       if (folder !== null) {
@@ -463,7 +486,7 @@ export function LibraryPanes({
       directories: Array.from(counts).sort(([a], [b]) => compare(a, b)),
       notes: notes.sort(compare),
     };
-  }, [paths, q, folder, reverse]);
+  }, [paths, q, folder, reverse, currentOnly, result]);
   const sidebar = (
     <AppShell.Navbar className="sidebar" aria-label="笔记库目录">
       {phone ? (
@@ -480,20 +503,19 @@ export function LibraryPanes({
           <details className="vault-tools" onClick={e => {if ((e.target as HTMLElement).closest("button")) e.currentTarget.open = false;}}><summary aria-label="笔记库菜单">库工具 ▾</summary>{tools}</details>
           {create}
           <div className="side-files">
-            <div className="library-browse-actions"><button
+            <button
               aria-label="全部笔记"
               className={"all-notes" + (folder === null ? " current" : "")}
               onClick={() => { if (!allNotes || allNotes()) pickFolder(null); }}
             >
               ▦　全部笔记
             </button>
-            {searchAction}</div>
             <FolderTree paths={paths} active={folder} select={pickFolder} />
           </div>
         </>
       )}
       {phone && vault}
-      {phone && <nav className="sections" aria-label="笔记库工具">{searchAction}{tools}</nav>}
+      {phone && <nav className="sections" aria-label="笔记库工具">{tools}</nav>}
       {phone && <div className="phone-library-actions">{listActions}</div>}
       {!phone && (
         <div className="layout-options" aria-label="面板布局">
@@ -612,15 +634,7 @@ export function LibraryPanes({
         )}
         <div className="list-search">
           {tablet && <button aria-label="打开目录" onClick={() => setPane("nav")}><PhoneIcon name="folder" /></button>}
-          <input
-            ref={input}
-            type="search"
-            aria-label="筛选笔记路径"
-            placeholder="搜索笔记"
-            title="搜索笔记（Ctrl / ⌘ + Shift + F）"
-            value={query}
-            onChange={(e) => search(e.target.value)}
-          />
+          <SearchField input={input} query={query} change={search} folder={folder} currentOnly={currentOnly} setCurrentOnly={setCurrentOnly} history={history}/>
           <button
             title={reverse ? "切换为名称升序" : "切换为名称降序"}
             aria-label="切换排序"
@@ -659,10 +673,10 @@ export function LibraryPanes({
         >
           {directories.map(([dir, count]) => (
             <div className="entry-row" key={dir} data-library-path={dir}>
-              <button className="entry" onClick={() => pickFolder(dir)}>
+              <button className="entry" onClick={() => {history.remember(query);pickFolder(dir);}}>
                 <span>
                   <i className="folder-icon" />
-                  {dir.split("/").at(-2)}
+                  <MatchText text={entryName(dir)} term={q}/>
                 </span>
                 <small>{count} 篇笔记</small>
               </button>
@@ -677,18 +691,18 @@ export function LibraryPanes({
                 title={path}
                 disabled={busy}
                 aria-current={active === path ? "page" : undefined}
-                onClick={() => open(path)}
+                onClick={() => {history.remember(query);open(path);}}
               >
                 <span>
                   <i className="file-icon" aria-hidden="true">
                     {path.split(".").at(-1)?.slice(0, 1).toUpperCase()}
                   </i>
-                  {path.split("/").at(-1)}
+                  <MatchText text={entryName(path)} term={q}/>
                 </span>
                 {phone ? (
                   (q || folder === null) &&
                   parentFolder(path) && (
-                    <small>{parentFolder(path).slice(0, -1)}</small>
+                    <small><MatchText text={parentFolder(path).slice(0,-1)} term={q}/></small>
                   )
                 ) : (
                   <small>
@@ -696,7 +710,7 @@ export function LibraryPanes({
                       libraryTitle}
                     {sizes?.get(path) !== undefined && `　${formatSize(sizes.get(path)!)}`}
                     {(q || folder === null) && path.includes("/")
-                      ? " · " + path.slice(0, path.lastIndexOf("/"))
+                      ? <> · <MatchText text={parentFolder(path).slice(0,-1)} term={q}/></>
                       : ""}
                   </small>
                 )}
@@ -706,7 +720,7 @@ export function LibraryPanes({
           ))}
           {!notes.length && !directories.length && (
             <p className="list-empty">
-              {q ? "没有匹配的笔记" : "此处还没有笔记"}
+              {q ? (result?.query !== q ? "正在搜索…" : result.error || "没有匹配的笔记") : "此处还没有笔记"}
             </p>
           )}
         </div>

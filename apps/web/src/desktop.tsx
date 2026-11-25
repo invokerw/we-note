@@ -245,6 +245,7 @@ function Workspace({
     }),
     [binding],
   );
+  const searchContent = useCallback((query: string) => local<string[]>(vault,"search_notes",{query,paths:files.filter(p=>!p.endsWith("/"))}),[vault,files]);
   const loadBacklinks = useCallback(async (): Promise<Hit[]> => {
     const id = await local<string | null>(vault, "file_id", { path });
     return id ? client.json("/links/backlinks?file_id=" + encodeURIComponent(id)) : [];
@@ -621,7 +622,7 @@ function Workspace({
         }
       }}
     >
-      <LibraryPanes
+      <LibraryPanes key={vault}
         phone={phone}
         paths={files}
         entries={entries}
@@ -646,7 +647,8 @@ function Workspace({
         }
         avatar={<SettingsButton avatar={profile.avatar} open={() => {originalHandler.current = handlerKey(path);setSettingsOpen(true);}}/>}
         allNotes={() => {if (!leave()) return false; setView("笔记");choose("");setPluginBytes(null);setPluginDirty(false);setSaved(text);return true;}}
-        searchAction={<button disabled={busy} onClick={() => {if(leave()){setView("搜索");panes.setPane("doc");}}}>搜索</button>}
+        searchContent={searchContent}
+        historyKey={vault}
         tools={<button disabled={busy} onClick={() => {if(leave()){setView("导出");panes.setPane("doc");}}}>导出</button>}
         listActions={
           <>
@@ -735,7 +737,6 @@ function Workspace({
             key={view}
             client={client}
             view={view}
-            open={(h) => run(() => open(h.path))}
             notify={notify}
           />
         ) : (

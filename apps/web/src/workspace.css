@@ -117,8 +117,6 @@
 .settings-detail article { padding: 0; min-width: 0; }
 @media (max-width: 720px) { .settings-layout nav { flex: 1; } .personal-settings { width: 96vw; } }
 
-.library-browse-actions { display: flex; align-items: center; gap: 4px; }
-.library-browse-actions > :last-child { flex-shrink: 0; }
 
 .profile-heading { padding: 12px 0; }
 .profile-heading strong { overflow-wrap: anywhere; }
@@ -128,3 +126,18 @@
 .settings-detail > .profile-action, .settings-detail > details { display: block; width: 100%; margin-top: 8px; border-top: 1px solid #e5e9ef; border-radius: 0; text-align: left; }
 .settings-detail > .profile-action, .settings-detail > details > summary { padding: 12px 0; }
 .settings-detail .profile-logout { margin-top: 20px; color: #984145; }
+
+.list-search:has(.note-search-options) { align-items: flex-start; }
+.note-search-field { position: relative; flex: 1; min-width: 0; }
+.note-search-input { position: relative; }
+.note-search-input i { position: absolute; left: 10px; top: 50%; transform: translateY(-60%); width: 12px; height: 12px; border: 1.5px solid #8391a8; border-radius: 50%; pointer-events: none; }
+.note-search-input i::after { content: ''; position: absolute; right: -4px; bottom: -2px; width: 5px; border-top: 1.5px solid #8391a8; transform: rotate(45deg); }
+.list-search .note-search-field input[type=search] { width: 100%; padding-left: 30px; background: white; border: 1px solid #d8deea; }
+.note-search-field input[type=search]:focus { outline: 1px solid #5b89fe; }
+.note-search-options { position: relative; margin-top: 5px; padding: 11px; background: white; border: 1px solid #e4e8f0; border-radius: 7px; box-shadow: 0 4px 12px #23375b1c; font-size: 12px; }
+.recent-heading { display: flex; align-items: center; justify-content: space-between; color: #596a85; }
+.recent-terms { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.recent-terms button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; background: #f0f3f7; }
+.note-search-options fieldset { margin: 9px 0 0; padding: 6px 0 0; border: 0; border-top: 1px solid #e6eaf0; }
+.note-search-options label { display: flex; align-items: center; gap: 5px; margin: 4px 0; }
+.note-list-pane mark, ::highlight(note-search) { background-color: #ffe8af; color: #352c1e; }
