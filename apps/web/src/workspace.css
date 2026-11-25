@@ -55,10 +55,6 @@
 .layout .document-mode .reading h3, .layout .mode-live .cm-line.live-h3 { font-size: calc(var(--body-size) * 8 / 7); }
 .layout .reading li > :is(ul,ol) { margin-block: 0; }
 .layout .reading li::marker { color: #8291a9; }
-.layout .metadata-panel {
-  position: absolute; inset-block: 0; inset-inline-end: 0; z-index: 3;
-  width: min(272px, 85%); background: #fff; box-shadow: -4px 0 16px #24385812;
-}
 .directory-drawer { margin: 0; padding: 0; border: 0; width: 240px; height: 100dvh; max-height: none; background: var(--rail); }
 .directory-drawer[open] { display: flex; flex-direction: column; }
 .directory-drawer::backdrop { background: #232d4729; }
@@ -75,7 +71,6 @@
   .layout .document-head { min-height: 52px; padding-inline: 10px; }
   .layout .document-head h1 { font-size: 14px; }
   .layout .document-mode .reading h1, .layout .mode-live .cm-line.live-h1 { font-size: calc(var(--body-size) * 19 / 14); }
-  .layout .metadata-panel { inset: auto 0 0; width: 100%; max-height: 60%; border-top: 1px solid var(--line); }
 }
 .layout.android-phone { --reading-inset: 16px; }
 .android-phone .phone-head h1 { font-size: 14px; }

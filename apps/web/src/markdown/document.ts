@@ -65,7 +65,20 @@ export function inspect(source: string) {
     ))
       tags.add(tag[1]);
   });
-  return { outline, properties, tags: [...tags].sort() };
+  // Resolve reference links and wiki links using the same syntax as the preview.
+  noteSyntax()(tree);
+  const definitions = new Map<string, string>();
+  visit(tree, "definition", node => {
+    if (!definitions.has(node.identifier)) definitions.set(node.identifier, node.url);
+  });
+  const links = new Set<string>();
+  visit(tree, node => {
+    const href = node.type === "link" ? node.url : node.type === "linkReference" ? definitions.get(node.identifier) : undefined;
+    if (!href) return;
+    const raw = linkTarget(href);
+    if (raw && !/^(?:#|[\w+.-]+:|\/\/)/.test(raw)) links.add(href);
+  });
+  return { outline, properties, tags: [...tags].sort(), links: [...links] };
 }
 const wikiPrefix = "#wenote-link=";
 export function linkTarget(href: string) {

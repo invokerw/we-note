@@ -4,7 +4,7 @@ import type { MarkdownMode } from "./modes";
 import type { RichWriting } from "./crepeSource";
 import { lazy, Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import SplitEditor from "./SplitEditor";
-import { inspect, taskCheckChange, type Branch } from "./document";
+import { inspect, linkTarget, taskCheckChange, type Branch } from "./document";
 import Source from "./Source";
 import { formatSelection } from "./format";
 import { EditorView } from "@codemirror/view";
@@ -71,7 +71,7 @@ export function Document({
   markdown = true,
   focusSource = false,
   writing, upload, imageURL,
-  metadataHost,
+  metadataHost, resolveNote,
   attach,
   preferences = defaultMarkdownPreferences,
   onPreferencesChange,
@@ -88,6 +88,7 @@ export function Document({
   upload?: (file: File) => Promise<string>;
   imageURL?: (url: string) => Promise<string>;
   metadataHost?: HTMLElement | null;
+  resolveNote?: (raw: string) => string | undefined;
   attach?: () => void;
   preferences?: MarkdownPreferences;
   onPreferencesChange?: (patch: Partial<MarkdownPreferences>) => void;
@@ -258,17 +259,27 @@ export function Document({
     </div>
   );
   if (!metadataHost || !metadata) return documentView;
+  const outgoing = new Map<string, string>();
+  for (const href of info.links) {
+    const path = resolveNote?.(linkTarget(href));
+    if (path) outgoing.set(path, href);
+  }
   return (
     <>
       {documentView}
       {createPortal(
+        <>
         <section aria-label="目录与属性">
           <h2>目录与属性</h2>
           {metadata}
           {!info.outline.length &&
             !Object.keys(info.properties).length &&
             !info.tags.length && <p>当前笔记没有标题、属性或标签。</p>}
-        </section>,
+        </section>
+        {outgoing.size > 0 && <section aria-label="本文链接"><h2>本文链接</h2><ul>
+          {Array.from(outgoing, ([path, href]) => <li key={path}><button onClick={() => io.link?.(href, path)}>{path}</button></li>)}
+        </ul></section>}
+        </>,
         metadataHost,
       )}
     </>

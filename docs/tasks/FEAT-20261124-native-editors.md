@@ -100,3 +100,12 @@
 - `ANDROID_SERIAL=emulator-5612 node apps/web/tests/native-editors.mjs --android` 退出 0。Chrome 验证菜单关闭、备注保存重开、撤销与重做、关系箭头、布局、主题、文件导出和宽窄窗口四边。Android WebView 用触屏手势验证长按节点、长按空白处保存、离线重开和回网同步。
 - 自审与手机实测发现本地客户端底部还有 49px 的反向链接栏。已将导图的反向链接移入标题「更多操作」并复测入口与画布边界。关系箭头与备注使用浮层，打开时画布尺寸不变。
 - 8 项 `node --test apps/web/tests/*test.mjs` 通过。`npm run build --prefix apps/web`、`npm run android --prefix apps/client -- --debug`、`cargo build --locked -p wenote-desktop --release` 退出 0。已核对 18274 验收服务的首页和导图脚本，更新 `dist/acceptance/WeNote`、`dist/acceptance/WeNote-arm64-debug.apk`，截图为 `dist/acceptance/mind-context-menu.png`。macOS 完成构建，本轮界面交互在 Chrome 和 Android 模拟器验证。
+
+## 11 月 25 日验收反馈 · 笔记信息占位与双向链接
+
+沿用方式 2。Markdown 与导图使用标题栏的同一按钮开合信息面板。宽编辑区左右布局，窄编辑区上下布局，内容与信息各占独立空间。使用真实文件核对笔记互链和导图作为链接目标的往返。
+
+- 红阶段在 765px 宽的导图区内测得 272px 宽的信息栏与画布重叠。另外，默认 Crepe 把新输入的 `[[笔记]]` 保存为 `\[\[笔记]]`，服务端无法将该原文索引为引用。
+- `node apps/web/tests/native-editors.mjs` 通过。Chrome 验证宽屏并排、手机上下占位、同一标题按钮收起、可视化编辑新建及重开后继续编辑双链、Markdown 目标反链，以及通过导图反链返回来源笔记。
+- `ANDROID_SERIAL=emulator-5612 node apps/web/tests/native-editors.mjs --android` 通过。Android WebView 验证导图下方的信息面板、来源笔记列表、长按保存、断网重开和恢复同步。自审核对了链接别名、渲染和索引的区别及 Web 和本地客户端的文件入口。导图内部的关系箭头作用于节点；文件反链由已保存的 Markdown 引用生成。
+- `node --test apps/web/tests/*test.mjs` 的 8 项测试通过。Web、Android 和 macOS 构建成功，更新验收程序，核对 18274 返回的页面和 Crepe 脚本。面板截图为 `dist/acceptance/note-info-docked.png`。macOS 本轮完成构建，界面交互通过 Chrome 和 Android 模拟器验收。

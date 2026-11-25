@@ -157,6 +157,7 @@ export function NoteHeading({
             {mode === "read" ? (handset.dirty ? "保存" : "编辑") : "完成"}
           </button>
         )}
+        {endAction}
         <button aria-label="更多操作" onClick={() => setSheet("more")}><PhoneIcon name="more" /></button>
         {sheet && (
           <PhoneSheet
@@ -182,7 +183,6 @@ export function NoteHeading({
                 <>
                   {change && <button onClick={() => setSheet("modes")}>编辑模式</button>}
                   <div onClick={() => setSheet(null)}>
-                    {endAction}
                     {share && <button onClick={share.run} disabled={busy}>{share.label}</button>}
                     {more}
                   </div>

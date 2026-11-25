@@ -93,6 +93,8 @@ try {
       },
     }),
   );
+  const typed = await create("手写双链.md", "参考资料");
+  await create("链接索引.md", "# 项目索引\n\n[[笔记|会议记录]] 和 [路线图](路线.mind.json)\n");
   await create("普通.json", "{}");
   await create("引用.md", "[首页][home]\n\n[home]: /home");
   const readingSource = [
@@ -163,6 +165,45 @@ try {
   await button("预览").click();
   await page.locator(".reading h2").waitFor();
   await button("路线.mind.json").click();
+  const infoButton = button("笔记信息");
+  const infoPanel = page.getByRole("complementary", {name: "笔记信息"});
+  async function verifyDock(content, stacked = false) {
+    await infoButton.click();
+    const box = await content.boundingBox();
+    const info = await infoPanel.boundingBox();
+    assert.ok(stacked ? Math.abs(box.y + box.height - info.y) <= 1 : Math.abs(box.x + box.width - info.x) <= 1,
+      `panel overlaps content: ${JSON.stringify({box, info})}`);
+    assert.equal(await infoPanel.getByRole("button", {name: /关闭/}).count(), 0);
+  }
+  const mapCanvas = page.locator(".mind-host .map-container");
+  await verifyDock(mapCanvas);
+  await infoPanel.getByRole("button", {name:"链接索引.md"}).click();
+  await verifyDock(page.locator(".mode-crepe"));
+  const outgoing = infoPanel.getByRole("region", { name: "本文链接" });
+  if (process.env.WENOTE_INFO_PREVIEW) await page.locator(".document").screenshot({path:process.env.WENOTE_INFO_PREVIEW});
+  await outgoing.getByRole("button", { name:"笔记.md" }).click();
+  await infoButton.click();
+  await infoPanel.getByRole("button", {name:"链接索引.md"}).click();
+  await button("编辑模式").click();
+  await button("预览").click();
+  await page.locator(".reading").getByRole("link", {name:"路线图"}).click();
+  await verifyDock(mapCanvas);
+  await infoButton.click();
+  await button("手写双链.md").click();
+  const typedParagraph = page.locator(".milkdown .ProseMirror > p").first();
+  await typedParagraph.click();
+  await page.keyboard.press("End");
+  await page.keyboard.insertText(" [[笔记]]");
+  assert.match(await saveFile(typed), /\[\[笔记\]\]/);
+  await button("笔记.md").click();
+  await infoButton.click();
+  await infoPanel.getByRole("button", { name: "手写双链.md" }).waitFor();
+  await infoPanel.getByRole("button", { name: "手写双链.md" }).click();
+  await typedParagraph.click();
+  await page.keyboard.press("End");
+  await page.keyboard.insertText("补充");
+  assert.match(await saveFile(typed), /\[\[笔记\]\]补充/);
+  await button("路线.mind.json").click();
   const branch = page.locator(".me-tpc").filter({ hasText: "调研" });
   const surface = page.locator(".mind-host .map-container");
   const menuItem = (name) => page.getByRole("menuitem", { name, exact: true });
@@ -227,6 +268,8 @@ try {
   const desktopViewport = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator(".phone-document-head").waitFor();
+  await verifyDock(mapCanvas, true);
+  await infoButton.click();
   await checkCanvasBounds();
   await page.setViewportSize(desktopViewport);
   await page

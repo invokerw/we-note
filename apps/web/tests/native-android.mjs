@@ -76,9 +76,12 @@ export async function verifyAndroid(origin, email, password) {
     const canvas = await mapSurface().boundingBox();
     assert.ok(Math.abs(doc.x - canvas.x) <= 1 && Math.abs(doc.width - canvas.width) <= 1);
     assert.ok(Math.abs(header.y + header.height - canvas.y) <= 1 && Math.abs(doc.y + doc.height - canvas.y - canvas.height) <= 1);
-    await button("更多操作").click();
-    await button("反向链接").click();
-    await page.getByRole("dialog", { name: "反向链接" }).getByRole("button", { name: "关闭" }).click();
+    await button("笔记信息").click();
+    const info = page.getByRole("complementary", {name: "笔记信息"});
+    await info.getByRole("button", {name:"链接索引.md"}).waitFor();
+    const dock = await info.boundingBox(), reduced = await mapSurface().boundingBox();
+    assert.ok(Math.abs(reduced.y + reduced.height - dock.y) <= 1);
+    await button("笔记信息").click();
     await longPressAction("保存");
     await page.getByText("已保存到本地目录").waitFor();
     await button("返回笔记列表").click();

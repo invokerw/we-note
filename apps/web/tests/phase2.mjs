@@ -123,7 +123,7 @@ try {
   await metadata.getByText("没有笔记链接到此处。", { exact: true }).waitFor();
   const panelBox = await metadata.boundingBox(),
     splitBox = await split.boundingBox();
-  assert.ok(Math.abs(panelBox.x + panelBox.width - splitBox.x - splitBox.width) <= 1);
+  assert.ok(Math.abs(panelBox.x - splitBox.x - splitBox.width) <= 1);
   await panelToggle.click();
   assert.equal(await metadata.isVisible(), false);
   const divider = split.getByRole("separator");
@@ -141,12 +141,12 @@ try {
   await page.setViewportSize({ width: 390, height: 800 });
   await split.locator('[aria-orientation="horizontal"]').waitFor();
   const narrow = await split.boundingBox();
-  await button("更多操作").click();
   await panelToggle.click();
   const drawer = await metadata.boundingBox();
   assert.equal((await split.boundingBox()).width, narrow.width);
   assert.ok(Math.abs(drawer.x + drawer.width - narrow.x - narrow.width) <= 1);
-  await button("关闭笔记信息").click();
+  assert.ok(Math.abs((await split.boundingBox()).y + (await split.boundingBox()).height - drawer.y) <= 1);
+  await panelToggle.click();
   await divider.press("ArrowDown");
   assert.equal(await divider.getAttribute("aria-valuenow"), "55");
   await page.setViewportSize(wide);

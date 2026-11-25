@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { editorViewCtx, parserCtx, serializerCtx } from "@milkdown/kit/core";
+import { editorViewCtx, parserCtx, remarkStringifyOptionsCtx, serializerCtx } from "@milkdown/kit/core";
 import { Plugin, type SelectionBookmark } from "@milkdown/kit/prose/state";
 import { Slice, type Node as PMNode } from "@milkdown/kit/prose/model";
 import { $prose } from "@milkdown/kit/utils";
@@ -100,6 +100,20 @@ export default function CrepeEditor(props: Props) {
           },
         },
       },
+    });
+    editor.editor.config((ctx) => {
+      ctx.update(remarkStringifyOptionsCtx, options => {
+        const text = options.handlers?.text;
+        if (!text) return options;
+        return { ...options, handlers: { ...options.handlers,
+          text(node, parent, state, info) {
+            const markdown = text(node, parent, state, info);
+            if (parent?.type === "link" || !node.value.includes("[[")) return markdown;
+            // Crepe escapes opening brackets in ordinary text. Keep complete wiki links indexable.
+            return markdown.replace(/(?<!\\)\\\[\\\[(?=[^\[\]\n]+\]\])/g, "[[");
+          },
+        } };
+      });
     });
     editor.editor.use(
       $prose(
@@ -207,7 +221,8 @@ export default function CrepeEditor(props: Props) {
           nodes.forEach((n, i) => {
             const raw = initial.slice(...ranges[i]);
             originals.set(n, raw);
-            if (/\[\[|^>\s*\[!|<\/?[a-z][^>]*>/im.test(raw))
+            const complexWikiBlock = raw.includes("[[") && !n.isTextblock;
+            if (complexWikiBlock || /\\\[\\?\[|^>\s*\[!|<\/?[a-z][^>]*>/im.test(raw))
               protectedBlocks.add(n);
           });
           initialized = true;

@@ -6,7 +6,7 @@ import { isMindMap } from "./plugins/mindFile";
 import { usesPluginEditor } from "./plugins/registry";
 import Manager from "./plugins/Manager";
 import { TextFile } from "./markdown/textFile";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback, useId } from "react";
 import { createRoot } from "react-dom/client";
 import type { RichWriting } from "./markdown/crepeSource";
 import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
@@ -24,6 +24,7 @@ import {
   parentFolder,
   type EntryIO,
 } from "./libraryEntries";
+import { NoteInfoPanel, NoteInfoToggle } from "./NoteInfo";
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
 import { AppShell } from "@mantine/core";
 import { WorkspaceShell } from "./WorkspaceShell";
@@ -145,8 +146,11 @@ function Workspace({
   );
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
-  const mindLinks = useRef<HTMLDialogElement>(null);
+  const panelId = useId();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
   const showMindMap = !!pluginBytes && isMindMap(path);
+  const hasInfo = showMindMap || /\.md$/i.test(path);
   const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     editor = useRef<EditorView | null>(null),
@@ -235,16 +239,10 @@ function Workspace({
     }),
     [binding],
   );
-  async function backlinks() {
+  const loadBacklinks = useCallback(async (): Promise<Hit[]> => {
     const id = await local<string | null>(vault, "file_id", { path });
-    setLinks(
-      id
-        ? await client.json(
-            "/links/backlinks?file_id=" + encodeURIComponent(id),
-          )
-        : [],
-    );
-  }
+    return id ? client.json("/links/backlinks?file_id=" + encodeURIComponent(id)) : [];
+  }, [client, path, vault]);
   async function load() {
     list(await local<Record<string, string>>(vault, "library"));
   }
@@ -291,6 +289,7 @@ function Workspace({
     setSaved(source.current.text);
     setBase(result.hash);
     choose(p);
+    setPanelOpen(false);
     panes.setPane("doc");
     setView("笔记");
     setLinks([]);
@@ -482,10 +481,95 @@ function Workspace({
   }
   const backlinkList = links.length ? links.map((hit) => (
     <button key={hit.file_id} onClick={() => {
-      mindLinks.current?.close();
       run(() => open(hit.path));
     }}>{hit.path}</button>
   )) : <p>没有笔记链接到此处。</p>;
+  const fileContent = pluginBytes ? (
+    <PluginEditor
+      key={path}
+      path={path}
+      bytes={pluginBytes}
+      save={savePlugin}
+      output={output}
+      dirty={setPluginDirty}
+      notify={notify}
+      xmindTheme={xmindPreferences(preferences).theme}
+    />
+  ) : (
+    <>
+      <input
+        type="file"
+        hidden
+        ref={picker}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) run(() => attach([f]));
+          e.target.value = "";
+        }}
+      />
+      <div className="document-body" inert={busy}>
+        <Document
+          metadataHost={hasInfo ? (panelOpen ? metadataHost : null) : undefined}
+          resolveNote={raw => resolvePath(path, raw, files)}
+          writing={rich}
+          upload={uploadFile}
+          imageURL={async url => {
+            if (!isAsset(url)) return url;
+            const asset = await local<{ type: string; data: string }>(vault, "image", { url, token: await binding.access().catch(() => "") });
+            return `data:${asset.type};base64,${asset.data}`;
+          }}
+          key={path}
+          focusSource={phone && (mode === "edit" || mode === "split")}
+          attach={() => picker.current?.click()}
+          markdown={/\.md$/i.test(path)}
+          text={text}
+          edit={edit}
+          mode={mode}
+          setMode={changeMode}
+          editor={editor}
+          preferences={
+            /\.md$/i.test(path) ? markdownSettings : undefined
+          }
+          onPreferencesChange={
+            /\.md$/i.test(path)
+              ? (patch) =>
+                  updatePluginSetting("com.wenote.md", {
+                    ...markdownSettings,
+                    ...patch,
+                  })
+              : undefined
+          }
+          io={{
+            image: (src, alt) => (
+              <LocalImage binding={binding} src={src} alt={alt} />
+            ),
+            link: (href) => {
+              if (
+                /^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(
+                  href,
+                )
+              ) {
+                run(async () => {
+                  await client.save(
+                    "asset",
+                    new URL(href).pathname.split("/").at(-1)!,
+                    "附件",
+                  );
+                });
+                return true;
+              }
+              if (/^[\w+.-]+:/.test(href)) return false;
+              const raw = linkTarget(href);
+              const found = resolvePath(path, raw, files);
+              if (found) run(() => open(found));
+              else notify("找不到目标笔记 · " + raw);
+              return true;
+            },
+          }}
+        />
+      </div>
+    </>
+  );
   return (
     <WorkspaceShell
       className={"layout local-layout" + (phone ? " android-phone" : "")}
@@ -706,6 +790,7 @@ function Workspace({
                       : undefined
                   }
                   path={path}
+                  endAction={hasInfo && <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}
                   mode={mode}
                   change={pluginBytes ? undefined : changeMode}
                   markdown={/\.md$/i.test(path)}
@@ -754,10 +839,6 @@ function Workspace({
                           {panes.columns === 1 ? "退出专注" : "专注模式"}
                         </button>
                       )}
-                      {showMindMap && <button onClick={() => {
-                        mindLinks.current?.showModal();
-                        run(backlinks);
-                      }}>反向链接</button>}
                       {!pluginBytes && /\.md$/i.test(path) && (
                         <MarkdownExport
                           path={path}
@@ -769,98 +850,14 @@ function Workspace({
                     </>
                   }
                 />
-                {pluginBytes ? (
-                  <PluginEditor
-                    key={path}
-                    path={path}
-                    bytes={pluginBytes}
-                    save={savePlugin}
-                    output={output}
-                    dirty={setPluginDirty}
-                    notify={notify}
-                    xmindTheme={xmindPreferences(preferences).theme}
-                  />
-                ) : (
-                  <>
-                    <input
-                      type="file"
-                      hidden
-                      ref={picker}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) run(() => attach([f]));
-                        e.target.value = "";
-                      }}
-                    />
-                    <div className="document-body" inert={busy}>
-                      <Document
-                        writing={rich}
-                        upload={uploadFile}
-                        imageURL={async url => {
-                          if (!isAsset(url)) return url;
-                          const asset = await local<{ type: string; data: string }>(vault, "image", { url, token: await binding.access().catch(() => "") });
-                          return `data:${asset.type};base64,${asset.data}`;
-                        }}
-                        key={path}
-                        focusSource={phone && (mode === "edit" || mode === "split")}
-                        attach={() => picker.current?.click()}
-                        markdown={/\.md$/i.test(path)}
-                        text={text}
-                        edit={edit}
-                        mode={mode}
-                        setMode={changeMode}
-                        editor={editor}
-                        preferences={
-                          /\.md$/i.test(path) ? markdownSettings : undefined
-                        }
-                        onPreferencesChange={
-                          /\.md$/i.test(path)
-                            ? (patch) =>
-                                updatePluginSetting("com.wenote.md", {
-                                  ...markdownSettings,
-                                  ...patch,
-                                })
-                            : undefined
-                        }
-                        io={{
-                          image: (src, alt) => (
-                            <LocalImage binding={binding} src={src} alt={alt} />
-                          ),
-                          link: (href) => {
-                            if (
-                              /^https:\/\/[^/]+\/assets\/asset_[\w-]+$/.test(
-                                href,
-                              )
-                            ) {
-                              run(async () => {
-                                await client.save(
-                                  "asset",
-                                  new URL(href).pathname.split("/").at(-1)!,
-                                  "附件",
-                                );
-                              });
-                              return true;
-                            }
-                            if (/^[\w+.-]+:/.test(href)) return false;
-                            const raw = linkTarget(href);
-                            const found = resolvePath(path, raw, files);
-                            if (found) run(() => open(found));
-                            else notify("找不到目标笔记 · " + raw);
-                            return true;
-                          },
-                        }}
-                      />
-                    </div>
-                  </>
-                )}
-                {showMindMap ? <dialog ref={mindLinks} aria-label="反向链接" className="entry-dialog">
-                  <h2>反向链接</h2>
-                  {backlinkList}
-                  <form method="dialog"><footer><button>关闭</button></footer></form>
-                </dialog> : <details
+                {hasInfo ? <div className="document-body note-workspace">
+                  <div className={showMindMap ? "note-aux-view" : "note-content"}>{fileContent}</div>
+                  {panelOpen && <NoteInfoPanel id={panelId} metadata={setMetadataHost} load={loadBacklinks} open={hit => run(() => open(hit.path))} />}
+                </div> : fileContent}
+                {!hasInfo && <details
                   className="backlinks"
                   onToggle={(e) => {
-                    if (e.currentTarget.open) run(backlinks);
+                    if (e.currentTarget.open) run(async () => setLinks(await loadBacklinks()));
                   }}
                 >
                   <summary>反向链接</summary>

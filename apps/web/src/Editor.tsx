@@ -1,17 +1,18 @@
 import { markdownWritingMode } from "./markdown/modes";
+import { NoteInfoToggle, NoteInfoPanel } from "./NoteInfo";
 import { NoteHeading } from "./LibraryUI";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { browserExport } from "./plugins/archive";
 import { usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { RichWriting } from "./markdown/crepeSource";
 import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
 import type { EditorView } from "@codemirror/view";
 import { Document, type Mode } from "./markdown/Markdown";
 import { formatMarkdown } from "./markdown/saveFormat";
 import { resolvePath, linkTarget } from "./markdown/document";
-import { download, type Hit } from "./Resources";
+import { download } from "./Resources";
 import { base64, Note, request, uploadAsset, Version } from "./api";
 import {
   loadNoteMode,
@@ -77,57 +78,6 @@ export function AssetImage({
     <span>{alt}</span>
   );
 }
-function Backlinks({
-  token,
-  vault,
-  fileId,
-  open,
-}: {
-  token: string;
-  vault: string;
-  fileId: string;
-  open: (id: string) => void;
-}) {
-  const [links, setLinks] = useState<Hit[] | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    request(
-      token,
-      `/api/v1/vaults/${vault}/links/backlinks?file_id=${encodeURIComponent(fileId)}`,
-    )
-      .then((response) => response.json())
-      .then((results) => {
-        if (active) setLinks(results);
-      })
-      .catch((e) => {
-        if (active) setError(String(e));
-      });
-    return () => {
-      active = false;
-    };
-  }, [token, vault, fileId]);
-  return (
-    <section className="panel-backlinks" aria-label="反向链接">
-      <h2>反向链接</h2>
-      {error ? (
-        <p role="alert">{error}</p>
-      ) : links === null ? (
-        <p role="status">正在加载…</p>
-      ) : links.length ? (
-        <ul>
-          {links.map((f) => (
-            <li key={f.file_id}>
-              <button onClick={() => open(f.file_id)}>{f.path}</button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>没有笔记链接到此处。</p>
-      )}
-    </section>
-  );
-}
 export default function Editor({
   actions,
   phoneBack,
@@ -165,6 +115,8 @@ export default function Editor({
   const panelId = useId();
   const [panelOpen, setPanelOpen] = useState(false);
   const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
+  const loadBacklinks = useCallback(async () => (await request(token,
+    `/api/v1/vaults/${vault}/links/backlinks?file_id=${encodeURIComponent(note.file_id)}`)).json(), [token, vault, note.file_id]);
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
@@ -366,31 +318,7 @@ export default function Editor({
         markdown={note.format === "md"}
         busy={busy}
         endAction={
-          <button
-            className="metadata-toggle"
-            title={
-              panelOpen
-                ? "收起笔记信息"
-                : "展开笔记信息（目录、属性与反向链接）"
-            }
-            aria-label="笔记信息"
-            aria-expanded={panelOpen}
-            aria-controls={panelId}
-            onClick={() => setPanelOpen((open) => !open)}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
-            >
-              <rect x="2" y="3" width="16" height="14" rx="2" />
-              <path d="M11.5 3v14M14 7h2M14 10h2" />
-            </svg>
-          </button>
+          <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />
         }
         share={{ label: "分享快照", run: share }}
         save={
@@ -530,6 +458,7 @@ export default function Editor({
                 return URL.createObjectURL(blob);
               }}
               metadataHost={panelOpen ? metadataHost : null}
+              resolveNote={raw => resolvePath(note.path, raw, files.map(f => f.path))}
               attach={() => assetPicker.current?.click()}
               markdown={note.format === "md"}
               text={text}
@@ -555,23 +484,7 @@ export default function Editor({
             />
           </div>
         )}
-        <aside
-          className="metadata-panel"
-          id={panelId}
-          hidden={!panelOpen}
-          aria-label="笔记信息"
-        >
-          <button aria-label="关闭笔记信息" onClick={() => setPanelOpen(false)}>关闭</button>
-          <div ref={setMetadataHost} />
-          {panelOpen && (
-            <Backlinks
-              token={token}
-              vault={vault}
-              fileId={note.file_id}
-              open={open}
-            />
-          )}
-        </aside>
+        {panelOpen && <NoteInfoPanel id={panelId} metadata={setMetadataHost} load={loadBacklinks} open={hit => open(hit.file_id)} />}
       </div>
     </article>
   );
