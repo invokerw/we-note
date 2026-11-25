@@ -308,6 +308,7 @@ function FolderRows({
       >
         {node.children.size ? (
           <button
+            type="button"
             aria-label={(expanded ? "折叠" : "展开") + label}
             aria-expanded={expanded}
             onClick={() => setExpanded(!expanded)}
@@ -318,6 +319,7 @@ function FolderRows({
           <span className="indent" />
         )}
         <button
+          type="button"
           className="folder-name"
           aria-current={active === node.prefix ? "location" : undefined}
           onClick={() => select(node.prefix)}
@@ -340,6 +342,32 @@ function FolderRows({
       )}
     </li>
   );
+}
+export function FolderTree({ paths, active, select, includeRoot = true }: {
+  paths: string[];
+  active: string | null;
+  select: (path: string) => void;
+  includeRoot?: boolean;
+}) {
+  const tree = useMemo(() => {
+    const root: Folder = { prefix: "", children: new Map() };
+    for (const path of paths) {
+      let node = root;
+      for (const part of path.split("/").slice(0, -1)) {
+        if (!node.children.has(part))
+          node.children.set(part, {
+            prefix: node.prefix + part + "/",
+            children: new Map(),
+          });
+        node = node.children.get(part)!;
+      }
+    }
+    return root;
+  }, [paths]);
+  return <ul className="folders">{includeRoot
+    ? <FolderRows node={tree} active={active} select={select} />
+    : Array.from(tree.children.values(), child => <FolderRows key={child.prefix} node={child} active={active} select={select} />)}
+  </ul>;
 }
 export function LibraryPanes({
   paths,
@@ -386,21 +414,6 @@ export function LibraryPanes({
   }, [tablet, pane]);
   const [reverse, sort] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const tree = useMemo(() => {
-    const root: Folder = { prefix: "", children: new Map() };
-    for (const path of paths) {
-      let node = root;
-      for (const part of path.split("/").slice(0, -1)) {
-        if (!node.children.has(part))
-          node.children.set(part, {
-            prefix: node.prefix + part + "/",
-            children: new Map(),
-          });
-        node = node.children.get(part)!;
-      }
-    }
-    return root;
-  }, [paths]);
   const pickFolder = panes.browse;
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -469,9 +482,7 @@ export function LibraryPanes({
             >
               ▦　全部笔记
             </button>
-            <ul className="folders">
-              <FolderRows node={tree} active={folder} select={pickFolder} />
-            </ul>
+            <FolderTree paths={paths} active={folder} select={pickFolder} />
           </div>
         </>
       )}

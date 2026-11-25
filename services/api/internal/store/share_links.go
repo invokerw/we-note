@@ -253,7 +253,7 @@ func (r *Repository) DownloadLinkFile(ctx context.Context, id, session, version 
 	return "", nil, ErrNotFound
 }
 
-func (r *Repository) ImportLink(ctx context.Context, user, id, session, target, folder string) ([]FileResult, error) {
+func (r *Repository) ImportLink(ctx context.Context, user, id, session, target, folder string, placeSingleFileHere bool) ([]FileResult, error) {
 	if folder != "" && !PortablePath(folder) {
 		return nil, fileError(400, "INVALID_PATH", "invalid import folder")
 	}
@@ -281,6 +281,9 @@ func (r *Repository) ImportLink(ctx context.Context, user, id, session, target, 
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
+	}
+	if placeSingleFileHere && len(s.Files) == 1 {
+		s.Files[0].Path = path.Base(s.Files[0].Path)
 	}
 	files, _, err := r.importSnapshot(ctx, tx, s.Vault, target, folder, user, s.Snapshot)
 	if err != nil {

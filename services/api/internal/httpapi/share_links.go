@@ -107,12 +107,13 @@ func (a *API) publicLink(w http.ResponseWriter, r *http.Request) {
 		var q struct {
 			Vault  string `json:"vault_id"`
 			Folder string `json:"folder"`
+			Direct bool   `json:"place_single_file_here"`
 		}
 		if err := decodeJSON(w, r, &q); err != nil {
 			writeError(w, 400, "INVALID_REQUEST", err.Error())
 			return
 		}
-		files, err := a.repository.ImportLink(ctx, u.ID, id, cookie.Value, q.Vault, q.Folder)
+		files, err := a.repository.ImportLink(ctx, u.ID, id, cookie.Value, q.Vault, q.Folder, q.Direct)
 		if err != nil {
 			resourceError(w, err)
 			return

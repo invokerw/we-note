@@ -38,7 +38,7 @@ import "./phone.css";
 import "./workspace.css";
 const Admin = lazy(() => import("./Admin"));
 import { AccountAction, accountAction } from "./AccountAction";
-function Auth({ login }: { login: (s: string) => void }) {
+function Auth({ login, compact = false }: { login: (s: string) => void; compact?: boolean }) {
   const [register, setRegister] = useState(false),
     [mode, setMode] = useState(""),
     [error, setError] = useState(""),
@@ -50,10 +50,10 @@ function Auth({ login }: { login: (s: string) => void }) {
       .catch((e) => setError(String(e)));
   }, []);
   return (
-    <div className="auth">
-      <Cover />
+    <div className={compact ? "share-auth" : "auth"}>
+      {!compact && <Cover />}
       <div className="entry-form">
-        <h1>{register ? "创建账户" : "打开你的笔记库"}</h1>
+        {compact ? <h3>{register ? "创建账户" : "登录"}</h3> : <h1>{register ? "创建账户" : "打开你的笔记库"}</h1>}
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -856,6 +856,7 @@ function App() {
   );
   const auth = (
     <Auth
+      compact={!!shared}
       login={(s) => {
         sessionStorage.setItem("wenote-session", s);
         setToken(s);
