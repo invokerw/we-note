@@ -14,8 +14,8 @@ type Job = {
   status: string;
   created_at: string;
 };
-export async function download(token: string, path: string, name: string) {
-  const blob = await (await request(token, path)).blob();
+export async function download(token: string, path: string, name: string, method = "GET") {
+  const blob = await (await request(token, path, method)).blob();
   const a = document.createElement("a");
   a.download = name;
   a.href = URL.createObjectURL(blob);

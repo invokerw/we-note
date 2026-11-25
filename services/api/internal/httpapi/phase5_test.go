@@ -9,9 +9,11 @@ import (
 	"github.com/weifei/we-note/services/api/internal/sqlite"
 	"github.com/weifei/we-note/services/api/internal/store"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -144,6 +146,72 @@ func TestLinkLifetimeScopeAndDownloadLimit(t *testing.T) {
 		}
 		if _, e = repo.LinkSnapshot(ctx, l.ID, session, false); e == nil {
 			t.Fatal(kind)
+		}
+	}
+}
+func TestSharedSourceDownload(t *testing.T) {
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	blobs, err := blob.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := store.NewRepository(db, blobs)
+	mux := NewMux(repo)
+	u, err := repo.CreateUser(ctx, "source@test.invalid", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := repo.CreateVault(ctx, u.ID, "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte{0x50, 0x4b, 0, 255, 13, 10}
+	const name = "图谱.xmind"
+	file, err := repo.WriteFile(ctx, u.ID, v.ID, "", "create_file", "write", store.FileWrite{Path: "目录/" + name, Content: raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, allow := range []bool{false, true} {
+		secret := "source-token-" + strconv.FormatBool(allow)
+		l, err := repo.CreateLink(ctx, u.ID, "", store.LinkOptions{Vault: v.ID, Paths: []string{"目录/" + name}, Expires: time.Now().Add(time.Hour).Unix(), TokenHash: strings.TrimPrefix(digest([]byte(secret)), "sha256:"), Download: allow, MaxDownloads: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		session, err := repo.ExchangeLink(ctx, l.ID, secret, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		download := func(version string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest("POST", "/s/"+l.ID+"/files/"+version+"/download", nil)
+			req.AddCookie(&http.Cookie{Name: "wenote_share", Value: session})
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			return w
+		}
+		if !allow {
+			if w := download(file.Version); w.Code != 403 {
+				t.Fatalf("disabled source download: %d", w.Code)
+			}
+			continue
+		}
+		if w := download("unlisted"); w.Code != 404 {
+			t.Fatal(w.Code)
+		}
+		w := download(file.Version)
+		disposition, params, err := mime.ParseMediaType(w.Header().Get("Content-Disposition"))
+		if err != nil || w.Code != 200 || disposition != "attachment" || params["filename"] != name || !bytes.Equal(w.Body.Bytes(), raw) {
+			t.Fatalf("source: %d %v %v", w.Code, params, err)
+		}
+		if w = download(file.Version); w.Code != 404 {
+			t.Fatalf("quota: %d", w.Code)
 		}
 	}
 }

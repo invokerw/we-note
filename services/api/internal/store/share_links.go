@@ -212,15 +212,47 @@ func (r *Repository) LinkSnapshot(ctx context.Context, id, session string, downl
 		return s, err
 	}
 	if download {
-		if !s.Download {
-			return s, fileError(403, "DOWNLOAD_DISABLED", "此链接未开放下载")
-		}
-		if _, err = tx.ExecContext(ctx, `UPDATE share_links SET downloads=downloads+1 WHERE id=?`, id); err != nil {
+		if err = countLinkDownload(ctx, tx, id, s); err != nil {
 			return s, err
 		}
 	}
 	return s, tx.Commit()
 }
+
+func countLinkDownload(ctx context.Context, tx *sql.Tx, id string, s LinkSnapshot) error {
+	if !s.Download {
+		return fileError(403, "DOWNLOAD_DISABLED", "此链接未开放下载")
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE share_links SET downloads=downloads+1 WHERE id=?`, id)
+	return err
+}
+
+func (r *Repository) DownloadLinkFile(ctx context.Context, id, session, version string) (string, []byte, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	defer tx.Rollback()
+	s, err := readLink(ctx, tx, id, session)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, f := range s.Files {
+		if f.Version != version {
+			continue
+		}
+		if err = countLinkDownload(ctx, tx, id, s); err != nil {
+			return "", nil, err
+		}
+		data, err := r.readNoteBlobWithQuery(ctx, tx, s.Vault, f.Hash, f.Size)
+		if err != nil {
+			return "", nil, err
+		}
+		return path.Base(f.Path), data, tx.Commit()
+	}
+	return "", nil, ErrNotFound
+}
+
 func (r *Repository) ImportLink(ctx context.Context, user, id, session, target, folder string) ([]FileResult, error) {
 	if folder != "" && !PortablePath(folder) {
 		return nil, fileError(400, "INVALID_PATH", "invalid import folder")
