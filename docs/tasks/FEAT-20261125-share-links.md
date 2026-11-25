@@ -1,6 +1,6 @@
 # FEAT-20261125-share-links · 笔记分享链接
 
-- 类型 `feature`，影响 server / web。当前状态 `DELIVERED`。
+- 类型 `feature`，影响 server / web。当前状态 `MERGED`。
 - 开发依据为 `main` 的 `02e790d` 所收录的[笔记分享链接需求](../笔记分享链接需求.md)。用户选择方式 2，先在任务分支验收，通过后合入。
 - 分支 `codex/feature-share-links-20261125`，独立工作区 `/Users/weifei/code/we-note/.worktrees/share-links-20261125`。
 - 从单篇笔记创建可复制的 URL，访客直接阅读正文和快照图片，下载原始文件，登录后选择自己的库和目录保存并打开副本。保留已有链接的密码、撤销与权限规则。
@@ -42,3 +42,7 @@
 `CHANGES_REQUESTED`。移除分享阅读页底部的「我的笔记库」入口，沿用原任务工作区和验收方式。
 
 `WENOTE_TEST_ORIGIN=http://localhost:19475 node apps/web/tests/phase1.mjs` 首次退出 1，页面上找到一个「我的笔记库」链接。移除该链接后，`npm run build --prefix apps/web` 和相同的浏览器回归命令均退出 0，覆盖访客阅读、下载、登录保存及打开副本。复查完整差异并通过 `git diff --check`，本轮 `DELIVERED`。
+
+## 验收与合入 · 2026-11-25 16:02（上海时间）
+
+用户确认 `c871439` 验收通过，任务状态从 `ACCEPTED` 转为 `MERGED`。本地 `main` 从 `b4d5cc5` 快进至 `c871439`，`git merge-base --is-ancestor c871439 main` 验证通过。已停止 19475 端口的任务服务，移除分享任务工作区并删除对应本地分支。
