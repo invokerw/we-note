@@ -76,11 +76,12 @@ export async function request(
   });
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
-    throw new Error(
+    const error = new Error(
       e.error?.code === "FILE_VERSION_CONFLICT"
         ? "文件已有新版本。请保留当前草稿，查看新版本后再保存。"
         : e.error?.message || e.message || `请求失败 (${response.status})`,
     );
+    throw Object.assign(error, { code: e.error?.code });
   }
   return response;
 }

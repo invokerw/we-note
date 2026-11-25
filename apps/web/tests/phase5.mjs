@@ -180,8 +180,15 @@ try {
   p.once("dialog", (d) => d.accept("私人日记.md"));
   await button(p, "新建加密笔记").click();
   await p.getByLabel("加密笔记正文").fill("只在本机解密的内容");
+  // Reserve the first candidate for another owner before the browser saves it.
+  let occupied;
+  await p.route("**/api/v1/encrypted-vaults/*", async (route) => {
+    occupied = route.request().url().split("/").at(-1);
+    await api(b.token, "/api/v1/encrypted-vaults/" + occupied, "PUT", route.request().postDataJSON(), 200);
+    await route.continue();
+  }, { times: 1 });
   const saved = p.waitForRequest(
-    (r) => r.method() === "PUT" && r.url().includes("/encrypted-vaults/"),
+    (r) => occupied && r.method() === "PUT" && r.url().includes("/encrypted-vaults/") && !r.url().endsWith("/" + occupied),
   );
   await button(p, "加密并保存").click();
   await p.getByText("加密库已保存").waitFor();
@@ -190,6 +197,7 @@ try {
   for (const secret of [key, "私人日记", "只在本机解密"])
     assert.ok(!sealed.includes(secret));
   const cid = req.url().split("/").at(-1);
+  assert.match(cid, /^[0-9abcdefghjkmnpqrstvwxyz]{8}$/u);
   await api(b.token, "/api/v1/encrypted-vaults/" + cid, "GET", undefined, 404);
   await button(p, "锁定笔记库").click();
   await p.getByLabel("选择加密库").selectOption(cid);

@@ -9,6 +9,31 @@ type Envelope = Header & { iv: string; ciphertext: string };
 type Payload = { base_revision: number; iv: string; ciphertext: string };
 export type EncryptedIO = (id?: string, payload?: Payload) => Promise<any>;
 const utf8 = new TextEncoder();
+const shortIDAlphabet = "0123456789abcdefghjkmnpqrstvwxyz";
+function newVaultID() {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, (b) => shortIDAlphabet[b & 31]).join("");
+}
+async function seal(
+  contents: Contents,
+  key: CryptoKey,
+  id: string,
+  revision: number,
+): Promise<Payload> {
+  const bytes = utf8.encode(JSON.stringify(contents));
+  if (bytes.byteLength + 16 > 16 << 20) throw Error("整库密文超过 16 MiB");
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const sealed = await crypto.subtle.encrypt(
+    parameters(id, revision + 1, iv),
+    key,
+    bytes,
+  );
+  return {
+    base_revision: revision,
+    iv: base64(iv),
+    ciphertext: base64(new Uint8Array(sealed)),
+  };
+}
 function parameters(id: string, revision: number, iv: Uint8Array<ArrayBuffer>) {
   return {
     name: "AES-GCM",
@@ -121,7 +146,7 @@ export default function EncryptedVaults({
     setRecovery(secret);
     setRaw("");
     setStored(false);
-    setId(crypto.randomUUID());
+    setId(newVaultID());
     setRevision(0);
     select(0);
     edit({ name: "未命名加密库", files: [] });
@@ -150,27 +175,29 @@ export default function EncryptedVaults({
   }
   async function save() {
     if (!contents || !key.current || (!revision && !stored)) return;
-    if (!pending.current) {
-      const bytes = utf8.encode(JSON.stringify(contents));
-      if (bytes.byteLength + 16 > 16 << 20) throw Error("整库密文超过 16 MiB");
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const sealed = await crypto.subtle.encrypt(
-        parameters(id, revision + 1, iv),
-        key.current,
-        bytes,
-      );
-      pending.current = {
-        base_revision: revision,
-        iv: base64(iv),
-        ciphertext: base64(new Uint8Array(sealed)),
-      };
+    let candidate = id;
+    let head: Header;
+    for (let attempt = 1; ; attempt++) {
+      pending.current ??= await seal(contents, key.current, candidate, revision);
+      try {
+        head = await io(candidate, pending.current);
+        break;
+      } catch (err) {
+        const taken =
+          err === "VAULT_ID_TAKEN" ||
+          (err as { code?: string } | null)?.code === "VAULT_ID_TAKEN";
+        if (revision || !taken) throw err;
+        candidate = newVaultID();
+        setId(candidate);
+        pending.current = null;
+        if (attempt >= 8) throw Error("暂时无法分配笔记库 ID，请重试");
+      }
     }
-    const head: Header = await io(id, pending.current);
     pending.current = null;
     setRevision(head.revision);
     setModified(false);
     setRecovery("");
-    setRows((old) => [head, ...old.filter((r) => r.id !== id)]);
+    setRows((old) => [head, ...old.filter((r) => r.id !== head.id)]);
     notify("加密库已保存");
   }
   function add(path: string, body: string, binary: boolean) {

@@ -153,7 +153,7 @@ func TestEncryptedEnvelopeIsolationAndRevision(t *testing.T) {
 	registerUser(t, m, "bob@test.invalid", "bob password")
 	a := loginUser(t, m, "alice@test.invalid", "alice password")
 	b := loginUser(t, m, "bob@test.invalid", "bob password")
-	const id = "375c2e73-73c7-4ed0-9f15-7576a055a634"
+	const id = "b4r8n2qy"
 	path := "/api/v1/encrypted-vaults/" + id
 	q := store.Envelope{IV: make([]byte, 12), Ciphertext: bytes.Repeat([]byte{3}, 50)}
 	put := func(token string, want int) {

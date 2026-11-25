@@ -32,7 +32,7 @@ pub struct Receipt {
     pub path: String,
 }
 #[derive(Debug)]
-pub struct HttpError(pub u16, String);
+pub struct HttpError(pub u16, String, Option<String>);
 impl std::fmt::Display for HttpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HTTP {}: {}", self.0, self.1)
@@ -53,6 +53,10 @@ fn checked(response: Response) -> Result<Response> {
             .and_then(Value::as_str)
             .unwrap_or("request failed")
             .to_owned(),
+        error
+            .pointer("/error/code")
+            .and_then(Value::as_str)
+            .map(String::from),
     )
     .into())
 }
@@ -149,6 +153,15 @@ impl Api {
             envelope,
             None,
         )
+        .map_err(|err| {
+            // The native bridge serializes errors as strings. Preserve this actionable API code.
+            if let Some(HttpError(_, _, Some(code))) = err.downcast_ref::<HttpError>() {
+                if code == "VAULT_ID_TAKEN" {
+                    return anyhow::anyhow!("VAULT_ID_TAKEN");
+                }
+            }
+            err
+        })
     }
     pub fn vaults(&self) -> Result<Value> {
         self.json(Method::GET, "/api/v1/vaults", None, None)

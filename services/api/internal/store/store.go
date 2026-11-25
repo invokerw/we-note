@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -69,18 +70,14 @@ func (r *Repository) createUser(ctx context.Context, email, passwordHash, role, 
 	if normalizedEmail == "" || passwordHash == "" {
 		return model.User{}, fmt.Errorf("email and password hash are required")
 	}
-	id, err := newID("user")
-	if err != nil {
-		return model.User{}, err
-	}
 	createdAt := time.Now().UTC()
 	var verifiedValue any
 	if !verifiedAt.IsZero() {
 		verifiedValue = formatTime(verifiedAt)
 	}
-	_, err = r.db.ExecContext(ctx, `
+	id, err := insertWithShortID(ctx, r.db, `
 		INSERT INTO users(id, email, password_hash, created_at, role, status, email_verified_at, password_changed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id, normalizedEmail, passwordHash, formatTime(createdAt), role, status, verifiedValue, formatTime(createdAt))
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, normalizedEmail, passwordHash, formatTime(createdAt), role, status, verifiedValue, formatTime(createdAt))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
 			return model.User{}, ErrConflict
@@ -247,19 +244,16 @@ func (r *Repository) CreateVault(ctx context.Context, ownerUserID, name string) 
 	if _, err := r.UserByID(ctx, ownerUserID); err != nil {
 		return model.Vault{}, err
 	}
-	id, err := newID("vault")
-	if err != nil {
-		return model.Vault{}, err
-	}
 	createdAt := time.Now().UTC()
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.Vault{}, fmt.Errorf("begin vault transaction: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `
+	id, err := insertWithShortID(ctx, tx, `
 		INSERT INTO vaults(id, owner_user_id, name, created_at)
-		VALUES (?, ?, ?, ?)`, id, ownerUserID, name, formatTime(createdAt)); err != nil {
+		SELECT ?1, ?2, ?3, ?4 WHERE `+vaultIDAvailable, ownerUserID, name, formatTime(createdAt))
+	if err != nil {
 		return model.Vault{}, fmt.Errorf("create vault: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -408,6 +402,36 @@ func parseTime(value string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("parse stored time %q: %w", value, err)
 	}
 	return parsed, nil
+}
+
+const shortIDAlphabet = "0123456789abcdefghjkmnpqrstvwxyz"
+
+var shortIDEncoding = base32.NewEncoding(shortIDAlphabet).WithPadding(base32.NoPadding)
+
+// ?1 is the candidate. Check both vault types and pending account cleanup in the inserting statement.
+const vaultIDAvailable = `NOT EXISTS(SELECT 1 FROM vaults WHERE id=?1)
+ AND NOT EXISTS(SELECT 1 FROM encrypted_vaults WHERE id=?1)
+ AND NOT EXISTS(SELECT 1 FROM cleanup_vaults WHERE vault_id=?1)`
+
+type rowQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func insertWithShortID(ctx context.Context, db rowQueryer, insert string, values ...any) (string, error) {
+	args := append([]any{nil}, values...)
+	for attempt := 0; attempt < 8; attempt++ {
+		var random [5]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return "", err
+		}
+		args[0] = shortIDEncoding.EncodeToString(random[:])
+		var id string
+		err := db.QueryRowContext(ctx, insert+" ON CONFLICT(id) DO NOTHING RETURNING id", args...).Scan(&id)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return id, err
+		}
+	}
+	return "", errors.New("could not allocate a unique short ID")
 }
 
 func newID(prefix string) (string, error) {

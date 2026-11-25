@@ -87,7 +87,7 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 				}
 			}))
 			defer srv.Close()
-			const encryptedID = "ef721403-7744-4dd2-937a-3db614f6bd33"
+			const encryptedID = "9hm5j4z7"
 			envelope := Envelope{IV: make([]byte, 12), Ciphertext: []byte("encrypted content predating GM")}
 			if _, err = db.Exec(`INSERT INTO encrypted_vaults VALUES(?,?,1,?,?,CURRENT_TIMESTAMP)`, encryptedID, "owner", envelope.Ciphertext, envelope.IV); err != nil {
 				t.Fatal(err)

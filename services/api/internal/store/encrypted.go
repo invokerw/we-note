@@ -27,7 +27,7 @@ type Envelope struct {
 	Ciphertext []byte `json:"ciphertext"`
 }
 
-var encryptedID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+var encryptedID = regexp.MustCompile(`^[` + shortIDAlphabet + `]{8}$`)
 
 func (r *Repository) EncryptedVaults(ctx context.Context, user string) ([]EncryptedVault, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT id,revision,updated_at FROM encrypted_vaults WHERE owner=? ORDER BY updated_at DESC`, user)
@@ -89,7 +89,7 @@ func (r *Repository) SaveEncrypted(ctx context.Context, user, id string, q Envel
 		hash = fmt.Sprintf("sha256:%x", sha256.Sum256(q.Ciphertext))
 	}
 	if q.Base == 0 {
-		res, err = tx.ExecContext(ctx, `INSERT INTO encrypted_vaults VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING`, id, user, v.Revision, inline, q.IV, v.Updated)
+		res, err = tx.ExecContext(ctx, `INSERT INTO encrypted_vaults(id,owner,revision,ciphertext,iv,updated_at) SELECT ?1,?2,?3,?4,?5,?6 WHERE `+vaultIDAvailable, id, user, v.Revision, inline, q.IV, v.Updated)
 	} else {
 		res, err = tx.ExecContext(ctx, `UPDATE encrypted_vaults SET revision=?,ciphertext=?,iv=?,updated_at=? WHERE id=? AND owner=? AND revision=? AND iv<>?`, v.Revision, inline, q.IV, v.Updated, id, user, q.Base, q.IV)
 	}
@@ -101,6 +101,9 @@ func (r *Repository) SaveEncrypted(ctx context.Context, user, id string, q Envel
 		err = tx.QueryRowContext(ctx, `SELECT updated_at FROM encrypted_vaults e LEFT JOIN encrypted_objects o ON o.vault_id=e.id WHERE id=? AND owner=? AND revision=? AND iv=? AND (ciphertext=? OR o.hash=?)`, id, user, v.Revision, q.IV, q.Ciphertext, hash).Scan(&v.Updated)
 		if !errors.Is(err, sql.ErrNoRows) {
 			return v, err
+		}
+		if q.Base == 0 {
+			return v, fileError(409, "VAULT_ID_TAKEN", "笔记库 ID 已被占用")
 		}
 		return v, fileError(409, "ENCRYPTED_CONFLICT", "云端版本已变化，请先导出本地草稿再重新解锁")
 	}

@@ -8,7 +8,7 @@
 
 ## 本轮实现与验收入口
 
-- Web 入口 `http://localhost:19127`，GM 入口 `http://localhost:19127/gm`。任务进程 PID `78975`，工作区内日志 `dist/local/server.log`，SQLite 和在线目录在 `services/api/data/`。首次进入 GM 时使用本工作区的 `services/api/data/setup.token` 创建管理员。在该任务库中新建 Markdown 笔记，插入一张 PNG，保存后在预览和源码模式查看。
+- Web 入口 `http://localhost:19127`，GM 入口 `http://localhost:19127/gm`。任务进程 PID `84336`，工作区内日志 `dist/local/server.log`，SQLite 和在线目录在 `services/api/data/`。首次进入 GM 时使用本工作区的 `services/api/data/setup.token` 创建管理员。在该任务库中新建 Markdown 笔记，插入一张 PNG，保存后在预览和源码模式查看。
 - 客户端从本工作区构建。桌面调试程序 `target/debug/wenote-desktop`，连接上述本机服务。停止本次实例的命令为 `./scripts/local.py stop`。
 - 上传会话记录实际上传者及发起笔记。Markdown URL 使用库所有者、库 ID、UTC 日期和 SHA-256。保存时写入并校验库内版本，服务启动及每分钟发布 `current` 和 `manifest.json`。若要从复制的库恢复到新目录，可执行 `python3 scripts/recover_vault.py <库副本> <新目录>`。工具按清单校验正文、历史和图片的长度与哈希。
 - 删除笔记后可从回收站还原。实际清除笔记后，仍受其他笔记、历史版本或有效快照使用的图片继续保留。最后一个引用消失后由后台核对连续七天的宽限期。旧非图片资源和迁移时未确认归属的资源保留，旧库目录中的 `migration-report.json` 记录保护备份 ID 和待核对项。
@@ -23,3 +23,11 @@
 - 自审后修正了 GM 切换目标时提前提交数据库变更、相同哈希不同日期的对象回收，以及发布时一次性读入大笔记的问题。确认证明七天宽限的回归采用隔离库时间戳，未改系统时间。
 
 按方式 2 保留此分支和服务，等待实现验收。受测代码提交可用 `git log -1 --oneline` 查看。
+
+## 验收反馈 · 2026-11-25
+
+用户要求用户与笔记库统一采用 8 位短 ID，后续自行清库。沿用任务分支验收。验证注册、邀请和初始化管理员、普通与加密库创建及冲突处理、图片链接、磁盘目录和设备同步。
+
+- `CHANGES_REQUESTED` → `DELIVERED`。数据库使用实际短 ID。普通库、加密库和等待清理的库共享 ID 占用检查，遇到碰撞重新生成。验收服务保留原数据，新建帐号及库即可同时看到两段短 ID。
+- 新用例先在旧实现上复现了用户和普通库带长前缀、加密库拒绝短 ID 的问题。Go 全量测试和 `go vet ./...` 通过，包含注册、初始化、邀请、重复邮箱和短 ID 碰撞回归。
+- Web 和桌面前端构建、Rust 工作区构建和测试通过。`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --images` 通过，覆盖 Markdown 图片地址与实际帐号和库 ID 一致、双设备同步、防盗链，以及加密库首次保存时的碰撞重试和解锁。

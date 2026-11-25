@@ -144,12 +144,8 @@ func (r *Repository) BootstrapAdmin(ctx context.Context, email, passwordHash str
 	rowErr := tx.QueryRowContext(ctx, `SELECT id,created_at FROM users WHERE email=?`, normalized).Scan(&id, &created)
 	now := time.Now().UTC()
 	if errors.Is(rowErr, sql.ErrNoRows) {
-		id, err = newID("user")
-		if err != nil {
-			return model.User{}, err
-		}
 		created = formatTime(now)
-		_, err = tx.ExecContext(ctx, `INSERT INTO users(id,email,password_hash,created_at,role,status,email_verified_at,password_changed_at) VALUES(?,?,?,?,'system_admin','active',?,?)`, id, normalized, passwordHash, created, formatTime(now), formatTime(now))
+		id, err = insertWithShortID(ctx, tx, `INSERT INTO users(id,email,password_hash,created_at,role,status,email_verified_at,password_changed_at) VALUES(?,?,?,?,'system_admin','active',?,?)`, normalized, passwordHash, created, formatTime(now), formatTime(now))
 	} else if rowErr == nil {
 		return model.User{}, fileError(409, "EMAIL_IN_USE", "请选择独立的管理员邮箱")
 	} else {
@@ -625,12 +621,9 @@ func (r *Repository) RegisterInvitation(ctx context.Context, token, passwordHash
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return model.User{}, err
 	}
-	id, err := newID("user")
-	if err != nil {
-		return model.User{}, err
-	}
 	now := time.Now().UTC()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO users(id,email,password_hash,created_at,role,status,password_changed_at) VALUES(?,?,?,?,'user','active',?)`, id, email, passwordHash, formatTime(now), formatTime(now)); err != nil {
+	id, err := insertWithShortID(ctx, tx, `INSERT INTO users(id,email,password_hash,created_at,role,status,password_changed_at) VALUES(?,?,?,?,'user','active',?)`, email, passwordHash, formatTime(now), formatTime(now))
+	if err != nil {
 		return model.User{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE invitations SET used_at=? WHERE id=?`, formatTime(now), invitationID); err != nil {
