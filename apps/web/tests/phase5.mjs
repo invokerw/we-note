@@ -109,6 +109,26 @@ try {
     await api(b.token, `/api/v1/vaults/${b.vault}/assets`)
   ).json();
   assert.equal(copyAssets.length, 1);
+  // The same document name in two notebooks must remain distinguishable.
+  for (const [vault, days] of [[b.vault, 0], [otherVault.id, 1]]) {
+    await api(b.token, `/api/v1/vaults/${vault}/files`, "POST", {path: "共享.md", content: bytes("正文")});
+    await api(b.token, "/api/v1/share-links", "POST", {
+      vault_id: vault, paths: ["共享.md"], duration_days: days,
+      token_hash: createHash("sha256").update(randomBytes(32)).digest("hex"),
+    });
+  }
+  await b.page.clock.install();
+  await b.page.goto(origin);
+  await button(b.page, "打开个人设置").click();
+  await button(b.page, "我的分享").click();
+  const groups = b.page.locator(".share-list section");
+  const permanent = groups.filter({has: b.page.getByRole("heading", {name: "接收库", exact: true})});
+  const temporary = groups.filter({has: b.page.getByRole("heading", {name: "备用库", exact: true})});
+  await permanent.getByText("共享.md", {exact: true}).waitFor();
+  await temporary.getByText("共享.md", {exact: true}).waitFor();
+  await b.page.clock.fastForward(86_401_000);
+  await temporary.waitFor({state: "detached"});
+  await permanent.getByText("永久有效", {exact: true}).waitFor();
   const p = a.page;
   await button(p,"打开个人设置").click();
   await p.getByText("账户活动",{exact:true}).click();

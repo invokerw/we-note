@@ -60,6 +60,11 @@ try {
   assert.match(await readFile(await file.path(), "utf8"), /^# 浏览器快照/);
   await button(a, "分享").click();
   await a.getByRole("dialog").waitFor();
+  const duration = a.getByLabel("分享有效期");
+  assert.equal(await duration.inputValue(), "7");
+  assert.deepEqual(await duration.locator("option").allTextContents(), ["1 天", "3 天", "7 天", "永久"]);
+  await duration.selectOption("0");
+  await button(a, "生成链接").click();
   const link = await a.getByLabel("分享链接", { exact: true }).inputValue();
   await button(a, "关闭链接").click();
   await button(a, "编辑模式").click();
@@ -124,7 +129,10 @@ try {
   await button(a, "打开个人设置").click();
   await button(a, "我的分享").click();
   a.once("dialog", d => d.accept());
-  await button(a, "撤销链接").click();
+  await a.getByRole("heading", { name: "Alice", exact: true }).waitFor();
+  await a.getByText("永久有效", { exact: true }).waitFor();
+  await button(a, "停止分享").click();
+  await a.getByText("暂无有效分享").waitFor();
   const expired = await chrome.newPage();
   await expired.goto(link);
   await expired.getByText("分享链接已失效").waitFor();

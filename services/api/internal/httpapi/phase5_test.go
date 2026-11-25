@@ -232,3 +232,94 @@ func TestEncryptedVaultRoutesRetired(t *testing.T) {
 		}
 	}
 }
+
+func TestShareDurationsAndActiveList(t *testing.T) {
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	enableOpenRegistration(t, db)
+	blobs, err := blob.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := store.NewRepository(db, blobs)
+	mux := NewMux(repo)
+	owner := registerUser(t, mux, "duration@test.invalid", "link password")
+	token := loginUser(t, mux, owner.Email, "link password")
+	vault, err := repo.CreateVault(ctx, owner.ID, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.WriteFile(ctx, owner.ID, vault.ID, "", "create_file", "write", store.FileWrite{Path: "note.md", Content: []byte("saved")}); err != nil {
+		t.Fatal(err)
+	}
+	const endpoint = "/api/v1/share-links"
+	ids := map[int]string{}
+	for _, days := range []int{1, 3, 7, 0, 2} {
+		secret := strconv.Itoa(days)
+		before := time.Now().Unix()
+		r := requestJSON(t, mux, "POST", endpoint, token, map[string]any{"vault_id": vault.ID, "paths": []string{"note.md"}, "token_hash": strings.TrimPrefix(digest([]byte(secret)), "sha256:"), "duration_days": days})
+		if days == 2 {
+			if r.Code != 400 {
+				t.Fatal("unsupported duration", r.Code)
+			}
+			continue
+		}
+		if r.Code != 201 {
+			t.Fatalf("%d days: %d %s", days, r.Code, r.Body.String())
+		}
+		var link store.ShareLink
+		decodeResponse(t, r, &link)
+		ids[days] = link.ID
+		if days == 0 {
+			if link.Expires != 0 {
+				t.Fatal(link.Expires)
+			}
+		} else if offset := link.Expires - int64(days)*86400; offset < before || offset > time.Now().Unix() {
+			t.Fatal("wrong expiration", days, link.Expires)
+		}
+		session, err := repo.ExchangeLink(ctx, link.ID, secret, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.LinkSnapshot(ctx, link.ID, session, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.RevokeLink(ctx, owner.ID, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE share_links SET expires=unixepoch() WHERE id=?`, ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	for _, days := range []int{0, 1} {
+		if _, err := repo.ExchangeLink(ctx, ids[days], strconv.Itoa(days), ""); err == nil {
+			t.Fatal("inactive link opened", days)
+		}
+	}
+	for _, query := range []string{"", "?vault_id=" + vault.ID} {
+		r := requestJSON(t, mux, "GET", endpoint+query, token, nil)
+		var links []struct {
+			ID    string
+			Vault string `json:"vault_id"`
+		}
+		decodeResponse(t, r, &links)
+		if len(links) != 2 || links[0].ID != ids[7] || links[1].ID != ids[3] || links[0].Vault != vault.ID {
+			t.Fatalf("unexpected active list: %+v", links)
+		}
+	}
+	other := registerUser(t, mux, "other-duration@test.invalid", "other password")
+	otherToken := loginUser(t, mux, other.Email, "other password")
+	r := requestJSON(t, mux, "GET", endpoint, otherToken, nil)
+	var others []store.ShareLink
+	decodeResponse(t, r, &others)
+	if len(others) != 0 {
+		t.Fatal(others)
+	}
+}

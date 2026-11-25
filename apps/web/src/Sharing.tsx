@@ -2,7 +2,7 @@ import { download } from "./Resources";
 import { ShareSaveDialog } from "./ShareSaveDialog";
 import { MarkdownView } from "./markdown/Markdown";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { base64, request } from "./api";
+import { base64, request, type Vault } from "./api";
 
 type Asset = {
   canonical_url: string;
@@ -13,12 +13,12 @@ type Asset = {
   status: string;
 };
 type Link = {
+  vault_id: string;
   id: string;
   title: string;
   expires: number;
   downloads: number;
   max_downloads: number;
-  revoked: boolean;
   password_required: boolean;
   allow_download: boolean;
   allow_import: boolean;
@@ -66,65 +66,70 @@ function prepareLink(token: string, options: Record<string, unknown>) {
   };
 }
 
-export function prepareNoteLink(token: string, vault: string, path: string) {
+export function prepareNoteLink(token: string, vault: string, path: string, days: number) {
   return prepareLink(token, {
     vault_id: vault,
     paths: [path],
     allow_import: true,
     allow_download: true,
-    expires: Math.floor(Date.now() / 1000) + 7 * 86400,
+    duration_days: days,
   });
 }
 
-export function Sharing({ token, vault }: { token: string; vault: string }) {
+export function Sharing({ token, vaults }: { token: string; vaults: Vault[] }) {
   const [links, setLinks] = useState<Link[]>([]);
   const { message, busy, run } = useAction();
   const endpoint = "/api/v1/share-links";
-  async function refresh() {
-    setLinks(
-      await (
-        await request(
-          token,
-          endpoint + "?vault_id=" + encodeURIComponent(vault),
-        )
-      ).json(),
-    );
-  }
   useEffect(() => {
-    void run(refresh);
-  }, [token, vault]);
+    let open = true;
+    void run(async () => {
+      const response = await request(token, endpoint);
+      const active: Link[] = await response.json();
+      if (open) setLinks(active);
+    });
+    return () => { open = false; };
+  }, [token]);
+
+  useEffect(() => {
+    const next = links.reduce((first, link) => link.expires ? Math.min(first, link.expires) : first, Infinity);
+    if (!Number.isFinite(next)) return;
+    // Older clients could set arbitrary expiry dates beyond the browser timer limit.
+    const delay = Math.min(next * 1000 - Date.now(), 2_147_483_647);
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      setLinks(current => current.filter(link => !link.expires || link.expires * 1000 > now));
+    }, Math.max(0, delay));
+    return () => clearTimeout(timer);
+  }, [links]);
+
+  async function stop(link: Link) {
+    if (!confirm(`停止分享「${link.title}」？已保存的副本可继续使用。`)) return;
+    await request(token, `${endpoint}/${link.id}`, "DELETE");
+    setLinks(current => current.filter(item => item.id !== link.id));
+  }
+  const groups = new Map<string, Link[]>();
+  for (const link of links) {
+    const group = groups.get(link.vault_id);
+    if (group) group.push(link);
+    else groups.set(link.vault_id, [link]);
+  }
   return (
-    <article className="security-panel">
-      <p role="status">{message}</p>
-      <h4>已创建的链接</h4>{!busy && !message && !links.length && <p>暂无分享链接</p>}
-      {links.map((l) => (
-        <section key={l.id} className="share">
-          <strong>{l.title}</strong><p>{new Date(l.expires * 1000).toLocaleString()} 到期</p>
-          <p>
-            {l.password_required ? "有密码 · " : ""}已用 {l.downloads} /{" "}
-            {l.max_downloads || "不限"} 次 ·{" "}
-            {l.revoked
-              ? "已撤销"
-              : l.expires * 1000 <= Date.now()
-                ? "已过期"
-                : l.max_downloads && l.downloads >= l.max_downloads
-                  ? "次数已用完"
-                  : "有效"}
-          </p>
-          {!l.revoked && (
-            <button
-              disabled={busy}
-              onClick={() =>
-                run(async () => {
-                  if (!confirm(`撤销「${l.title}」的分享链接？已保存的副本可继续使用。`)) return;
-                  await request(token, endpoint + "/" + l.id, "DELETE");
-                  await refresh();
-                })
-              }
-            >
-              撤销链接
-            </button>
-          )}
+    <article className="security-panel share-list">
+      {message && <p role="status">{message}</p>}
+      {!busy && !message && !links.length && <p>暂无有效分享</p>}
+      {Array.from(groups, ([vault, items]) => (
+        <section key={vault}>
+          <h3>{vaults.find(item => item.id === vault)?.name ?? vault}</h3>
+          <ul>{items.map(link => (
+            <li key={link.id}>
+              <div>
+                <strong>{link.title}</strong>
+                <p>{link.expires ? `${new Date(link.expires * 1000).toLocaleString()} 到期` : "永久有效"}</p>
+                <small>{link.password_required && "有密码 · "}已用 {link.downloads} / {link.max_downloads || "不限"} 次</small>
+              </div>
+              <button disabled={busy} onClick={() => run(() => stop(link))}>停止分享</button>
+            </li>
+          ))}</ul>
         </section>
       ))}
     </article>

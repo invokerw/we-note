@@ -100,14 +100,18 @@ export default function Editor({
   const [shareURL, setShareURL] = useState("");
   const pendingShare = useRef<ReturnType<typeof prepareNoteLink> | null>(null);
   const shareDialog = useRef<HTMLDialogElement>(null);
-  const [draftShare, setDraftShare] = useState(false);
+  const [shareDays, setShareDays] = useState(7);
   const [pluginDirty, setPluginDirty] = useState(false);
+  function openShare() {
+    setShareDays(7);
+    setShareURL("");
+    pendingShare.current = null;
+    shareDialog.current?.showModal();
+  }
   async function generateLink() {
-    pendingShare.current ??= prepareNoteLink(token, vault, note.path);
+    pendingShare.current ??= prepareNoteLink(token, vault, note.path, shareDays);
     setShareURL(await pendingShare.current());
     pendingShare.current = null;
-    setDraftShare(false);
-    if (!shareDialog.current?.open) shareDialog.current?.showModal();
   }
   const markdownSettings = markdownPreferences(preferences);
   const [text, setText] = useState(""),
@@ -264,6 +268,7 @@ export default function Editor({
       setMode(note.format === "md" ? "split" : "edit");
     }
   }
+  const draftShare = pluginDirty || text !== saved.current;
   const editing = mode === "crepe" || mode === "edit" || mode === "split";
   function navigate(href: string, label: string) {
     if (href.startsWith(origin + "/assets/")) {
@@ -319,21 +324,36 @@ export default function Editor({
         }
       }}
     >
-      <dialog ref={shareDialog} className="note-share-dialog" aria-labelledby="share-title">
+      <dialog ref={shareDialog} className="note-share-dialog" aria-labelledby="share-title"
+        onCancel={event => { if (busy) event.preventDefault(); }}>
         <h2 id="share-title">分享 {note.path.split("/").at(-1)}</h2>
-        {draftShare ? <><p>将分享上次保存的版本。</p>
-          <button disabled={busy} onClick={()=>run(generateLink)}>分享已保存版本</button>
-          {special ? <button onClick={()=>shareDialog.current?.close()}>返回编辑器保存</button> : <button disabled={busy} onClick={()=>run(async()=>{await save();await generateLink();})}>先保存再分享</button>}
-          <button onClick={()=>shareDialog.current?.close()}>取消</button></> : <><p>持链接者可在 7 天内查看、保存或下载这个版本。</p>
-        <input aria-label="分享链接" readOnly value={shareURL} onFocus={e => e.target.select()} />
-        <form method="dialog">
-          <button type="button" onClick={() => run(async () => {
-            try { await navigator.clipboard.writeText(shareURL); }
-            catch { shareDialog.current?.querySelector("input")?.select(); throw Error("请选择并复制链接"); }
-            shareDialog.current?.close(); notify("分享链接已复制");
-          })}>复制链接</button>
-          <button aria-label="关闭链接">关闭</button>
-        </form></>}
+        {shareURL ? <>
+          <p>{shareDays ? `有效期为 ${shareDays} 天` : "永久有效"}。持链接者可查看、保存或下载这个版本。</p>
+          <input aria-label="分享链接" readOnly value={shareURL} onFocus={e => e.target.select()} />
+          <form method="dialog">
+            <button type="button" onClick={() => run(async () => {
+              try { await navigator.clipboard.writeText(shareURL); }
+              catch { shareDialog.current?.querySelector("input")?.select(); throw Error("请选择并复制链接"); }
+              shareDialog.current?.close(); notify("分享链接已复制");
+            })}>复制链接</button>
+            <button aria-label="关闭链接">关闭</button>
+          </form>
+        </> : <>
+          <label className="share-duration">分享有效期
+            <select value={shareDays} disabled={busy} onChange={event => {
+              pendingShare.current = null;
+              setShareDays(Number(event.target.value));
+            }}>
+              {[1, 3, 7, 0].map(days => <option key={days} value={days}>{days ? `${days} 天` : "永久"}</option>)}
+            </select>
+          </label>
+          <p>{draftShare ? "有尚未保存的修改。" : "持链接者可查看、保存或下载当前版本。"}</p>
+          <div className="share-actions">
+            <button disabled={busy} onClick={() => run(generateLink)}>{draftShare ? "分享已保存版本" : "生成链接"}</button>
+            {draftShare && !special && <button disabled={busy} onClick={() => run(async () => { await save(); await generateLink(); })}>先保存再分享</button>}
+            <button disabled={busy} onClick={() => shareDialog.current?.close()}>{draftShare && special ? "返回编辑器保存" : "取消"}</button>
+          </div>
+        </>}
       </dialog>
       <NoteHeading
         handset={phoneBack && {
@@ -356,7 +376,7 @@ export default function Editor({
         endAction={
           <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />
         }
-        share={{ label: "分享", run: () => {if (pluginDirty || text !== saved.current) { setDraftShare(true);shareDialog.current?.showModal(); } else void run(generateLink); } }}
+        share={{ label: "分享", run: openShare }}
         save={
           !special && (
             <button

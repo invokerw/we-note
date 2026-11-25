@@ -23,11 +23,13 @@ type LinkOptions struct {
 	AssetIDs     []string `json:"asset_ids"`
 	Password     string   `json:"password"`
 	Expires      int64    `json:"expires"`
+	DurationDays *int     `json:"duration_days,omitempty"`
 	MaxDownloads int      `json:"max_downloads"`
 	Download     bool     `json:"allow_download"`
 	Import       bool     `json:"allow_import"`
 }
 type ShareLink struct {
+	Vault        string `json:"vault_id"`
 	Title        string `json:"title"`
 	ID           string `json:"id"`
 	Expires      int64  `json:"expires"`
@@ -39,11 +41,11 @@ type ShareLink struct {
 	Protected    bool   `json:"password_required"`
 }
 
-const linkColumns = `id,expires,max_downloads,downloads,allow_download,allow_import,revoked,password_hash<>'',coalesce(json_extract(snapshot,'$.files[0].path'),json_extract(snapshot,'$.assets[0].name'),'分享') || CASE WHEN json_array_length(snapshot,'$.files')>1 THEN ' 等 ' || json_array_length(snapshot,'$.files') || ' 篇笔记' ELSE '' END`
+const linkColumns = `vault,id,expires,max_downloads,downloads,allow_download,allow_import,revoked,password_hash<>'',coalesce(json_extract(snapshot,'$.files[0].path'),json_extract(snapshot,'$.assets[0].name'),'分享') || CASE WHEN json_array_length(snapshot,'$.files')>1 THEN ' 等 ' || json_array_length(snapshot,'$.files') || ' 篇笔记' ELSE '' END`
 
 func scanLink(row scanner) (ShareLink, error) {
 	var l ShareLink
-	err := row.Scan(&l.ID, &l.Expires, &l.MaxDownloads, &l.Downloads, &l.Download, &l.Import, &l.Revoked, &l.Protected, &l.Title)
+	err := row.Scan(&l.Vault, &l.ID, &l.Expires, &l.MaxDownloads, &l.Downloads, &l.Download, &l.Import, &l.Revoked, &l.Protected, &l.Title)
 	return l, err
 }
 func ownedVaultTx(ctx context.Context, tx *sql.Tx, user, vault string) error {
@@ -89,7 +91,19 @@ func (r *Repository) CreateLink(ctx context.Context, user, key string, q LinkOpt
 			return l, err
 		}
 	}
-	if q.Expires <= time.Now().Unix() {
+	// Resolve relative durations after replay lookup so retries retain the original expiry.
+	if q.DurationDays != nil {
+		if q.Expires != 0 {
+			return l, fileError(400, "INVALID_EXPIRY", "choose one expiry format")
+		}
+		switch *q.DurationDays {
+		case 0: // Permanent until revoked.
+		case 1, 3, 7:
+			q.Expires = time.Now().Add(time.Duration(*q.DurationDays) * 24 * time.Hour).Unix()
+		default:
+			return l, fileError(400, "INVALID_EXPIRY", "请选择 1 天、3 天、7 天或永久")
+		}
+	} else if q.Expires <= time.Now().Unix() {
 		return l, fileError(400, "INVALID_EXPIRY", "choose a future expiry")
 	}
 	if len(q.Paths) != 1 || len(q.AssetIDs) != 0 || !PortablePath(q.Paths[0]) {
@@ -129,7 +143,7 @@ func (r *Repository) CreateLink(ctx context.Context, user, key string, q LinkOpt
 	return l, tx.Commit()
 }
 func (r *Repository) Links(ctx context.Context, user, vault string) ([]ShareLink, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT `+linkColumns+` FROM share_links WHERE owner=? AND vault=? ORDER BY rowid DESC`, user, vault)
+	rows, err := r.db.QueryContext(ctx, `SELECT `+linkColumns+` FROM share_links WHERE owner=?1 AND (?2='' OR vault=?2) AND `+activeLink+` ORDER BY rowid DESC`, user, vault)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +167,8 @@ func (r *Repository) RevokeLink(ctx context.Context, user, id string) error {
 	return err
 }
 
-const activeLink = `revoked=0 AND expires>unixepoch() AND (max_downloads=0 OR downloads<max_downloads)`
+const unexpiredLink = `revoked=0 AND (expires=0 OR expires>unixepoch())`
+const activeLink = unexpiredLink + ` AND (max_downloads=0 OR downloads<max_downloads)`
 const LinkSessionSeconds = 900
 
 func secretHash(secret string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(secret))) }
@@ -182,7 +197,7 @@ func (r *Repository) ExchangeLink(ctx context.Context, id, secret, pass string) 
 		return "", err
 	}
 	var saved string
-	err = tx.QueryRowContext(ctx, `INSERT INTO share_link_sessions(token_hash,link,expires) SELECT ?,id,min(expires,unixepoch()+?) FROM share_links WHERE id=? AND `+activeLink+` RETURNING link`, hash, LinkSessionSeconds, id).Scan(&saved)
+	err = tx.QueryRowContext(ctx, `INSERT INTO share_link_sessions(token_hash,link,expires) SELECT ?,id,unixepoch()+? FROM share_links WHERE id=? AND `+activeLink+` RETURNING link`, hash, LinkSessionSeconds, id).Scan(&saved)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrNotFound
 	}

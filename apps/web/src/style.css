@@ -2544,6 +2544,13 @@ pre {
 .note-share-dialog input { width: 100%; margin-bottom: 1rem; }
 .note-share-dialog form, .share-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 
+.share-duration { display: flex; align-items: center; gap: .75rem; }
+.share-list ul { list-style: none; padding: 0; }
+.share-list li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 0; border-bottom: 1px solid var(--line); }
+.share-list li div { min-width: 0; overflow-wrap: anywhere; }
+.share-list li p { margin: .25rem 0; }
+.share-list li button { flex: none; }
+
 .share-save-dialog {
   width: min(30rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
