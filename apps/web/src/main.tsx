@@ -152,6 +152,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [origin, setOrigin] = useState(location.origin),
     [preferences, setPreferences] =
       useState<UserPreferences>(loadLocalPreferences);
+  const initialLocation = useRef(new URLSearchParams(location.search));
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
   const panes = usePanes();
@@ -198,7 +199,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       .vaults as Vault[];
     setVaults(v);
     if (!v.length) panes.setPane("nav");
-    setVault((x) => x || v[0]?.id || "");
+    setVault((x) => x || v.find(item => item.id === initialLocation.current.get("vault"))?.id || v[0]?.id || "");
   }
   async function list() {
     if (!vault) return;
@@ -257,8 +258,13 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         const result = await (await request(token, base + "/files")).json();
         if (live) {
           setFiles(result.files);
-          setNote(
-            (result.files as Note[]).find(
+          const wanted = vault === initialLocation.current.get("vault") &&
+            (result.files as Note[]).find(f => f.file_id === initialLocation.current.get("note"));
+          if (wanted) {
+            panes.setPane("doc");
+            initialLocation.current = new URLSearchParams();
+          }
+          setNote(wanted || (result.files as Note[]).find(
               (f) => entryPath(f.path, f.current_content_hash) === f.path,
             ) || null,
           );
@@ -353,19 +359,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   function open(id: string) {
     const f = files.find((n) => n.file_id === id);
     if (f) select(f);
-  }
-  async function share() {
-    const recipient = prompt("接收者邮箱");
-    if (!recipient) return;
-    const path = prompt("文件或目录路径", note?.path || "");
-    if (path) {
-      await request(token, "/api/v1/shares", "POST", {
-        vault_id: vault,
-        recipient,
-        paths: [path],
-      });
-      msg("快照已发送");
-    }
   }
   const newVault = () =>
     run(async () => {
@@ -499,9 +492,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         tools={
           <>
             {goToSection("搜索", "搜索")}
-            {!note && vault && (
-              <button onClick={() => run(share)}>分享快照</button>
-            )}{" "}
             {Object.entries({
               inbox: "收件箱",
               sent: "已发送",
@@ -589,7 +579,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 phoneBack: phone ? () => panes.setPane("list") : undefined,
                 toggleFocus: panes.toggleFocus,
                 focused: panes.columns === 1,
-                share: () => run(share),
                 actions: (
                   <>
                     <button

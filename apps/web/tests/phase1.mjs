@@ -58,12 +58,10 @@ try {
   const file = await downloaded;
   assert.equal(file.suggestedFilename(), "验收.md");
   assert.match(await readFile(await file.path(), "utf8"), /^# 浏览器快照/);
-  const answers = [email, "daily/"];
-  const dialogs = (d) => d.accept(answers.shift());
-  a.on("dialog", dialogs);
-  await button(a, "分享快照").click();
-  await a.getByText("快照已发送").waitFor();
-  a.off("dialog", dialogs);
+  await button(a, "分享").click();
+  await a.getByRole("dialog").waitFor();
+  const link = await a.getByLabel("分享链接", { exact: true }).inputValue();
+  await button(a, "关闭链接").click();
   await button(a, "编辑模式").click();
   await button(a, "分屏编辑").click();
   await a.getByLabel("笔记源码").fill("# 发件人后续修改");
@@ -73,10 +71,34 @@ try {
   await button(a, "历史版本").click();
   await a.getByRole("button", { name: /版本 2/ }).click();
   await a.locator("article pre").filter({ hasText: "浏览器快照" }).waitFor();
-  await button(b, "收件箱").click();
-  b.once("dialog", (d) => d.accept("导入"));
-  await button(b, "导入快照").click();
-  await b.getByText(/已导入/).waitFor();
+  const guest = await chrome.newPage({ viewport: { width: 390, height: 844 } });
+  await guest.goto(link);
+  await guest.getByRole("heading", { name: "浏览器快照" }).waitFor();
+  await guest.waitForFunction(
+    () => document.querySelector(".reading img")?.naturalWidth === 1,
+  );
+  const source = guest.waitForEvent("download");
+  await button(guest, "下载源文件").click();
+  const original = await source;
+  assert.equal(original.suggestedFilename(), file.suggestedFilename());
+  assert.deepEqual(
+    await readFile(await original.path()),
+    await readFile(await file.path()),
+  );
+  await button(guest, "保存到我的笔记").click();
+  await guest.getByLabel("邮箱").fill(email);
+  await guest.getByLabel("密码", { exact: true }).fill("phase-one-browser");
+  await button(guest, "登录").click();
+  await guest.getByLabel("目标目录").fill("导入");
+  await button(guest, "确认保存").click();
+  await guest.getByRole("link", { name: "打开已保存的笔记" }).click();
+  await guest.getByRole("heading", { name: "验收.md" }).waitFor();
+  await button(a, "分享管理").click();
+  await button(a, "撤销链接").click();
+  const expired = await chrome.newPage();
+  await expired.goto(link);
+  await expired.getByText("分享链接已失效").waitFor();
+  await b.reload();
   await button(b, "验收.md").click();
   await button(b, "编辑模式").click();
   await button(b, "预览").click();
@@ -100,7 +122,7 @@ try {
   await button(b, "预览").click();
   assert.equal(await b.locator(".reading").innerText(), "Bob 独立编辑");
   console.log(
-    "Browser acceptance passed: registration, source editing, private asset preview, version history, frozen directory share, recipient copy, trash and restore.",
+    "Browser acceptance passed: registration, source editing, private asset preview, version history, mobile guest reading, source download, frozen note share, saved copy and revocation, trash and restore.",
   );
 } finally {
   await chrome.close();

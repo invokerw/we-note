@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,7 +14,7 @@ func (a *API) linkRoutes(m *http.ServeMux) {
 	m.HandleFunc("POST /api/v1/share-links", a.manageLinks)
 	m.HandleFunc("GET /api/v1/share-links", a.manageLinks)
 	m.HandleFunc("DELETE /api/v1/share-links/{id}", a.manageLinks)
-	for _, route := range []string{"POST /s/{id}/session", "GET /s/{id}/snapshot", "GET /s/{id}/files/{version}", "GET /s/{id}/assets/{asset}", "POST /s/{id}/download", "POST /s/{id}/import"} {
+	for _, route := range []string{"POST /s/{id}/session", "GET /s/{id}/snapshot", "GET /s/{id}/files/{version}", "GET /s/{id}/assets/{asset}", "POST /s/{id}/download", "POST /s/{id}/files/{version}/download", "POST /s/{id}/import"} {
 		m.HandleFunc(route, a.publicLink)
 	}
 }
@@ -117,6 +118,17 @@ func (a *API) publicLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, map[string]any{"files": files})
+		return
+	}
+	if r.Pattern == "POST /s/{id}/files/{version}/download" {
+		name, data, err := a.repository.DownloadLinkFile(ctx, id, cookie.Value, r.PathValue("version"))
+		if err != nil {
+			resourceError(w, err)
+			return
+		}
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write(data)
 		return
 	}
 	download := r.Pattern == "POST /s/{id}/download"

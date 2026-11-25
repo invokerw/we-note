@@ -1,3 +1,4 @@
+import { download } from "./Resources";
 import { MarkdownView } from "./markdown/Markdown";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { base64, request, type Share, type Vault } from "./api";
@@ -36,15 +37,53 @@ function useAction() {
   }
   return { message, setMessage, busy, run };
 }
+function prepareLink(token: string, options: Record<string, unknown>) {
+  const key = crypto.randomUUID();
+  const secret = base64(crypto.getRandomValues(new Uint8Array(32)))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+  return async () => {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(secret),
+    );
+    const token_hash = Array.from(new Uint8Array(digest), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    const link = await (
+      await request(
+        token,
+        "/api/v1/share-links",
+        "POST",
+        { ...options, token_hash },
+        { "Idempotency-Key": key },
+      )
+    ).json();
+    return `${location.origin}/#share=${link.id}.${secret}`;
+  };
+}
+
+export function prepareNoteLink(token: string, vault: string, path: string) {
+  return prepareLink(token, {
+    vault_id: vault,
+    paths: [path],
+    allow_import: true,
+    allow_download: true,
+    expires: Math.floor(Date.now() / 1000) + 7 * 86400,
+  });
+}
+
 export function Sharing({ token, vault }: { token: string; vault: string }) {
   const [links, setLinks] = useState<Link[]>([]),
     [url, setUrl] = useState(""),
     [kind, setKind] = useState("link");
   const { message, setMessage, busy, run } = useAction();
   const endpoint = "/api/v1/share-links";
-  const pending = useRef<{ form: string; secret: string; key: string } | null>(
-    null,
-  );
+  const pending = useRef<{
+    form: string;
+    create: () => Promise<string>;
+  } | null>(null);
   async function refresh() {
     setLinks(
       await (
@@ -97,31 +136,10 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
             if (pending.current?.form !== fields) {
               pending.current = {
                 form: fields,
-                secret: base64(crypto.getRandomValues(new Uint8Array(32)))
-                  .replaceAll("+", "-")
-                  .replaceAll("/", "_")
-                  .replace(/=+$/, ""),
-                key: crypto.randomUUID(),
+                create: prepareLink(token, options),
               };
             }
-            const { secret, key } = pending.current;
-            const digest = await crypto.subtle.digest(
-              "SHA-256",
-              new TextEncoder().encode(secret),
-            );
-            const token_hash = Array.from(new Uint8Array(digest), (b) =>
-              b.toString(16).padStart(2, "0"),
-            ).join("");
-            const link = await (
-              await request(
-                token,
-                endpoint,
-                "POST",
-                { ...options, token_hash },
-                { "Idempotency-Key": key },
-              )
-            ).json();
-            setUrl(`${location.origin}/#share=${link.id}.${secret}`);
+            setUrl(await pending.current.create());
             pending.current = null;
             await refresh();
           });
@@ -456,35 +474,62 @@ export function PublicShare({
   token: string;
   login: ReactNode;
 }) {
-  const [snap, setSnap] = useState<Manifest>(),
-    [preview, setPreview] = useState<{ path: string; text: string }>(),
-    [password, setPassword] = useState(""),
-    [vaults, setVaults] = useState<Vault[]>([]);
+  const [snap, setSnap] = useState<Manifest>();
+  const [selected, setSelected] = useState("");
+  const [preview, setPreview] = useState<{ version: string; text: string }>();
+  const [locked, setLocked] = useState(false);
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedURL, setSavedURL] = useState("");
+  const [vaults, setVaults] = useState<Vault[]>();
   const { message, setMessage, busy, run } = useAction();
   const path = "/s/" + entry.id + "/";
-  async function refresh() {
-    try {
-      setSnap(await (await request("", path + "snapshot")).json());
-    } catch (e) {
+  const file =
+    snap?.files.find((f) => f.version_id === selected) || snap?.files[0];
+  const version = file?.version_id;
+  const canPreview = file && /\.(md|txt|json)$/i.test(file.path);
+
+  function report(error: unknown) {
+    const code = (error as { code?: string }).code;
+    if (code === "NOT_FOUND" || code === "SHARE_SESSION_REQUIRED") {
       setSnap(undefined);
-      setPreview(undefined);
-      throw e;
+      setMessage(
+        code === "NOT_FOUND"
+          ? "分享链接已失效"
+          : "请使用发送者提供的完整链接打开分享。",
+      );
+    } else setMessage(String(error));
+  }
+  async function refresh() {
+    setSnap(await (await request("", path + "snapshot")).json());
+  }
+  async function unlock(pass: string) {
+    if (entry.secret) {
+      try {
+        await request("", path + "session", "POST", {
+          token: entry.secret,
+          password: pass,
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === "PASSWORD_REQUIRED") {
+          setLocked(true);
+          if (pass) setMessage("请输入正确的分享密码");
+          return;
+        }
+        throw error;
+      }
     }
+    setLocked(false);
+    setPassword("");
+    await refresh();
   }
   useEffect(() => {
-    if (!entry.secret) void run(refresh);
-  }, [entry.id]);
-  useEffect(() => {
-    if (!token || !snap?.allow_import) return;
-    request(token, "/api/v1/vaults")
-      .then((r) => r.json())
-      .then((x) => setVaults(x.vaults))
-      .catch((e) => setMessage(String(e)));
-  }, [token, snap?.allow_import]);
+    void run(() => unlock("").catch(report));
+  }, [entry.id, entry.secret]);
   useEffect(() => {
     if (!snap) return;
     const check = () => {
-      if (!document.hidden) refresh().catch((e) => setMessage(String(e)));
+      if (!document.hidden) refresh().catch(report);
     };
     const timer = setInterval(check, 15000);
     window.addEventListener("focus", check);
@@ -493,70 +538,178 @@ export function PublicShare({
       window.removeEventListener("focus", check);
     };
   }, [!!snap]);
+  useEffect(() => {
+    if (!version || !canPreview) return;
+    let live = true;
+    request("", path + "files/" + version)
+      .then((r) => r.json())
+      .then((data) => {
+        if (live) setPreview({ version, text: data.text });
+      })
+      .catch((error) => {
+        if (live) report(error);
+      });
+    return () => {
+      live = false;
+    };
+  }, [version, canPreview, path]);
+  useEffect(() => {
+    if (!token || !saving || !snap?.allow_import) return;
+    let live = true;
+    request(token, "/api/v1/vaults")
+      .then((r) => r.json())
+      .then((data) => {
+        if (live) setVaults(data.vaults);
+      })
+      .catch((error) => {
+        if (live) setMessage(String(error));
+      });
+    return () => {
+      live = false;
+    };
+  }, [token, saving, snap?.allow_import]);
+  async function save(fields: FormData) {
+    let vault = String(fields.get("vault") || "");
+    if (!vault) {
+      const created: Vault = await (
+        await request(token, "/api/v1/vaults", "POST", {
+          name: String(fields.get("name")).trim(),
+        })
+      ).json();
+      setVaults([created]);
+      vault = created.id;
+    }
+    const { files } = await (
+      await request(token, path + "import", "POST", {
+        vault_id: vault,
+        folder: fields.get("folder"),
+      })
+    ).json();
+    if (files[0])
+      setSavedURL(
+        "/?" + new URLSearchParams({ vault, note: files[0].file_id }),
+      );
+    setSaving(false);
+    setMessage("已保存到我的笔记");
+  }
+  const attachments = useRef<HTMLDetailsElement>(null);
+  const assetFor = (url: string) =>
+    snap?.assets.find(
+      (a) => a.canonical_url === url || a.reference_urls?.includes(url),
+    );
   return (
     <main className="public-share security-panel">
-      <h1>分享快照</h1>
-      {!snap ? (
-        entry.secret ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(async () => {
-                await request("", path + "session", "POST", {
-                  token: entry.secret,
-                  password,
-                });
-                setPassword("");
-                await refresh();
-              });
-            }}
-          >
-            <label>
-              分享密码（如有）
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
-            <button disabled={busy}>打开分享</button>
-          </form>
-        ) : (
-          <p>请使用发送者提供的完整链接打开分享。</p>
-        )
-      ) : (
+      <h1>{file?.path.split("/").at(-1) || "分享笔记"}</h1>
+      {locked && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(() => unlock(password).catch(report));
+          }}
+        >
+          <label>
+            分享密码
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <button disabled={busy}>打开分享</button>
+        </form>
+      )}
+      {snap && (
         <>
-          <h2>文件</h2>
-          {snap.files.map((f) => (
-            <div key={f.version_id}>
-              {f.path}{" "}
-              {!f.path.toLowerCase().endsWith(".xmind") && (
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    run(async () => {
-                      await refresh();
-                      const data = await (
-                        await request("", path + "files/" + f.version_id)
-                      ).json();
-                      setPreview({ path: f.path, text: data.text });
-                    })
-                  }
-                >
-                  预览文本
-                </button>
-              )}
-            </div>
-          ))}
-          {preview &&
-            (preview.path.toLowerCase().endsWith(".md") ? (
+          {snap.files.length > 1 && (
+            <label>
+              分享中的文件
+              <select
+                value={version}
+                onChange={(e) => setSelected(e.target.value)}
+              >
+                {snap.files.map((f) => (
+                  <option key={f.version_id} value={f.version_id}>
+                    {f.path}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="share-actions">
+            {snap.allow_import && !saving && !savedURL && (
+              <button className="primary" onClick={() => setSaving(true)}>
+                保存到我的笔记
+              </button>
+            )}
+            {snap.allow_download && file && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  run(() =>
+                    download(
+                      "",
+                      path + "files/" + file.version_id + "/download",
+                      file.path.split("/").at(-1)!,
+                      "POST",
+                    ).catch(report),
+                  )
+                }
+              >
+                下载源文件
+              </button>
+            )}
+            {snap.allow_download && snap.files.length !== 1 && (
+              <form method="post" action={path + "download"}>
+                <button>下载快照 ZIP</button>
+              </form>
+            )}
+          </div>
+          {saving &&
+            snap.allow_import &&
+            (!token
+              ? login
+              : vaults && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const fields = new FormData(e.currentTarget);
+                      void run(() => save(fields));
+                    }}
+                  >
+                    {vaults.length ? (
+                      <label>
+                        目标笔记库
+                        <select name="vault" required>
+                          {vaults.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <label>
+                        新建笔记库
+                        <input name="name" required defaultValue="我的笔记" />
+                      </label>
+                    )}
+                    <label>
+                      目标目录
+                      <input name="folder" placeholder="笔记库根目录" />
+                    </label>
+                    <button disabled={busy}>确认保存</button>
+                  </form>
+                ))}
+          {file && !canPreview && <p>此格式暂不支持在线预览。</p>}
+          {file &&
+            preview?.version === file.version_id &&
+            (/\.md$/i.test(file.path) ? (
               <MarkdownView
                 text={preview.text}
                 io={{
                   image: (url, alt) => {
-                    const asset = snap.assets.find(
-                      (a) => a.canonical_url === url || a.reference_urls?.includes(url),
-                    );
+                    const asset = assetFor(url);
                     return asset ? (
                       <img src={path + "assets/" + asset.asset_id} alt={alt} />
                     ) : (
@@ -564,10 +717,9 @@ export function PublicShare({
                     );
                   },
                   link: (href) => {
-                    const asset = snap.assets.find(
-                      (a) => a.canonical_url === href || a.reference_urls?.includes(href),
-                    );
+                    const asset = assetFor(href);
                     if (asset) {
+                      if (attachments.current) attachments.current.open = true;
                       document.getElementById(asset.asset_id)?.scrollIntoView();
                       return true;
                     }
@@ -578,61 +730,41 @@ export function PublicShare({
             ) : (
               <pre>{preview.text}</pre>
             ))}
-          {snap.assets.map((a) => (
-            <figure key={a.asset_id} id={a.asset_id}>
-              <figcaption>{a.name}</figcaption>
-              {["image/png", "image/jpeg", "image/gif", "image/webp"].includes(
-                a.media_type,
-              ) && <img src={path + "assets/" + a.asset_id} alt={a.name} />}
-            </figure>
-          ))}
-          {snap.allow_download && (
-            <form method="post" action={path + "download"}>
-              <button>下载快照 ZIP</button>
-            </form>
+          {snap.assets.length > 0 && (
+            <details ref={attachments}>
+              <summary>随笔记分享的文件（{snap.assets.length}）</summary>
+              {snap.assets.map((a) => (
+                <figure key={a.asset_id} id={a.asset_id}>
+                  <figcaption>{a.name}</figcaption>
+                  {[
+                    "image/png",
+                    "image/jpeg",
+                    "image/gif",
+                    "image/webp",
+                  ].includes(a.media_type) && (
+                    <img
+                      loading="lazy"
+                      src={path + "assets/" + a.asset_id}
+                      alt={a.name}
+                    />
+                  )}
+                </figure>
+              ))}
+              {snap.allow_download && snap.files.length === 1 && (
+                <form method="post" action={path + "download"}>
+                  <button>下载快照 ZIP</button>
+                </form>
+              )}
+            </details>
           )}
-          {snap.allow_import &&
-            (token ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const fields = new FormData(e.currentTarget);
-                  void run(async () => {
-                    await request(token, path + "import", "POST", {
-                      vault_id: fields.get("vault"),
-                      folder: fields.get("folder"),
-                    });
-                    setMessage("快照已导入");
-                  });
-                }}
-              >
-                <label>
-                  目标笔记库
-                  <select name="vault" required>
-                    {vaults.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  目标目录
-                  <input name="folder" />
-                </label>
-                <button disabled={busy || !vaults.length}>
-                  导入到我的笔记库
-                </button>
-              </form>
-            ) : (
-              <details>
-                <summary>登录并导入</summary>
-                {login}
-              </details>
-            ))}
         </>
       )}
-      <p role="status">{message}</p>
+      <p role="status">{message || (busy && !snap ? "正在打开分享…" : "")}</p>
+      {savedURL && (
+        <p>
+          <a href={savedURL}>打开已保存的笔记</a>
+        </p>
+      )}
       <a href="/">我的笔记库</a>
     </main>
   );

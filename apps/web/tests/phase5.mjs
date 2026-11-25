@@ -89,16 +89,16 @@ try {
   await button(a.page, "生成分享链接").click();
   const link = await a.page.getByLabel("复制分享地址").inputValue();
   await b.page.goto(link);
-  await b.page.getByLabel("分享密码（如有）").fill("phase5-link");
+  await b.page.getByLabel("分享密码", {exact:true}).fill("phase5-link");
   await button(b.page, "打开分享").click();
-  await button(b.page, "预览文本").click();
   await b.page.getByText(body, { exact: true }).waitFor();
   assert.equal(new URL(b.page.url()).hash, "");
+  await button(b.page, "保存到我的笔记").click();
   await b.page.getByLabel("目标目录").fill("链接");
-  await button(b.page, "导入到我的笔记库").click();
-  await b.page.getByText("快照已导入").waitFor();
+  await button(b.page, "确认保存").click();
+  await b.page.getByText("已保存到我的笔记").waitFor();
   await b.page.reload();
-  await b.page.getByText("请使用发送者提供的完整链接打开分享。").waitFor();
+  await b.page.getByText("分享链接已失效").waitFor();
   const copyAssets = await (
     await api(b.token, `/api/v1/vaults/${b.vault}/assets`)
   ).json();

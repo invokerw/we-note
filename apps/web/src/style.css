@@ -2554,3 +2554,15 @@ pre {
   background: var(--md-bg);
 }
 .trash-expiry { display: block; color: var(--muted, #606772); margin-top: .25rem; }
+
+.note-share-dialog {
+  max-width: min(28rem, 90vw);
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper, Canvas);
+}
+.note-share-dialog::backdrop { background: rgb(0 0 0 / 30%); }
+.note-share-dialog input { width: 100%; margin-bottom: 1rem; }
+.note-share-dialog form, .share-actions { display: flex; flex-wrap: wrap; gap: .5rem; }

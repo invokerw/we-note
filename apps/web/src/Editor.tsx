@@ -22,10 +22,11 @@ import {
   type UserPreferences,
 } from "./preferences";
 
+import { prepareNoteLink } from "./Sharing";
+
 type Props = {
   actions: ReactNode;
   phoneBack?: () => void;
-  share: () => void;
   focused: boolean;
   toggleFocus: () => void;
   note: Note;
@@ -81,7 +82,6 @@ export function AssetImage({
 export default function Editor({
   actions,
   phoneBack,
-  share,
   focused,
   toggleFocus,
   note,
@@ -97,6 +97,15 @@ export default function Editor({
   updatePluginSetting,
 }: Props) {
   const path = `/api/v1/vaults/${vault}/files/${note.file_id}`;
+  const [shareURL, setShareURL] = useState("");
+  const pendingShare = useRef<ReturnType<typeof prepareNoteLink> | null>(null);
+  const shareDialog = useRef<HTMLDialogElement>(null);
+  async function share() {
+    pendingShare.current ??= prepareNoteLink(token, vault, note.path);
+    setShareURL(await pendingShare.current());
+    pendingShare.current = null;
+    shareDialog.current?.showModal();
+  }
   const markdownSettings = markdownPreferences(preferences);
   const [text, setText] = useState(""),
     [base, setBase] = useState(""),
@@ -307,6 +316,19 @@ export default function Editor({
         }
       }}
     >
+      <dialog ref={shareDialog} className="note-share-dialog" aria-labelledby="share-title">
+        <h2 id="share-title">分享 {note.path.split("/").at(-1)}</h2>
+        <p>持链接者可在 7 天内查看、保存或下载这个版本。</p>
+        <input aria-label="分享链接" readOnly value={shareURL} onFocus={e => e.target.select()} />
+        <form method="dialog">
+          <button type="button" onClick={() => run(async () => {
+            try { await navigator.clipboard.writeText(shareURL); }
+            catch { shareDialog.current?.querySelector("input")?.select(); throw Error("请选择并复制链接"); }
+            shareDialog.current?.close(); notify("分享链接已复制");
+          })}>复制链接</button>
+          <button aria-label="关闭链接">关闭</button>
+        </form>
+      </dialog>
       <NoteHeading
         handset={phoneBack && {
           back: phoneBack,
@@ -328,7 +350,7 @@ export default function Editor({
         endAction={
           <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />
         }
-        share={{ label: "分享快照", run: share }}
+        share={{ label: "分享", run: () => run(share) }}
         save={
           !special && (
             <button
