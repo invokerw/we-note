@@ -15,7 +15,7 @@
 | `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web` | 两个入口均退出 0。 |
 | `node --test apps/web/tests/*test.mjs`、`cargo test --locked -p wenote-sync --lib` | 8 项前端测试与同步库单元测试通过。 |
 | `node apps/web/tests/personal-settings.mjs` | 退出 0。桌面和手机宽度、两个独立会话，验证头像预览取消、保存与恢复，字号、草稿保护、改密与旧会话撤销。 |
-| `node apps/web/tests/phase1.mjs`、`node apps/web/tests/phase5.mjs` | 均退出 0。分享已保存单篇、访客阅读、保存副本、撤销、目录分享、回收站、加密库和账户活动可达。浏览器测试使用 `WENOTE_TEST_ORIGIN=http://localhost:19486`。 |
+| `node apps/web/tests/phase1.mjs`、`node apps/web/tests/phase5.mjs` | 均退出 0。分享已保存单篇、访客阅读、保存副本、撤销、回收站和账户活动可达。浏览器测试使用 `WENOTE_TEST_ORIGIN=http://localhost:19486`。 |
 | 扩展回归 `phase2.mjs`、`phase4.mjs`、`gm.mjs` | 均退出 1。分别停在原可视化编辑器焦点、旧 `.mode-live` 元素和 GM 文本附件上传（415）。用分享基线 `375ebb2` 的产物、独立临时数据库和原脚本在同一位置复现。日志在 `dist/local/`。 |
 
 自审时检查了两个工作区入口、数据表、账号切换和旧分享接口的调用方。补充了插件配置改变后的编辑器刷新，保留编辑草稿与历史副本数据。账号头像保存在服务端，以账号 ID 隔离。个人设置截图核对后调整了头像按钮和长邮箱换行。
@@ -23,7 +23,7 @@
 ## 任务分支验收
 
 - 从本工作区执行 `./scripts/local.py start --port 19486`。服务入口 `http://localhost:19486`，PID `8907`，日志 `dist/local/server.log`，独立数据 `services/api/data/`。验收后执行 `./scripts/local.py stop`。
-- 使用 `dist/local/验收账号.txt` 中的普通账号登录，或自行注册。示例账号有两个库，在「个人笔记」中可打开 `工作/周记.md`。在该笔记中编辑草稿，打开头像设置后更换头像，再返回正文检查草稿。通过库名旁的「库工具」进入批量分享，通过头像中的「我的分享」按库查看和撤销链接。
+- 使用 `dist/local/验收账号.txt` 中的普通账号登录，或自行注册。示例账号有两个库，在「个人笔记」中可打开 `工作/周记.md`。在该笔记中编辑草稿，打开头像设置后更换头像，再返回正文检查草稿。从笔记标题操作生成单篇分享链接，通过头像中的「我的分享」按库查看和撤销链接。
 - macOS ARM64 构建 `cargo build --locked -p wenote-desktop --release` 退出 0。运行本工作区的 `target/release/wenote-desktop`，服务地址填写 `http://localhost:19486`，选择专用本地目录同步后打开编辑器。
 - Android 与桌面共用的前端产物位于 `apps/client/dist/`。`npm run android --prefix apps/client -- --debug` 退出 1，本机 SDK 目录为空，缺少 Android 命令行工具和 NDK。手机布局已使用 Chrome 验证，APK 与真机交互待验证。
 - 已按方式 2 保留工作区、分支和服务，等待用户验收。
@@ -39,3 +39,19 @@
 - 最终执行 `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo build --locked -p wenote-desktop --release`、`cargo test --locked -p wenote-sync --lib`、`go test ./...`（`services/api`）和 `git diff --check`，均退出 0。本地库回归覆盖断网时从 Markdown 和 JSON 内容命中，并跳过二进制脑图。
 - 在已重建服务运行 `apps/web/tests/` 下的 `library-search.mjs`、`personal-settings.mjs`、`phase1.mjs` 和 `phase5.mjs`，四项浏览器回归均退出 0。
 - 方式 2 验收地址仍为 `http://localhost:19486`，新 PID `13173`。原示例账号选「个人笔记」，从第二栏输入 `linux` 即可打开 `工作/终端笔记.md` 并看到正文高亮。macOS 可执行程序已更新；Android 验证限于共用前端构建和手机宽度，SDK 条件见上轮记录。
+
+## 第三轮 · 侧栏回收站与设置内导出
+
+按方式 2 在原 worktree 返工。删除左栏「库工具」菜单，将回收站放到文件夹树下方。导出移入头像打开的「个人设置 → 导出」，当前库创建导出任务，关闭设置后保留编辑草稿。删除网页、桌面和 Android 共用的加密笔记库入口及批量分享创建功能，保留历史加密密文和已有分享链接的读取、下载、保存副本与撤销。
+
+- 红阶段新增的 `TestEncryptedVaultRoutesRetired` 和批量路径拒绝测试先失败，分别暴露旧加密接口仍返回 200 和目录分享仍可创建。
+- 绿阶段通过服务端仅保留审计路由、单篇已保存笔记分享校验、网页与原生端入口调整，以及本地回收站枚举和恢复。
+- `go test ./...`、`go vet ./...`（`services/api`）通过。
+- `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo test --locked -p wenote-sync --lib`、`cargo build --locked -p wenote-desktop --release` 和 `git diff --check` 通过。
+- `WENOTE_TEST_ORIGIN=http://localhost:19486 node apps/web/tests/{personal-settings,phase1,phase5,library-search}.mjs` 顺序执行，四项均退出 0。覆盖桌面和手机宽度的设置、头像、密码、导出、回收站位置、单篇分享、旧入口消失和全文搜索。
+
+## 当前验收交付
+
+- 服务地址 `http://localhost:19486`，PID `14610`，日志 `dist/local/server.log`，数据目录为本 worktree 下的 `services/api/data/`。
+- macOS ARM64 产物为 `target/release/wenote-desktop`。Android SDK 仍不可用，手机布局使用 Chrome 宽度回归验证。
+- 任务分支保留在 `codex/feature-personal-settings-20261125`，等待用户验收后再合入本地 `main`。

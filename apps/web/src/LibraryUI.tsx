@@ -379,7 +379,7 @@ export function LibraryPanes({
   panes,
   vault,
   create,
-  tools,
+  trash,
   avatar,
   searchContent,
   historyKey,
@@ -399,7 +399,7 @@ export function LibraryPanes({
   panes: Panes;
   vault?: ReactNode;
   create: ReactNode;
-  tools: ReactNode;
+  trash: { active: boolean; open: () => void; disabled?: boolean };
   avatar: ReactNode;
   searchContent: (query: string) => Promise<string[]>;
   historyKey: string;
@@ -421,7 +421,10 @@ export function LibraryPanes({
   }, [tablet, pane]);
   const [reverse, sort] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const pickFolder = panes.browse;
+  function pickFolder(path: string | null) {
+    if (trash.active && path !== null) allNotes?.();
+    panes.browse(path);
+  }
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (
@@ -491,31 +494,21 @@ export function LibraryPanes({
     <AppShell.Navbar className="sidebar" aria-label="笔记库目录">
       {phone ? (
         <header className="phone-head">
-          <button aria-label="返回笔记列表" onClick={() => setPane("list")}>
-            <PhoneIcon name="back" />
-          </button>
-          <h1>笔记库工具</h1>
+          <button aria-label="返回笔记列表" onClick={() => setPane("list")}><PhoneIcon name="back" /></button>
+          <h1>笔记库目录</h1>
         </header>
-      ) : (
-        <>
-          {avatar}
-          {vault}
-          <details className="vault-tools" onClick={e => {if ((e.target as HTMLElement).closest("button")) e.currentTarget.open = false;}}><summary aria-label="笔记库菜单">库工具 ▾</summary>{tools}</details>
-          {create}
-          <div className="side-files">
-            <button
-              aria-label="全部笔记"
-              className={"all-notes" + (folder === null ? " current" : "")}
-              onClick={() => { if (!allNotes || allNotes()) pickFolder(null); }}
-            >
-              ▦　全部笔记
-            </button>
-            <FolderTree paths={paths} active={folder} select={pickFolder} />
-          </div>
-        </>
-      )}
-      {phone && vault}
-      {phone && <nav className="sections" aria-label="笔记库工具">{tools}</nav>}
+      ) : avatar}
+      {vault}
+      {!phone && create}
+      <div className="side-files">
+        <button aria-label="全部笔记" className={"all-notes" + (!trash.active && folder === null ? " current" : "")}
+          onClick={() => { if (!allNotes || allNotes()) pickFolder(null); }}>
+          ▦　全部笔记
+        </button>
+        <FolderTree paths={paths} active={trash.active ? null : folder} select={pickFolder} />
+        <button className={"sidebar-trash" + (trash.active ? " current" : "")} aria-current={trash.active ? "page" : undefined}
+          disabled={trash.disabled} onClick={trash.open}><PhoneIcon name="trash" />回收站</button>
+      </div>
       {phone && <div className="phone-library-actions">{listActions}</div>}
       {!phone && (
         <div className="layout-options" aria-label="面板布局">
@@ -627,8 +620,8 @@ export function LibraryPanes({
                   ? "全部笔记"
                   : entryName(folder)}
             </h1>
-            <button aria-label="笔记库工具" onClick={() => setPane("nav")}>
-              <PhoneIcon name="tools" />
+            <button aria-label="打开笔记库目录" onClick={() => setPane("nav")}>
+              <PhoneIcon name="folder" />
             </button>
           </header>
         )}

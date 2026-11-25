@@ -59,10 +59,4 @@ func TestShortUserAndVaultIDs(t *testing.T) {
 	if _, err := r.CreateUser(ctx, "open@local.test", "hash"); !errors.Is(err, ErrConflict) {
 		t.Errorf("duplicate email: %v", err)
 	}
-	envelope := Envelope{IV: make([]byte, 12), Ciphertext: make([]byte, 16)}
-	_, err = r.SaveEncrypted(ctx, invited.ID, vault.ID, envelope)
-	var conflict *SyncError
-	if !errors.As(err, &conflict) || conflict.Code != "VAULT_ID_TAKEN" {
-		t.Errorf("ordinary vault collision: %v", err)
-	}
 }

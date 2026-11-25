@@ -1,12 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { request, type Note } from "./api";
 export type Hit = Pick<Note, "file_id" | "path">;
-type Asset = {
-  asset_id: string;
-  name: string;
-  media_type: string;
-  content_size: number;
-};
 type Job = {
   mode?: "online" | "portable";
   job_id: string;
@@ -25,19 +19,14 @@ export async function download(token: string, path: string, name: string, method
 export type ResourceClient = {
   json: (path: string) => Promise<any>;
   createExport: (scope: string, portable: boolean) => Promise<void>;
-  blob: (id: string) => Promise<Blob>;
-  save: (kind: "asset" | "export", id: string, name: string) => Promise<void>;
+  save: (kind: "asset" | "export", id: string, name: string) => Promise<string | void>;
 };
 export function LibraryResources({
-  view,
   base,
   token,
-  notify,
 }: {
-  view: string;
   base: string;
   token: string;
-  notify: (s: string) => void;
 }) {
   const client = useMemo<ResourceClient>(
     () => ({
@@ -50,7 +39,6 @@ export function LibraryResources({
           portable ? { scope, mode: "portable" } : { scope },
         );
       },
-      blob: async (id) => (await request(token, "/assets/" + id)).blob(),
       save: (kind, id, name) =>
         download(
           token,
@@ -62,66 +50,19 @@ export function LibraryResources({
     }),
     [base, token],
   );
-  return (
-    <Resources
-      view={view}
-      client={client}
-      notify={notify}
-    />
-  );
-}
-function useAsset(src: string, client: ResourceClient) {
-  const [entry, set] = useState({ src: "", url: "", error: "" });
-  useEffect(() => {
-    let live = true,
-      url = "";
-    client
-      .blob(src)
-      .then((b) => {
-        if (live) {
-          url = URL.createObjectURL(b);
-          set({ src, url, error: "" });
-        }
-      })
-      .catch((e) => {
-        if (live) set({ src, url: "", error: String(e) });
-      });
-    return () => {
-      live = false;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [src, client]);
-  return entry.src === src ? entry : { url: "", error: "" };
-}
-function Preview({ asset, client }: { asset: Asset; client: ResourceClient }) {
-  const { url, error } = useAsset(asset.asset_id, client);
-  if (!url) return <p>{error || "正在加载…"}</p>;
-  if (asset.media_type.startsWith("image/"))
-    return <img src={url} alt={asset.name} />;
-  if (asset.media_type.startsWith("audio/"))
-    return <audio controls src={url} />;
-  if (asset.media_type.startsWith("video/"))
-    return <video controls src={url} />;
-  if (asset.media_type === "application/pdf")
-    return <iframe sandbox="" title={asset.name} src={url} />;
-  return <p>下载后可用本地应用打开。</p>;
+  return <Resources client={client} />;
 }
 const scopes: Record<string, string> = {
   notes: "仅笔记",
   all: "完整笔记库",
 };
 export function Resources({
-  view,
   client,
-  notify,
 }: {
-  view: string;
   client: ResourceClient;
-  notify: (s: string) => void;
 }) {
-  const [assets, setAssets] = useState<Asset[]>([]),
-    [picked, pick] = useState(""),
-    [jobs, setJobs] = useState<Job[]>([]),
+  const [message, notify] = useState("");
+  const [jobs, setJobs] = useState<Job[]>([]),
     [scope, setScope] = useState("all"),
     [portable, setPortable] = useState(false),
     [revision, refresh] = useState(0),
@@ -131,16 +72,10 @@ export function Resources({
     let timer: ReturnType<typeof setTimeout>;
     const json = client.json;
     async function load() {
-      if (view === "附件") {
-        const result = await json("/assets");
-        if (live) setAssets(result);
-      } else {
-        const result: Job[] = await json("/exports");
-        if (live) {
-          setJobs(result);
-          if (result.some((j) => j.status === "pending"))
-            timer = setTimeout(() => refresh((n) => n + 1), 650);
-        }
+      const result: Job[] = await json("/exports");
+      if (live) {
+        setJobs(result);
+        if (result.some((j) => j.status === "pending")) timer = setTimeout(() => refresh((n) => n + 1), 650);
       }
     }
     timer = setTimeout(
@@ -154,106 +89,77 @@ export function Resources({
       live = false;
       clearTimeout(timer);
     };
-  }, [view, client, revision]);
+  }, [client, revision]);
   return (
     <article>
-      <h1>{view}</h1>
-      {view === "附件" ? (
-        <>
-          {assets.length === 0 && <p>笔记库中还没有附件。</p>}
-          {assets.map((a) => (
-            <section className="asset-row" key={a.asset_id}>
-              <strong>{a.name}</strong>
-              <small>
-                {a.media_type} · {a.content_size} B
-              </small>
-              <button
-                onClick={() => pick(picked === a.asset_id ? "" : a.asset_id)}
-              >
-                预览
-              </button>
-              <button
-                onClick={() =>
-                  client
-                    .save("asset", a.asset_id, a.name)
-                    .catch((e) => notify(String(e)))
-                }
-              >
-                下载
-              </button>
-              {picked === a.asset_id && <Preview asset={a} client={client} />}
-            </section>
+      <label>
+        导出范围
+        <select value={scope} onChange={(e) => setScope(e.target.value)}>
+          {Object.entries(scopes).map(([v, s]) => (
+            <option key={v} value={v}>
+              {s}
+            </option>
           ))}
-        </>
-      ) : (
-        <>
-          <label>
-            导出范围
-            <select value={scope} onChange={(e) => setScope(e.target.value)}>
-              {Object.entries(scopes).map(([v, s]) => (
-                <option key={v} value={v}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          {scope === "all" && (
-            <label>
-              图片链接
-              <select
-                value={portable ? "portable" : "online"}
-                onChange={(e) => setPortable(e.target.value === "portable")}
-              >
-                <option value="online">保留在线链接</option>
-                <option value="portable">离线便携（使用包内图片）</option>
-              </select>
-            </label>
-          )}
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await client.createExport(scope, scope === "all" && portable);
-                refresh((n) => n + 1);
-              } catch (e) {
-                notify(String(e));
-              } finally {
-                setBusy(false);
-              }
-            }}
+        </select>
+      </label>
+      {scope === "all" && (
+        <label>
+          图片链接
+          <select
+            value={portable ? "portable" : "online"}
+            onChange={(e) => setPortable(e.target.value === "portable")}
           >
-            创建导出
-          </button>
-          {jobs.map((j) => (
-            <div className="row" key={j.job_id}>
-              <span>
-                {scopes[j.scope]}
-                {j.mode === "portable" ? " · 离线便携" : ""} ·{" "}
-                {new Date(j.created_at).toLocaleString()}
-              </span>
-              {j.status === "completed" ? (
-                <button
-                  onClick={() =>
-                    client
-                      .save(
-                        "export",
-                        j.job_id,
-                        `wenote-${j.scope}${j.mode === "portable" ? "-portable" : ""}.zip`,
-                      )
-                      .catch((e) => notify(String(e)))
-                  }
-                >
-                  下载 ZIP
-                </button>
-              ) : (
-                <span>{j.status === "failed" ? "导出失败" : "正在打包…"}</span>
-              )}
-            </div>
-          ))}
-        </>
+            <option value="online">保留在线链接</option>
+            <option value="portable">离线便携（使用包内图片）</option>
+          </select>
+        </label>
       )}
+      <button
+        className="primary"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          notify("");
+          try {
+            await client.createExport(scope, scope === "all" && portable);
+            refresh((n) => n + 1);
+          } catch (e) {
+            notify(String(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        创建导出
+      </button>
+      {jobs.map((j) => (
+        <div className="row" key={j.job_id}>
+          <span>
+            {scopes[j.scope]}
+            {j.mode === "portable" ? " · 离线便携" : ""} ·{" "}
+            {new Date(j.created_at).toLocaleString()}
+          </span>
+          {j.status === "completed" ? (
+            <button
+              onClick={() =>
+                client
+                  .save(
+                    "export",
+                    j.job_id,
+                    `wenote-${j.scope}${j.mode === "portable" ? "-portable" : ""}.zip`,
+                  )
+                  .then((path) => { if (path) notify("已保存到 " + path); })
+                  .catch((e) => notify(String(e)))
+              }
+            >
+              下载 ZIP
+            </button>
+          ) : (
+            <span>{j.status === "failed" ? "导出失败" : "正在打包…"}</span>
+          )}
+        </div>
+      ))}
+      {message && <p role="status">{message}</p>}
     </article>
   );
 }

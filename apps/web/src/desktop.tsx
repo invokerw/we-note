@@ -1,6 +1,5 @@
 import { checkPicture, pictureTypes } from "./api";
 import { markdownWritingMode } from "./markdown/modes";
-import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
 import { isMindMap } from "./plugins/mindFile";
@@ -43,6 +42,8 @@ import {
 import "./style.css";
 import "./phone.css";
 import "./workspace.css";
+
+type TrashedFile = { external: boolean; batch: string; path: string };
 
 type Binding = {
   android?: boolean;
@@ -142,6 +143,7 @@ function Workspace({
   const profile = useAccountProfile(profileRequest);
   const originalHandler = useRef("");
   const [localHandler, setLocalHandler] = useState("");
+  const [trash, setTrash] = useState<TrashedFile[]>([]);
   const [view, setView] = useState("笔记"),
     [newPath, setNewPath] = useState<string | null>(null),
     [links, setLinks] = useState<Hit[]>([]);
@@ -224,24 +226,9 @@ function Workspace({
           mode: portable ? "portable" : null,
         });
       },
-      blob: async (id) => {
-        const r = await local<{ type: string; data: string }>(vault, "asset", {
-          id,
-          token: await binding.access(),
-        });
-        return new Blob(
-          [Uint8Array.from(atob(r.data), (c) => c.charCodeAt(0))],
-          { type: r.type },
-        );
-      },
-      save: async (kind, id) => {
-        const dest = await local<string>(vault, "download", {
-          kind,
-          id,
-          token: await binding.access(),
-        });
-        notify("已保存到 " + dest);
-      },
+      save: async (kind, id) => local<string>(vault, "download", {
+        kind, id, token: await binding.access(),
+      }),
     }),
     [binding],
   );
@@ -572,11 +559,12 @@ function Workspace({
                 )
               ) {
                 run(async () => {
-                  await client.save(
+                  const dest = await client.save(
                     "asset",
                     new URL(href).pathname.split("/").at(-1)!,
                     "附件",
                   );
+                  if (dest) notify("已保存到 " + dest);
                 });
                 return true;
               }
@@ -649,7 +637,12 @@ function Workspace({
         allNotes={() => {if (!leave()) return false; setView("笔记");choose("");setPluginBytes(null);setPluginDirty(false);setSaved(text);return true;}}
         searchContent={searchContent}
         historyKey={vault}
-        tools={<button disabled={busy} onClick={() => {if(leave()){setView("导出");panes.setPane("doc");}}}>导出</button>}
+        trash={{ active: view === "回收站", disabled: busy, open: () => run(async () => {
+          if (!leave()) return;
+          setTrash(await local<TrashedFile[]>(vault, "trash"));
+          choose(""); setPluginBytes(null); setPluginDirty(false); setSaved(text); setNewPath(null);
+          setView("回收站"); panes.setPane("doc");
+        }) }}
         listActions={
           <>
             {" "}
@@ -684,14 +677,13 @@ function Workspace({
           </>
         }
       />
-      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
+      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources client={client}/>} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
       <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (
           <header className="phone-head">
-            <button aria-label="返回笔记库工具" onClick={back}>
+            <button aria-label="返回笔记库目录" onClick={back}>
               <PhoneIcon name="back" />
             </button>
-            <h1>{view}</h1>
           </header>
         )}
         {newPath !== null && (
@@ -733,12 +725,17 @@ function Workspace({
           </p>
         )}
         {view !== "笔记" ? (
-          <Resources
-            key={view}
-            client={client}
-            view={view}
-            notify={notify}
-          />
+          <article>
+            <h1>回收站</h1>
+            {trash.length ? trash.map(item => <div className="row" key={`${item.external}/${item.batch}/${item.path}`}>
+              <span>{item.path}</span>
+              <button disabled={busy} onClick={() => run(async () => {
+                await local(vault, "restore_file", { item });
+                setTrash(await local<TrashedFile[]>(vault, "trash"));
+                await load();
+              })}>恢复</button>
+            </div>) : <p>回收站为空。</p>}
+          </article>
         ) : (
           <article className={path ? "document" : "blank-document"}>
             {!path && (
@@ -853,23 +850,6 @@ function Workspace({
     </WorkspaceShell>
   );
 }
-function EncryptedWorkspace({
-  android,
-  close,
-  children,
-}: {
-  android: boolean;
-  close: () => void;
-  children: React.ReactNode;
-}) {
-  useAndroidBack(android, close);
-  return (
-    <div className="local-workspace">
-      <button onClick={close}>返回同步设置</button>
-      {children}
-    </div>
-  );
-}
 const root = createRoot(document.getElementById("desktop-editor")!);
 window.addEventListener("open-notebook", (e) => {
   const binding = (e as CustomEvent<Binding>).detail,
@@ -883,47 +863,5 @@ window.addEventListener("open-notebook", (e) => {
         settings.hidden = false;
       }}
     />,
-  );
-});
-
-window.addEventListener("open-encrypted", (event) => {
-  const { access, origin, android } = (
-    event as CustomEvent<Binding & { origin: string }>
-  ).detail;
-  const settings = document.querySelector("body > main") as HTMLElement;
-  settings.hidden = true;
-  const io: EncryptedIO = async (id, envelope) =>
-    window.__TAURI__.core.invoke("encrypted_vault", {
-      origin,
-      token: await access(),
-      id: id ?? null,
-      envelope: envelope ?? null,
-    });
-  let dirty = false;
-  const changed = (value: boolean) => {
-    dirty = value;
-  };
-  const output: ExportFile = async (name, bytes) => {
-    const payload = { name, data: base64(bytes) };
-    if (android) {
-      await window.__TAURI__.core.invoke("mobile_control", {
-        action: "exportDocument",
-        payload,
-      });
-    } else {
-      await window.__TAURI__.core.invoke("export_decrypted_file", payload);
-    }
-  };
-  root.render(
-    <EncryptedWorkspace
-      android={!!android}
-      close={() => {
-        if (dirty && !confirm("放弃未保存的加密库编辑？")) return;
-        root.render(null);
-        settings.hidden = false;
-      }}
-    >
-      <EncryptedVaults io={io} dirty={changed} exportFile={output} />
-    </EncryptedWorkspace>,
   );
 });

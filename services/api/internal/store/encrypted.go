@@ -7,119 +7,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
-	"regexp"
 	"time"
 
 	"github.com/weifei/we-note/services/api/internal/blob"
 )
 
-type EncryptedVault struct {
-	ID         string `json:"id"`
-	Revision   int64  `json:"revision"`
-	Updated    string `json:"updated_at"`
-	IV         []byte `json:"iv,omitempty"`
-	Ciphertext []byte `json:"ciphertext,omitempty"`
-}
-type Envelope struct {
-	Base       int64  `json:"base_revision"`
-	IV         []byte `json:"iv"`
-	Ciphertext []byte `json:"ciphertext"`
-}
-
-var encryptedID = regexp.MustCompile(`^[` + shortIDAlphabet + `]{8}$`)
-
-func (r *Repository) EncryptedVaults(ctx context.Context, user string) ([]EncryptedVault, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id,revision,updated_at FROM encrypted_vaults WHERE owner=? ORDER BY updated_at DESC`, user)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []EncryptedVault{}
-	for rows.Next() {
-		var v EncryptedVault
-		if err = rows.Scan(&v.ID, &v.Revision, &v.Updated); err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	return out, rows.Err()
-}
-func (r *Repository) EncryptedVault(ctx context.Context, user, id string) (EncryptedVault, error) {
-	var v EncryptedVault
-	var hash string
-	var size int64
-	err := r.db.QueryRowContext(ctx, `SELECT e.id,revision,updated_at,iv,ciphertext,COALESCE(o.hash,''),COALESCE(o.size,0) FROM encrypted_vaults e LEFT JOIN encrypted_objects o ON o.vault_id=e.id WHERE e.id=? AND owner=?`, id, user).Scan(&v.ID, &v.Revision, &v.Updated, &v.IV, &v.Ciphertext, &hash, &size)
-	if errors.Is(err, sql.ErrNoRows) {
-		return v, ErrNotFound
-	}
-	if err != nil || hash == "" {
-		return v, err
-	}
-	if r.blobStore == nil || size < 16 || size > 16<<20 {
-		return v, errors.New("invalid encrypted vault storage")
-	}
-	in, err := r.blobStore.OpenContext(ctx, id, hash, "")
-	if err != nil {
-		return v, err
-	}
-	defer in.Close()
-	v.Ciphertext, err = io.ReadAll(io.LimitReader(in, size+1))
-	if err == nil && (int64(len(v.Ciphertext)) != size || fmt.Sprintf("sha256:%x", sha256.Sum256(v.Ciphertext)) != hash) {
-		return v, errors.New("encrypted content verification failed")
-	}
-	return v, err
-}
-func (r *Repository) SaveEncrypted(ctx context.Context, user, id string, q Envelope) (EncryptedVault, error) {
-	var v EncryptedVault
-	if !encryptedID.MatchString(id) || q.Base < 0 || q.Base >= maxSafeRevision || len(q.IV) != 12 || len(q.Ciphertext) < 16 || len(q.Ciphertext) > 16<<20 {
-		return v, fileError(400, "INVALID_ENVELOPE", "invalid encrypted vault envelope (16 MiB maximum)")
-	}
-	v = EncryptedVault{ID: id, Revision: q.Base + 1, Updated: formatTime(time.Now().UTC())}
-	var res sql.Result
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return v, err
-	}
-	defer tx.Rollback()
-	inline := q.Ciphertext
-	hash := ""
-	if r.blobStore != nil {
-		inline = []byte{}
-		hash = fmt.Sprintf("sha256:%x", sha256.Sum256(q.Ciphertext))
-	}
-	if q.Base == 0 {
-		res, err = tx.ExecContext(ctx, `INSERT INTO encrypted_vaults(id,owner,revision,ciphertext,iv,updated_at) SELECT ?1,?2,?3,?4,?5,?6 WHERE `+vaultIDAvailable, id, user, v.Revision, inline, q.IV, v.Updated)
-	} else {
-		res, err = tx.ExecContext(ctx, `UPDATE encrypted_vaults SET revision=?,ciphertext=?,iv=?,updated_at=? WHERE id=? AND owner=? AND revision=? AND iv<>?`, v.Revision, inline, q.IV, v.Updated, id, user, q.Base, q.IV)
-	}
-	if err != nil {
-		return v, err
-	}
-	n, err := res.RowsAffected()
-	if err == nil && n == 0 {
-		err = tx.QueryRowContext(ctx, `SELECT updated_at FROM encrypted_vaults e LEFT JOIN encrypted_objects o ON o.vault_id=e.id WHERE id=? AND owner=? AND revision=? AND iv=? AND (ciphertext=? OR o.hash=?)`, id, user, v.Revision, q.IV, q.Ciphertext, hash).Scan(&v.Updated)
-		if !errors.Is(err, sql.ErrNoRows) {
-			return v, err
-		}
-		if q.Base == 0 {
-			return v, fileError(409, "VAULT_ID_TAKEN", "笔记库 ID 已被占用")
-		}
-		return v, fileError(409, "ENCRYPTED_CONFLICT", "云端版本已变化，请先导出本地草稿再重新解锁")
-	}
-	if err != nil {
-		return v, err
-	}
-	if r.blobStore != nil {
-		if err = writeEnvelope(ctx, tx, unwrap(r.blobStore), user, id, hash, q.Ciphertext); err != nil {
-			return v, err
-		}
-	} else if _, err = tx.ExecContext(ctx, `DELETE FROM encrypted_objects WHERE vault_id=?`, id); err != nil {
-		return v, err
-	}
-	r.owners.Store(id, user)
-	return v, tx.Commit()
-}
+// Preserve archived ciphertext when an administrator migrates historical storage.
 func writeEnvelope(ctx context.Context, tx *sql.Tx, target blob.Store, owner, id, hash string, data []byte) error {
 	ns, err := blob.VaultNamespace(owner, id)
 	if err != nil {

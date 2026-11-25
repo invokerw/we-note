@@ -123,6 +123,7 @@ export default function PersonalSettings(props: {
   updatePluginSetting: (id: string, value: unknown) => void;
   audit?: ReactNode;
   shares?: ReactNode;
+  exportPanel: ReactNode;
   sync?: () => void;
   manage?: ReactNode;
 }) {
@@ -159,6 +160,7 @@ export default function PersonalSettings(props: {
   const categories = [
     "账户与安全",
     "编辑与插件",
+    "导出",
     ...(props.shares ? ["我的分享"] : []),
     ...(props.sync ? ["设备与同步"] : []),
   ];
@@ -369,6 +371,7 @@ export default function PersonalSettings(props: {
                 />
               </>
             )}
+            {section === "导出" && props.exportPanel}
             {section === "我的分享" && props.shares}
             {section === "设备与同步" && (
               <button

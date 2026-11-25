@@ -453,7 +453,7 @@ try {
   await page.getByRole("searchbox", {name:"搜索笔记"}).fill("新的正文");
   await button("路线.md").click();
   await page.locator(".reading").getByText("新的正文。").waitFor();
-  await page.getByLabel("笔记库菜单").click();
+  await button("打开个人设置").click();
   await button("导出").click();
   await button("创建导出").click();
   const wait = page.waitForEvent("download");
@@ -469,6 +469,7 @@ try {
     .click();
   const saved = await portableDownload;
   assert.equal(saved.suggestedFilename(), "wenote-all-portable.zip");
+  await button("关闭个人设置").click();
   const zip = unzipSync(await readFile(await saved.path()));
   const localDir = await mkdtemp(join(tmpdir(), "wenote-portable-"));
   const offline = await chrome.newContext({ offline: true });

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { chromium } from "playwright-core";
 const origin = process.env.WENOTE_TEST_ORIGIN;
 const browser = await chromium.launch({
@@ -74,21 +74,17 @@ try {
 
   const bytes = (s) => Buffer.from(s).toString("base64");
   const body = "初稿 " + asset.canonical_url;
-  const file = await (
-    await api(a.token, files, "POST", {
+  await api(a.token, files, "POST", {
       path: "项目/记录.md",
       content: bytes(body),
-    })
-  ).json();
-  await a.page.getByLabel("笔记库菜单").click();
-  await button(a.page, "批量分享").click();
-  await a.page.getByLabel("文件或目录，每行一个").fill("项目/");
-
-  await a.page.getByLabel("分享密码（可选）").fill("phase5-link");
-  await a.page.getByLabel("下载和导入次数上限（0 为不限）").fill("1");
-  await a.page.getByLabel("允许导入笔记库").check();
-  await button(a.page, "生成分享链接").click();
-  const link = await a.page.getByLabel("复制分享地址").inputValue();
+  });
+  const secret = randomBytes(32).toString("base64url");
+  const {id} = await (await api(a.token, "/api/v1/share-links", "POST", {
+    vault_id: a.vault, paths: ["项目/记录.md"], token_hash: createHash("sha256").update(secret).digest("hex"),
+    password: "phase5-link", max_downloads: 1, expires: Math.floor(Date.now()/1000) + 3600,
+    allow_import: true, allow_download: true,
+  })).json();
+  const link = `${origin}/#share=${id}.${secret}`;
   await b.page.goto(link);
   await b.page.getByLabel("分享密码", {exact:true}).fill("phase5-link");
   await button(b.page, "打开分享").click();
@@ -118,49 +114,8 @@ try {
   await p.getByText("账户活动",{exact:true}).click();
   await p.getByRole("heading",{name:"账户审计日志"}).waitFor();
   await button(p,"关闭个人设置").click();
-  await p.getByLabel("笔记库菜单").click();
-  await button(p, "加密笔记库").click();
-  await button(p, "新建加密笔记库").click();
-  const key = await p.getByLabel("恢复密钥", { exact: true }).inputValue();
-  await p.getByLabel("我已保存恢复密钥").check();
-  p.once("dialog", (d) => d.accept("私人日记.md"));
-  await button(p, "新建加密笔记").click();
-  await p.getByLabel("加密笔记正文").fill("只在本机解密的内容");
-  // Reserve the first candidate for another owner before the browser saves it.
-  let occupied;
-  await p.route("**/api/v1/encrypted-vaults/*", async (route) => {
-    occupied = route.request().url().split("/").at(-1);
-    await api(b.token, "/api/v1/encrypted-vaults/" + occupied, "PUT", route.request().postDataJSON(), 200);
-    await route.continue();
-  }, { times: 1 });
-  const saved = p.waitForRequest(
-    (r) => occupied && r.method() === "PUT" && r.url().includes("/encrypted-vaults/") && !r.url().endsWith("/" + occupied),
-  );
-  await button(p, "加密并保存").click();
-  await p.getByText("加密库已保存").waitFor();
-  const req = await saved;
-  const sealed = req.postData();
-  for (const secret of [key, "私人日记", "只在本机解密"])
-    assert.ok(!sealed.includes(secret));
-  const cid = req.url().split("/").at(-1);
-  assert.match(cid, /^[0-9abcdefghjkmnpqrstvwxyz]{8}$/u);
-  await api(b.token, "/api/v1/encrypted-vaults/" + cid, "GET", undefined, 404);
-  await button(p, "锁定笔记库").click();
-  await p.getByLabel("选择加密库").selectOption(cid);
-  await p
-    .getByLabel("恢复密钥", { exact: true })
-    .fill(Buffer.alloc(32, 7).toString("base64"));
-  await button(p, "解锁笔记库").click();
-  await p.getByText(/解锁失败/).waitFor();
-  await p.getByLabel("恢复密钥", { exact: true }).fill(key);
-  await button(p, "解锁笔记库").click();
-  assert.equal(
-    await p.getByLabel("加密笔记正文").inputValue(),
-    "只在本机解密的内容",
-  );
-  console.log(
-    "Phase 5 browser acceptance passed shared links, batch assets, audit and encrypted vaults.",
-  );
+  for (const name of ["笔记库菜单", "加密笔记库", "批量分享"]) assert.equal(await p.getByLabel(name).count(), 0);
+  console.log("通过单篇分享、密码、附件复制、次数限制及账户活动验收。");
 } finally {
   await browser.close();
 }

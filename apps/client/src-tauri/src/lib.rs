@@ -135,6 +135,10 @@ enum LocalAction {
     },
     List,
     Library,
+    Trash,
+    RestoreFile {
+        item: wenote_sync::notebook::TrashedFile,
+    },
     SearchNotes {
         query: String,
         paths: Vec<String>,
@@ -226,6 +230,8 @@ async fn notebook(
                     .and_then(|bytes| book.export_bytes(&dir, &name, &bytes))
                     .map(serde_json::Value::String)
             }
+            Trash => book.trash_files().map(|items| serde_json::json!(items)),
+            RestoreFile { item } => book.restore_file(&item).map(|()| serde_json::Value::Null),
             SearchNotes { query, paths } => book
                 .search_notes(&query, &paths)
                 .map(|hits| serde_json::json!(hits)),
@@ -258,37 +264,6 @@ async fn notebook(
                 .map(serde_json::Value::String),
         }
         .map_err(|e| format!("{e:#}"))
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-#[tauri::command]
-async fn encrypted_vault(
-    origin: String,
-    token: String,
-    id: Option<String>,
-    envelope: Option<serde_json::Value>,
-) -> Result<serde_json::Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        Api::new(&origin, &token)
-            .and_then(|api| api.encrypted_vault(id.as_deref(), envelope))
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-#[tauri::command]
-async fn export_decrypted_file(
-    app: tauri::AppHandle,
-    name: String,
-    data: String,
-) -> Result<String, String> {
-    use base64::{engine::general_purpose::STANDARD, Engine};
-    let downloads = app.path().download_dir().map_err(|e| e.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let bytes = STANDARD.decode(data).map_err(|e| e.to_string())?;
-        wenote_sync::notebook::Notebook::export_download(&downloads, &name, &bytes)
-            .map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -340,8 +315,6 @@ pub fn run() {
             logout,
             sync,
             notebook,
-            encrypted_vault,
-            export_decrypted_file,
             devices,
             is_android,
             print_note,

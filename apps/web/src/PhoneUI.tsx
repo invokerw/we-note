@@ -53,7 +53,7 @@ const icons = {
   folder: "M3 7V5h6l2 2h10v12H3z",
   new: "M12 5v14 M5 12h14",
   back: "m14 5-7 7 7 7",
-  tools: "M4 5h6v6H4z M14 5h6v6h-6z M4 15h6v5H4z M14 15h6v5h-6z",
+  trash: "M4 6h16 M9 6V3h6v3 M6 6l1 15h10l1-15 M10 10v7 M14 10v7",
   more: "M5 12h.1 M12 12h.1 M19 12h.1",
   sort: "M4 7h16 M4 12h11 M4 17h6",
 };

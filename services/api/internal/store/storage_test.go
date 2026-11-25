@@ -88,8 +88,8 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 			}))
 			defer srv.Close()
 			const encryptedID = "9hm5j4z7"
-			envelope := Envelope{IV: make([]byte, 12), Ciphertext: []byte("encrypted content predating GM")}
-			if _, err = db.Exec(`INSERT INTO encrypted_vaults VALUES(?,?,1,?,?,CURRENT_TIMESTAMP)`, encryptedID, "owner", envelope.Ciphertext, envelope.IV); err != nil {
+			ciphertext := []byte("encrypted content predating GM")
+			if _, err = db.Exec(`INSERT INTO encrypted_vaults VALUES(?,?,1,?,?,CURRENT_TIMESTAMP)`, encryptedID, "owner", ciphertext, make([]byte, 12)); err != nil {
 				t.Fatal(err)
 			}
 			profile := StorageConfig{Kind: kind, Endpoint: srv.URL, Username: "account", Secret: "secret", Bucket: "bucket", Region: "us-east-1"}
@@ -99,15 +99,6 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 			var inlineBytes int
 			if err = db.QueryRow(`SELECT length(ciphertext) FROM encrypted_vaults WHERE id=?`, encryptedID).Scan(&inlineBytes); err != nil || inlineBytes != 0 {
 				t.Fatal("existing encrypted vault was not moved", inlineBytes, err)
-			}
-			envelope.Base = 1
-			envelope.IV[0] = 1
-			envelope.Ciphertext = []byte("encrypted vault revised after migration")
-			if _, err = repo.SaveEncrypted(ctx, "owner", encryptedID, envelope); err != nil {
-				t.Fatal(err)
-			}
-			if _, err = repo.SaveEncrypted(ctx, "owner", encryptedID, envelope); err != nil {
-				t.Fatal("retry", err)
 			}
 			if err := repo.SetSetting(ctx, "owner", "backup_root", filepath.Join(root, "backups")); err != nil {
 				t.Fatal(err)
@@ -167,9 +158,15 @@ func TestGMStorageMigrationAndRemoteBackup(t *testing.T) {
 			if _, err = fresh.PullSyncChanges(ctx, "v", "device", 55); err == nil {
 				t.Fatal("pre-restore cursor still accepted")
 			}
-			v, err := fresh.EncryptedVault(ctx, "owner", encryptedID)
-			if err != nil || string(v.Ciphertext) != string(envelope.Ciphertext) {
-				t.Fatal("restored encrypted vault", err)
+			archivedHash := fmt.Sprintf("sha256:%x", sha256.Sum256(ciphertext))
+			archived, err := fresh.blobStore.OpenContext(ctx, encryptedID, archivedHash, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored, err := io.ReadAll(archived)
+			archived.Close()
+			if err != nil || string(restored) != string(ciphertext) {
+				t.Fatal("restored historic ciphertext", err)
 			}
 			failReads = true
 			dest := StorageConfig{Kind: "local", Directory: filepath.Join(root, "next")}

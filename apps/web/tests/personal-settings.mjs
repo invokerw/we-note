@@ -39,6 +39,11 @@ try {
   const desktop = await browser.newPage();
   desktop.setDefaultTimeout(10000);
   await login(desktop);
+  await button(desktop, "全部笔记").waitFor();
+  assert.equal(await desktop.getByLabel("笔记库菜单").count(), 0);
+  await desktop.locator(".side-files .folders + button", {hasText: "回收站"}).click();
+  await desktop.getByRole("heading", {name:"回收站"}).waitFor();
+  await button(desktop, "草稿.md").click();
   await button(desktop, "编辑模式").click();
   await button(desktop, "分屏编辑").click();
   await desktop.getByLabel("笔记源码").fill("未保存的草稿");
@@ -50,6 +55,13 @@ try {
     await desktop.getByText("服务端管理", { exact: true }).count(),
     0,
   );
+  await button(desktop, "导出").click();
+  const settings = desktop.getByRole("dialog", {name:"个人设置"});
+  await button(settings, "创建导出").click();
+  const download = desktop.waitForEvent("download");
+  await button(settings, "下载 ZIP").click();
+  assert.equal((await download).suggestedFilename(), "wenote-all.zip");
+  await button(desktop, "账户与安全").click();
   const png = await desktop.evaluate(
     () => document.createElement("canvas").toDataURL().split(",")[1],
   );
@@ -88,7 +100,14 @@ try {
   });
   mobile.setDefaultTimeout(10000);
   await login(mobile);
+  await button(mobile, "打开笔记库目录").click();
+  await button(mobile, "回收站").click();
+  await mobile.getByRole("heading", {name:"回收站"}).waitFor();
+  await button(mobile, "返回笔记列表").click();
   await button(mobile, "打开个人设置").click();
+  await button(mobile, "导出").click();
+  await button(mobile, "下载 ZIP").waitFor();
+  await button(mobile, "返回设置分类").click();
   await button(mobile, "账户与安全").click();
   await mobile.locator(".profile-heading img").waitFor();
   mobile.once("dialog", (d) => d.accept());

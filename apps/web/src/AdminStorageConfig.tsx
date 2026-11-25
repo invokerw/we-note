@@ -307,7 +307,7 @@ export function StorageConfigPanel({ token }: { token: string }) {
                 />
                 <small>
                   {scope === "online"
-                    ? "笔记正文、历史版本、附件、加密笔记库及导出文件。"
+                    ? "笔记正文、历史版本、附件、历史加密库密文及导出文件。"
                     : "手动备份、定时备份和恢复前自动备份。"}
                 </small>
               </div>

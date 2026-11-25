@@ -92,7 +92,18 @@ func (r *Repository) CreateLink(ctx context.Context, user, key string, q LinkOpt
 	if q.Expires <= time.Now().Unix() {
 		return l, fileError(400, "INVALID_EXPIRY", "choose a future expiry")
 	}
-	snap, err := r.selectSnapshot(ctx, tx, q.Vault, q.Paths, q.AssetIDs)
+	if len(q.Paths) != 1 || len(q.AssetIDs) != 0 || !PortablePath(q.Paths[0]) {
+		return l, fileError(400, "INVALID_SHARE", "请选择一篇笔记分享")
+	}
+	f, err := scanFile(tx.QueryRowContext(ctx, activeFileQuery+` AND f.path=?`, q.Vault, q.Paths[0]))
+	if err != nil {
+		return l, err
+	}
+	if f.CurrentVersionID == nil || (strings.HasSuffix(f.Path, "/.wenote-folder.json") && f.CurrentContentHash == "sha256:62837e3e3cc858e7102d86bce9f026008296ae23e621644486d155744e372496") {
+		return l, fileError(400, "INVALID_SHARE", "请选择一篇已保存的笔记分享")
+	}
+	snap := Snapshot{Files: []SnapshotFile{{Path: f.Path, Version: *f.CurrentVersionID, Hash: f.CurrentContentHash, Size: f.CurrentContentSize, StorageKey: f.CurrentStorageKey}}}
+	snap.Assets, err = r.snapshotAssets(ctx, tx, q.Vault, snap.Files, nil)
 	if err != nil {
 		return l, err
 	}

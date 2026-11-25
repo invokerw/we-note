@@ -5,7 +5,6 @@ import {
   PublicShare,
   readShareLocation,
 } from "./Sharing";
-import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { handlerKey } from "./plugins/registry";
@@ -142,11 +141,12 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [files, setFiles] = useState<Note[]>([]),
     [note, setNote] = useState<Note | null>(null),
     [view, setView] = useState("files"),
+    [trashRevision, refreshTrash] = useState(0),
     [trash, setTrash] = useState<{
       files: Note[];
       items: TrashItem[];
       can_manage: boolean;
-    }>({ files: [], items: [], can_manage: false }),
+    }>(),
     [settingsOpen, setSettingsOpen] = useState(false),
     [shareVault, setShareVault] = useState(""),
     [message, msg] = useState(""),
@@ -177,21 +177,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   const profile = useAccountProfile(profileRequest);
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
-  const encryptedIO = useCallback<EncryptedIO>(
-    async (id, payload) =>
-      (
-        await request(
-          token,
-          "/api/v1/encrypted-vaults" + (id ? "/" + id : ""),
-          payload ? "PUT" : "GET",
-          payload,
-        )
-      ).json(),
-    [token],
-  );
-  const encryptedDirty = useCallback((value: boolean) => {
-    dirty.current = value;
-  }, []);
   const base = `/api/v1/vaults/${vault}`;
   async function run(f: () => Promise<void>) {
     try {
@@ -292,13 +277,20 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
-  async function section(s: string) {
+  useEffect(() => {
+    if (view !== "trash" || !vault) return;
+    let live = true;
+    request(token, base + "/trash").then(r => r.json()).then(data => {
+      if (live) setTrash(data);
+    }).catch(e => { if (live) msg(String(e)); });
+    return () => { live = false; };
+  }, [token, base, view, trashRevision]);
+  function openTrash() {
     if (!leave()) return;
     setNote(null);
-    if (s === "trash")
-      setTrash(await (await request(token, base + "/trash")).json());
-    if (s === "files") await list();
-    setView(s);
+    setTrash(undefined);
+    setView("trash");
+    refreshTrash(n => n + 1);
     panes.setPane("doc");
   }
   async function changeTrash(
@@ -316,7 +308,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     )
       return;
     if (operation === "restore" && item?.kind === "file") {
-      const f = trash.files.find((note) => note.file_id === item.id);
+      const f = trash?.files.find((note) => note.file_id === item.id);
       if (!f) throw Error("笔记已变化，请重新打开回收站");
       const old = entryPath(f.path, f.current_content_hash),
         path = prompt("恢复路径", old);
@@ -336,7 +328,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       if (result.retained) msg(`${result.retained} 个项目仍被引用，已保留。`);
     }
     await list();
-    await section("trash");
+    refreshTrash(n => n + 1);
   }
   async function create(path: string, bytes: Uint8Array) {
     const r = await (
@@ -444,17 +436,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       if (target) select(target);
     },
   };
-  const goToSection = (id: string, label: string) => (
-    <button
-      key={id}
-      disabled={!vault && id !== "encrypted"}
-      aria-current={view === id ? "page" : undefined}
-      className={view === id ? "on" : ""}
-      onClick={() => run(() => section(id))}
-    >
-      {label}
-    </button>
-  );
   return (
     <WorkspaceShell className={phone ? "layout android-phone" : "layout"} data-pane={panes.pane} data-columns={panes.columns}>
       <LibraryPanes
@@ -504,7 +485,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         avatar={<SettingsButton avatar={profile.avatar} open={openSettings}/>}
         searchContent={searchContent}
         historyKey={vault}
-        tools={<>{goToSection("导出", "导出")}{goToSection("trash", "回收站")}{goToSection("sharing", "批量分享")}{goToSection("encrypted", "加密笔记库")}</>}
+        trash={{active: view === "trash", disabled: !vault, open: openTrash}}
+        allNotes={() => { if (view === "trash") setView("files"); return true; }}
         listActions={
           <button disabled={!vault} onClick={() => picker.current?.click()}>
             上传笔记
@@ -512,8 +494,9 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         }
       />
       {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={() => !dirty.current || confirm("放弃尚未保存的编辑？")} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
+        exportPanel={vault ? <><p>当前笔记库 · {vaults.find(v => v.id === vault)?.name}</p><LibraryResources base={base} token={token}/></> : <p>暂无笔记库可导出。</p>}
         audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
-        shares={vaults.length ? <><label>笔记库<select value={shareVault} onChange={e=>setShareVault(e.target.value)}>{vaults.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><Sharing key={shareVault} manage token={token} vault={shareVault}/></> : <p>暂无笔记库</p>}/>}
+        shares={vaults.length ? <><label>笔记库<select value={shareVault} onChange={e=>setShareVault(e.target.value)}>{vaults.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><Sharing key={shareVault} token={token} vault={shareVault}/></> : <p>暂无笔记库</p>}/>}
       <AppShell.Main className="workspace">
         {phone && (view !== "files" || !note) && (
           <header className="phone-head">
@@ -632,22 +615,10 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               {vault ? "写一篇笔记" : "创建笔记库"}
             </button>
           </article>
-        ) : view === "sharing" ? (
-          <Sharing key={vault} token={token} vault={vault} />
-        ) : view === "encrypted" ? (
-          <EncryptedVaults io={encryptedIO} dirty={encryptedDirty} />
-        ) : view === "导出" ? (
-          <LibraryResources
-            key={vault + view}
-            view={view}
-            base={base}
-            token={token}
-            notify={msg}
-          />
         ) : (
           <article>
             <h1>回收站</h1>
-            {view === "trash" &&
+            {!trash ? <p>{message || "正在加载回收站…"}</p> :
               (trash.items.length ? (
                 <>
                   {trash.can_manage && (

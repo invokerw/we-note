@@ -27,7 +27,6 @@ const lastReport = () => localStorage.getItem(reportKey()) || "尚无同步记�
 function toggleSettings(on) {
   byId("login").hidden = on;
   byId("settings").hidden = !on;
-  byId("open-encrypted").hidden = !on;
   byId("device-panel").hidden = !on;
   byId("device-list").replaceChildren();
   byId("diagnostic").textContent = on ? lastReport() : "";
@@ -102,7 +101,7 @@ byId("login").onsubmit = async (event) => {
     status(
       session.vaults.length
         ? ""
-        : "可直接打开加密库。同步普通笔记前请先在网页创建普通笔记库。",
+        : "请先在网页创建笔记库，再返回这里同步。",
     );
   } catch (error) {
     status(String(error));
@@ -312,10 +311,3 @@ byId("devices").onclick = async () => {
     status(String(e));
   }
 };
-
-byId("open-encrypted").onclick = () =>
-  window.dispatchEvent(
-    new CustomEvent("open-encrypted", {
-      detail: { access, origin: byId("origin").value.trim(), android },
-    }),
-  );

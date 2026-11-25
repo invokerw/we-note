@@ -12,7 +12,7 @@ sha2 = "0.10"
 walkdir = "2"
 fs2 = "0.4"
 tempfile = "3"
-uuid = { version="1", features=["v4"] }
+uuid = { version="1", features=["v4","serde"] }
 unicode-normalization = "0.1"
 diffy = "0.4"
 same-file = "1"

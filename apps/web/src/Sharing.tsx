@@ -76,15 +76,10 @@ export function prepareNoteLink(token: string, vault: string, path: string) {
   });
 }
 
-export function Sharing({ token, vault, manage = false }: { token: string; vault: string; manage?: boolean }) {
-  const [links, setLinks] = useState<Link[]>([]),
-    [url, setUrl] = useState("");
-  const { message, setMessage, busy, run } = useAction();
+export function Sharing({ token, vault }: { token: string; vault: string }) {
+  const [links, setLinks] = useState<Link[]>([]);
+  const { message, busy, run } = useAction();
   const endpoint = "/api/v1/share-links";
-  const pending = useRef<{
-    form: string;
-    create: () => Promise<string>;
-  } | null>(null);
   async function refresh() {
     setLinks(
       await (
@@ -96,106 +91,12 @@ export function Sharing({ token, vault, manage = false }: { token: string; vault
     );
   }
   useEffect(() => {
-    void run(async () => {
-      if (manage) await refresh();
-    });
-  }, [token, vault, manage]);
+    void run(refresh);
+  }, [token, vault]);
   return (
     <article className="security-panel">
-      {!manage && <><h1>批量分享</h1>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          const form = new FormData(event.currentTarget);
-          void run(async () => {
-            const selection = {
-              vault_id: vault,
-              paths: String(form.get("paths"))
-                .split("\n")
-                .map((v) => v.trim())
-                .filter(Boolean),
-            };
-            const options = {
-              ...selection,
-              expires: Math.floor(
-                new Date(String(form.get("expires"))).getTime() / 1000,
-              ),
-              password: form.get("password"),
-              max_downloads: Number(form.get("max")),
-              allow_download: form.has("download"),
-              allow_import: form.has("import"),
-            };
-            const fields = JSON.stringify(options);
-            if (pending.current?.form !== fields) {
-              pending.current = {
-                form: fields,
-                create: prepareLink(token, options),
-              };
-            }
-            setUrl(await pending.current.create());
-            pending.current = null;
-          });
-        }}
-      >
-        <fieldset disabled={busy}>
-          <label>
-            文件或目录，每行一个
-            <textarea name="paths" rows={3} placeholder="项目/会议记录" />
-          </label>
-              <label>
-                分享密码（可选）
-                <input
-                  name="password"
-                  type="password"
-                  maxLength={512}
-                  autoComplete="new-password"
-                />
-              </label>
-              <label>
-                有效期至
-                <input
-                  type="datetime-local"
-                  required
-                  name="expires"
-                  defaultValue={new Date(
-                    Date.now() +
-                      7 * 86400000 -
-                      new Date().getTimezoneOffset() * 60000,
-                  )
-                    .toISOString()
-                    .slice(0, 16)}
-                />
-              </label>
-              <label>
-                下载和导入次数上限（0 为不限）
-                <input
-                  type="number"
-                  name="max"
-                  min="0"
-                  defaultValue="0"
-                  required
-                />
-              </label>
-              <label>
-                <input type="checkbox" name="download" defaultChecked />
-                允许下载 ZIP
-              </label>
-              <label>
-                <input type="checkbox" name="import" />
-                允许导入笔记库
-              </label>
-          <button>生成分享链接</button>
-        </fieldset>
-      </form>
-      {url && (
-        <label>
-          复制分享地址
-          <input readOnly value={url} onFocus={(e) => e.target.select()} />
-        </label>
-      )}
-      </>}
       <p role="status">{message}</p>
-      {manage && <><h4>已创建的链接</h4>{!busy && !message && !links.length && <p>暂无分享链接</p>}
+      <h4>已创建的链接</h4>{!busy && !message && !links.length && <p>暂无分享链接</p>}
       {links.map((l) => (
         <section key={l.id} className="share">
           <strong>{l.title}</strong><p>{new Date(l.expires * 1000).toLocaleString()} 到期</p>
@@ -217,7 +118,6 @@ export function Sharing({ token, vault, manage = false }: { token: string; vault
                 run(async () => {
                   if (!confirm(`撤销「${l.title}」的分享链接？已保存的副本可继续使用。`)) return;
                   await request(token, endpoint + "/" + l.id, "DELETE");
-                  if (url.includes(l.id)) setUrl("");
                   await refresh();
                 })
               }
@@ -226,7 +126,7 @@ export function Sharing({ token, vault, manage = false }: { token: string; vault
             </button>
           )}
         </section>
-      ))}</>}
+      ))}
     </article>
   );
 }

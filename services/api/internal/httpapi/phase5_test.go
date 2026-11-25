@@ -4,7 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"encoding/json"
+
 	"github.com/weifei/we-note/services/api/internal/blob"
 	"github.com/weifei/we-note/services/api/internal/sqlite"
 	"github.com/weifei/we-note/services/api/internal/store"
@@ -46,9 +46,16 @@ func TestLinkLifetimeScopeAndDownloadLimit(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	q := store.LinkOptions{Vault: v.ID, Paths: []string{"shared/"}, Password: "link-only password", Expires: time.Now().Unix() + 60, MaxDownloads: 1, Download: true}
+	q := store.LinkOptions{Vault: v.ID, Paths: []string{"shared/note.txt"}, Password: "link-only password", Expires: time.Now().Unix() + 60, MaxDownloads: 1, Download: true}
 	secret := "test-link-capability"
 	q.TokenHash = strings.TrimPrefix(digest([]byte(secret)), "sha256:")
+	for _, paths := range [][]string{{"shared/"}, {"shared"}, {"shared/note.txt", "other.txt"}} {
+		batch := q
+		batch.Paths = paths
+		if _, err := repo.CreateLink(ctx, user.ID, "", batch); err == nil {
+			t.Errorf("created batch link for %v", paths)
+		}
+	}
 	link, e := repo.CreateLink(ctx, user.ID, "one", q)
 	if e != nil {
 		t.Fatal(e)
@@ -215,47 +222,13 @@ func TestSharedSourceDownload(t *testing.T) {
 		}
 	}
 }
-func TestEncryptedEnvelopeIsolationAndRevision(t *testing.T) {
+func TestEncryptedVaultRoutesRetired(t *testing.T) {
 	m := testMux(t)
 	registerUser(t, m, "alice@test.invalid", "alice password")
-	registerUser(t, m, "bob@test.invalid", "bob password")
-	a := loginUser(t, m, "alice@test.invalid", "alice password")
-	b := loginUser(t, m, "bob@test.invalid", "bob password")
-	const id = "b4r8n2qy"
-	path := "/api/v1/encrypted-vaults/" + id
-	q := store.Envelope{IV: make([]byte, 12), Ciphertext: bytes.Repeat([]byte{3}, 50)}
-	put := func(token string, want int) {
-		r := requestJSON(t, m, "PUT", path, token, q)
-		if r.Code != want {
-			t.Fatalf("save %d: %s", r.Code, r.Body.String())
+	token := loginUser(t, m, "alice@test.invalid", "alice password")
+	for _, route := range []struct{ method, path string }{{"GET", "/api/v1/encrypted-vaults"}, {"GET", "/api/v1/encrypted-vaults/b4r8n2qy"}, {"PUT", "/api/v1/encrypted-vaults/b4r8n2qy"}} {
+		if r := requestJSON(t, m, route.method, route.path, token, nil); r.Code != 404 {
+			t.Errorf("%s %s: %d", route.method, route.path, r.Code)
 		}
-	}
-	put(a, 200)
-	put(a, 200)
-	q.Ciphertext[0]++
-	put(a, 409)
-	q.Base = 1
-	q.IV[0]++
-	put(b, 409)
-	put(a, 200)
-	for _, p := range []string{path, "/api/v1/vaults/" + id + "/files"} {
-		if r := requestJSON(t, m, "GET", p, b, nil); r.Code != 404 {
-			t.Fatalf("%s %d", p, r.Code)
-		}
-	}
-	r := requestJSON(t, m, "GET", "/api/v1/encrypted-vaults", b, nil)
-	if strings.TrimSpace(r.Body.String()) != "[]" {
-		t.Fatal(r.Body.String())
-	}
-	r = requestJSON(t, m, "GET", "/api/v1/audit", b, nil)
-	var events []store.AuditEvent
-	if json.Unmarshal(r.Body.Bytes(), &events) != nil || len(events) == 0 || strings.Contains(r.Body.String(), id) {
-		t.Fatal("audit isolation", r.Body.String())
-	}
-	r = requestJSON(t, m, "GET", path, a, nil)
-	var saved store.EncryptedVault
-	decodeResponse(t, r, &saved)
-	if saved.Revision != 2 || !bytes.Equal(saved.Ciphertext, q.Ciphertext) {
-		t.Fatal(saved.Revision)
 	}
 }

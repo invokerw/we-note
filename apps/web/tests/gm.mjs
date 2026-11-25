@@ -301,7 +301,6 @@ try {
   );
   await user.goto(origin + "/");
   await user.getByLabel("笔记库", { exact: true }).selectOption(vault.id);
-  await user.getByLabel("笔记库菜单").click();
   await button(user, "回收站").click();
   for (const name of ["sample.txt", "pending.pdf"]) {
     const item = user.locator(".row").filter({ hasText: name });
@@ -319,7 +318,6 @@ try {
       base_version_id: created.version_id,
     });
   }
-  await user.getByLabel("笔记库菜单").click();
   await button(user, "回收站").click();
   const discard = user.locator(".row").filter({ hasText: "discard-a.md" });
   user.once("dialog", (d) => d.dismiss());

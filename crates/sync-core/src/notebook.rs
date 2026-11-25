@@ -12,6 +12,13 @@ use unicode_normalization::UnicodeNormalization;
 
 pub(crate) const DRAFT_PREFIX: &str = "https://wenote-draft.invalid/assets/";
 
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct TrashedFile {
+    pub external: bool,
+    pub batch: uuid::Uuid,
+    pub path: String,
+}
+
 /// Local editor operations are restricted to a folder previously bound by the sync engine.
 pub struct Notebook {
     state_dir: PathBuf,
@@ -81,6 +88,90 @@ impl Notebook {
     }
     pub fn library(&self) -> Result<BTreeMap<String, String>> {
         disk::scan(&self.root)
+    }
+
+    fn trash_root(&self, external: bool) -> Result<Option<PathBuf>> {
+        let mut dir = if external {
+            self.root.clone()
+        } else {
+            self.state_dir.clone()
+        };
+        let parts: &[&str] = if external {
+            &[".wenote", "trash"]
+        } else {
+            &["trash"]
+        };
+        for part in parts {
+            dir.push(part);
+            match fs::symlink_metadata(&dir) {
+                Ok(meta) if meta.is_dir() => (),
+                Ok(_) => bail!("无效的本地回收站"),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(Some(dir))
+    }
+    pub fn trash_files(&self) -> Result<Vec<TrashedFile>> {
+        let mut files = Vec::new();
+        for external in [false, true] {
+            let Some(root) = self.trash_root(external)? else {
+                continue;
+            };
+            for entry in fs::read_dir(root)? {
+                let entry = entry?;
+                let Ok(batch) = uuid::Uuid::parse_str(&entry.file_name().to_string_lossy()) else {
+                    continue;
+                };
+                if !entry.file_type()?.is_dir() {
+                    continue;
+                }
+                let dir = entry.path();
+                for file in walkdir::WalkDir::new(&dir) {
+                    let file = file?;
+                    if !file.file_type().is_file() {
+                        continue;
+                    }
+                    let path = file
+                        .path()
+                        .strip_prefix(&dir)?
+                        .to_string_lossy()
+                        .replace(std::path::MAIN_SEPARATOR, "/");
+                    if self.path(&path).is_ok() {
+                        files.push(TrashedFile {
+                            external,
+                            batch,
+                            path,
+                        });
+                    }
+                }
+            }
+        }
+        files.sort_by(|a, b| a.path.cmp(&b.path).then(a.batch.cmp(&b.batch)));
+        Ok(files)
+    }
+    pub fn restore_file(&self, item: &TrashedFile) -> Result<()> {
+        let lock = fs::OpenOptions::new()
+            .write(true)
+            .open(self.state_dir.join("lock"))?;
+        lock.try_lock_exclusive().context("正在同步，请稍后重试")?;
+        let root = self
+            .trash_root(item.external)?
+            .context("回收站项目不存在")?;
+        let source = disk::local_path(&root, &format!("{}/{}", item.batch, item.path))?;
+        let dest = self.path(&item.path)?;
+        if dest.try_exists()? {
+            bail!("原位置已有同名文件，请先移动或重命名它")
+        }
+        let parent = dest.parent().context("无效的恢复路径")?;
+        fs::create_dir_all(parent)?;
+        let mut input = fs::File::open(&source)?;
+        let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+        std::io::copy(&mut input, &mut tmp)?;
+        tmp.as_file().sync_all()?;
+        tmp.persist_noclobber(dest)?;
+        fs::remove_file(source)?;
+        Ok(())
     }
 
     pub fn change_entry(
@@ -577,6 +668,16 @@ mod entry_tests {
             .unwrap()?
             .path();
         assert_eq!(fs::read(trash.join("new.md"))?, b"changed");
+        let items = book.trash_files()?;
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        book.save("new.md", None, "replacement")?;
+        assert!(book.restore_file(item).is_err());
+        assert_eq!(fs::read(trash.join("new.md"))?, b"changed");
+        fs::remove_file(book.root.join("new.md"))?;
+        book.restore_file(item)?;
+        assert_eq!(fs::read(book.root.join("new.md"))?, b"changed");
+        assert!(book.trash_files()?.is_empty());
         Ok(())
     }
 }

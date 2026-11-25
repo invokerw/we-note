@@ -144,7 +144,6 @@ try {
   b.once("dialog", (d) => d.accept());
   await button(b, "更多操作").click();
   await button(b, "移入回收站").click();
-  await b.getByLabel("笔记库菜单").click();
   await button(b, "回收站").click();
   b.once("dialog", (d) => d.accept("恢复.md"));
   await button(b, "恢复").click();

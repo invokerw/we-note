@@ -114,21 +114,6 @@ try {
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await button("登录").click();
-  await button("打开加密笔记库").click();
-  await button("新建加密笔记库").click();
-  const recovery = await page
-    .getByLabel("恢复密钥", { exact: true })
-    .inputValue();
-  await page.getByLabel("我已保存恢复密钥").check();
-  await page.getByLabel("库名称").fill("Android 私有库");
-  await button("加密并保存").click();
-  await page.getByText("加密库已保存").waitFor();
-  await button("锁定笔记库").click();
-  await page.getByLabel("选择加密库").selectOption({ index: 1 });
-  await page.getByLabel("恢复密钥", { exact: true }).fill(recovery);
-  await button("解锁笔记库").click();
-  assert.equal(await page.getByLabel("库名称").inputValue(), "Android 私有库");
-  adb("shell", "input", "keyevent", "KEYCODE_BACK");
   await button("立即同步").click();
   await page
     .locator("#status")
@@ -163,7 +148,7 @@ try {
   const systemBack = () => adb("shell", "input", "keyevent", "KEYCODE_BACK");
   const dialog = page.getByRole("dialog");
   const item = (name) => page.getByRole("menuitem", { name, exact: true });
-  await button("笔记库工具").waitFor();
+  await button("打开笔记库目录").waitFor();
   const target = await button("原稿.md 的操作").boundingBox();
   assert(target.width >= 48 && target.height >= 48);
   const scroll = page.locator(".list-scroll");
@@ -288,18 +273,9 @@ try {
       await tap(button("返回笔记列表"));
     await button(p).click();
   };
-  const openTools = async () => {
-    if (await button("返回笔记库工具").isVisible())
-      await tap(button("返回笔记库工具"));
-    else {
-      if (await button("返回笔记列表").isVisible())
-        await tap(button("返回笔记列表"));
-      await tap(button("笔记库工具"));
-    }
-  };
   async function openSettings(section) {
-    await openTools();
-    await tap(button("返回笔记列表"));
+    if (await button("关闭个人设置").isVisible()) await button("关闭个人设置").click();
+    if (await button("返回笔记列表").isVisible()) await tap(button("返回笔记列表"));
     await button("打开个人设置").click();
     await button(section).click();
   }
@@ -470,9 +446,8 @@ try {
   );
   await tap(button("完成"));
   await page.getByText("已保存到本地目录").waitFor();
-  await openTools();
-  await button("导出").click();
-  await page.getByLabel("附件链接").selectOption("portable");
+  await openSettings("导出");
+  await page.getByLabel("图片链接").selectOption("portable");
   await button("创建导出").click();
   const portableRow = page.locator(".row").filter({ hasText: "离线便携" });
   await portableRow.getByRole("button", { name: "下载 ZIP" }).click();
