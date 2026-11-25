@@ -10,19 +10,19 @@ import { createPortal } from "react-dom";
 
 const handsetQuery =
   "(max-width: 720px), (max-width: 960px) and (max-height: 540px)";
-export function useAndroidPhone(android: boolean) {
+export function useNativePhone(mobile: boolean) {
   const [compact, setCompact] = useState(
     () => matchMedia(handsetQuery).matches,
   );
   useEffect(() => {
-    if (!android) return;
+    if (!mobile) return;
     const m = matchMedia(handsetQuery);
     const update = () => setCompact(m.matches);
     update();
     m.addEventListener("change", update);
     return () => m.removeEventListener("change", update);
-  }, [android]);
-  return android && compact;
+  }, [mobile]);
+  return mobile && compact;
 }
 export function useAndroidBack(enabled: boolean, back: () => void) {
   const latest = useRef(back);

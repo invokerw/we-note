@@ -1,0 +1,51 @@
+name: iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/feature-ios-*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+jobs:
+  iphone:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install build dependencies
+        run: |
+          rustup target add aarch64-apple-ios
+          npm ci --prefix ../web
+          npm ci
+      - name: Build unsigned iPhone IPA
+        run: npm run ios -- --build-number "$GITHUB_RUN_NUMBER"
+      - name: Verify iPhone bundle
+        shell: bash
+        run: |
+          shopt -s nullglob
+          packages=(src-tauri/gen/apple/build/arm64/*.ipa)
+          [[ ${#packages[@]} == 1 ]]
+          dest="$RUNNER_TEMP/iphone-package"
+          unzip -q "${packages[0]}" -d "$dest"
+          apps=("$dest"/Payload/*.app)
+          [[ ${#apps[@]} == 1 ]]
+          plist="${apps[0]}/Info.plist"
+          [[ $(plutil -extract CFBundleIdentifier raw "$plist") == com.wenote.ios ]]
+          [[ $(plutil -extract CFBundleSupportedPlatforms.0 raw "$plist") == iPhoneOS ]]
+          binary=$(plutil -extract CFBundleExecutable raw "$plist")
+          lipo -verify_arch arm64 "${apps[0]}/$binary"
+          cp "${packages[0]}" "$RUNNER_TEMP/WeNote-iphone-unsigned.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WeNote-iphone-unsigned
+          path: ${{ runner.temp }}/WeNote-iphone-unsigned.ipa
+          if-no-files-found: error

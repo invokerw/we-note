@@ -1,6 +1,9 @@
 {
   "name": "wenote-client",
   "private": true,
-  "scripts": { "android": "tauri android build --apk --target aarch64" },
+  "scripts": {
+    "android": "tauri android build --apk --target aarch64",
+    "ios": "tauri ios build --ci --target aarch64 --no-sign"
+  },
   "devDependencies": { "@tauri-apps/cli": "2.12.6" }
 }

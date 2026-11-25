@@ -1,0 +1,410 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		036B80B5CCB76F90C70420AA /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6914A921FC3E1D3060D0903F /* libapp.a */; };
+		124C2262EED03C7FA14691D0 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 546A3E9E8A628E326C599775 /* Security.framework */; };
+		1D8943452CA85C74FD6C99BF /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F77454187BACABC78CF0DF3 /* CoreGraphics.framework */; };
+		32F9A923E96DFE1CD3A7EF3B /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8D2CEDFC85DD4C34A170413A /* UIKit.framework */; };
+		46455DC555C997602164AE0D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DC6753CFA67769718880B443 /* Assets.xcassets */; };
+		4A12F35EA95708D6843A9147 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6E21152A22CFA0423965A77B /* WebKit.framework */; };
+		53980080E084261476BCB56D /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EB524DF25FA6705F0C056536 /* Metal.framework */; };
+		5B8C39CE13F55933104EAC85 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8DCB0795BBD70A25E486A4F9 /* MetalKit.framework */; };
+		5BD9A11C0C441C4E64EC0E01 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4A37BB27150B7BD3209F3378 /* LaunchScreen.storyboard */; };
+		ECC202F501872E2E4D5CE01A /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0B849FC2A4CE04A36EEAC48 /* QuartzCore.framework */; };
+		FC2C24A68538BF73C9C82241 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = D5478EDF3F4DB1EBF4F5F209 /* main.mm */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1F77454187BACABC78CF0DF3 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		4A37BB27150B7BD3209F3378 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		546A3E9E8A628E326C599775 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		6914A921FC3E1D3060D0903F /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		6E21152A22CFA0423965A77B /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		8D2CEDFC85DD4C34A170413A /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		8DCB0795BBD70A25E486A4F9 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		A0B849FC2A4CE04A36EEAC48 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		D5478EDF3F4DB1EBF4F5F209 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		DC6753CFA67769718880B443 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E6D658E8639E4D07E0978206 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		EB524DF25FA6705F0C056536 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		FF8DBD6D6ACEE19F0F95981D /* wenote-desktop_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "wenote-desktop_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		04525AEC78099FCA1B140BE5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				036B80B5CCB76F90C70420AA /* libapp.a in Frameworks */,
+				1D8943452CA85C74FD6C99BF /* CoreGraphics.framework in Frameworks */,
+				53980080E084261476BCB56D /* Metal.framework in Frameworks */,
+				5B8C39CE13F55933104EAC85 /* MetalKit.framework in Frameworks */,
+				ECC202F501872E2E4D5CE01A /* QuartzCore.framework in Frameworks */,
+				124C2262EED03C7FA14691D0 /* Security.framework in Frameworks */,
+				32F9A923E96DFE1CD3A7EF3B /* UIKit.framework in Frameworks */,
+				4A12F35EA95708D6843A9147 /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		320B8D5AE679B62EFA3E9ED9 /* WeNote */ = {
+			isa = PBXGroup;
+			children = (
+				D5478EDF3F4DB1EBF4F5F209 /* main.mm */,
+				3BD417CE47C13C5C00BC8CCA /* bindings */,
+			);
+			path = WeNote;
+			sourceTree = "<group>";
+		};
+		33A4B2A34B64B24221C1134D = {
+			isa = PBXGroup;
+			children = (
+				DC6753CFA67769718880B443 /* Assets.xcassets */,
+				4A37BB27150B7BD3209F3378 /* LaunchScreen.storyboard */,
+				BA5EA4B68213F3A39223C845 /* Sources */,
+				F884B57261941FE0A83B9D81 /* Frameworks */,
+				70BCDBD78FFC5B39A68D1097 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		3BD417CE47C13C5C00BC8CCA /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				E6D658E8639E4D07E0978206 /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		70BCDBD78FFC5B39A68D1097 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FF8DBD6D6ACEE19F0F95981D /* wenote-desktop_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BA5EA4B68213F3A39223C845 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				320B8D5AE679B62EFA3E9ED9 /* WeNote */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		F884B57261941FE0A83B9D81 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1F77454187BACABC78CF0DF3 /* CoreGraphics.framework */,
+				6914A921FC3E1D3060D0903F /* libapp.a */,
+				EB524DF25FA6705F0C056536 /* Metal.framework */,
+				8DCB0795BBD70A25E486A4F9 /* MetalKit.framework */,
+				A0B849FC2A4CE04A36EEAC48 /* QuartzCore.framework */,
+				546A3E9E8A628E326C599775 /* Security.framework */,
+				8D2CEDFC85DD4C34A170413A /* UIKit.framework */,
+				6E21152A22CFA0423965A77B /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		516764230231210C069F01C1 /* wenote-desktop_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2A78F7A54FD3DFD71A60FC1D /* Build configuration list for PBXNativeTarget "wenote-desktop_iOS" */;
+			buildPhases = (
+				A4FBCC77371E3ACACB0C0D4C /* Build Rust Code */,
+				FB938FC9F3E86D714E02E262 /* Sources */,
+				E77E22B4F091709469666554 /* Resources */,
+				04525AEC78099FCA1B140BE5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "wenote-desktop_iOS";
+			packageProductDependencies = (
+			);
+			productName = "wenote-desktop_iOS";
+			productReference = FF8DBD6D6ACEE19F0F95981D /* wenote-desktop_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6CCEF987312C89CC0A6B0DF5 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 3F308D89246057E71A54771E /* Build configuration list for PBXProject "wenote-desktop" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 33A4B2A34B64B24221C1134D;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 70BCDBD78FFC5B39A68D1097 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				516764230231210C069F01C1 /* wenote-desktop_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E77E22B4F091709469666554 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				46455DC555C997602164AE0D /* Assets.xcassets in Resources */,
+				5BD9A11C0C441C4E64EC0E01 /* LaunchScreen.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A4FBCC77371E3ACACB0C0D4C /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/arm64/$(CONFIGURATION)/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\ncd \"$SRCROOT/../../..\"\n./node_modules/.bin/tauri ios xcode-script --platform \"$PLATFORM_DISPLAY_NAME\" --sdk-root \"$SDKROOT\" --framework-search-paths \"$FRAMEWORK_SEARCH_PATHS\" --header-search-paths \"${HEADER_SEARCH_PATHS:-}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration \"$CONFIGURATION\" $ARCHS\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FB938FC9F3E86D714E02E262 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC2C24A68538BF73C9C82241 /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		6192B9BBA2B414305FDF4FFA /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = debug;
+		};
+		6C78454E7258B935F16F3F54 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "wenote-desktop_iOS/wenote-desktop_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "wenote-desktop_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) \"$(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)\" $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.wenote.ios;
+				PRODUCT_NAME = WeNote;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = release;
+		};
+		BB53A26A51B0FDAF870DC40C /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "wenote-desktop_iOS/wenote-desktop_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "wenote-desktop_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) \"$(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)\" $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.wenote.ios;
+				PRODUCT_NAME = WeNote;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = debug;
+		};
+		DC095608EEB692E2220DFF9E /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2A78F7A54FD3DFD71A60FC1D /* Build configuration list for PBXNativeTarget "wenote-desktop_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB53A26A51B0FDAF870DC40C /* debug */,
+				6C78454E7258B935F16F3F54 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		3F308D89246057E71A54771E /* Build configuration list for PBXProject "wenote-desktop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6192B9BBA2B414305FDF4FFA /* debug */,
+				DC095608EEB692E2220DFF9E /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 6CCEF987312C89CC0A6B0DF5 /* Project object */;
+}

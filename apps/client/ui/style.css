@@ -14,7 +14,7 @@
   padding-left: 1.3rem;
   overflow-wrap: anywhere;
 }
-#settings :is(.checkbox, #background-label) {
+#settings :is(.checkbox, #background-label):not([hidden]) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -28,14 +28,14 @@
   color: #8a4a22;
 }
 
-.android-client
+.mobile-client
   .sync-entry
   :is(button, select, summary, input:not([type="checkbox"])),
-.android-client .sync-entry :is(.checkbox, #background-label),
-.android-client .local-workspace button {
+.mobile-client .sync-entry :is(.checkbox, #background-label),
+.mobile-client .local-workspace button {
   min-height: 48px;
 }
-.android-client #open-editor {
+.mobile-client #open-editor {
   width: 100%;
   background: #426bd0;
   color: white;

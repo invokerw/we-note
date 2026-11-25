@@ -76,6 +76,25 @@ JSON 编辑器支持格式化、压缩、语法校验和 JSON Pointer 节点替�
 
 同一设备上的绑定信息、待确认操作和删除前的副本保存在应用数据目录的相应 Vault 子目录中。两端离线修改了不同文本行时，客户端尝试三方合并。遇到重叠修改时，原路径接收远端版本，本地编辑保存为同目录带 `conflict` 的文件。下次扫描也会同步该副本。
 
+## 用 GitHub Actions 构建并安装到个人 iPhone
+
+「Actions → iOS IPA」在 `codex/feature-ios-*` 任务分支推送和版本标签推送时自动运行。工作流进入默认分支后，也可以点「Run workflow」选择要构建的分支。在成功的运行页面底部下载 `WeNote-iphone-unsigned`，解压 ZIP 得到 `WeNote-iphone-unsigned.ipa`。工作流使用 macOS runner 编译 ARM64 真机包，检查包内的应用标识、平台和可执行文件。GitHub 无需配置 Apple 账号或证书。
+
+个人试装可以使用 AltStore Classic。在自己的 Mac 或 Windows 电脑上按 AltStore Classic 安装指南设置 AltServer，将 AltStore 安装到已配对的 iPhone，按系统提示信任个人开发者并开启开发者模式。把解压出的 IPA 保存到 iPhone「文件」，在「AltStore → My Apps → ＋」选择它，使用自己的 Apple 账号签名并安装。免费账号签名有效期为 7 天，电脑运行 AltServer 且与手机连通时可在 My Apps 刷新。安装与刷新方法见 [AltStore Classic 官方指南](https://faq.altstore.io/altstore-classic/your-altstore)。
+
+也可从源码通过 Xcode 真机运行。在装好完整 Xcode 和 Rust 的 Mac 上，从仓库根目录执行以下命令，保持最后一个命令运行，在 Xcode 中选择 `wenote-desktop_iOS` 的 Signing & Capabilities、自己的 Personal Team 和已配对的 iPhone，再点 Run。个人账号需要唯一的 Bundle Identifier。
+
+```sh
+rustup target add aarch64-apple-ios
+npm ci --prefix apps/web
+npm ci --prefix apps/client
+npm run build:desktop --prefix apps/web
+cd apps/client
+npm exec -- tauri ios dev --open
+```
+
+打开 WeNote，填写 iPhone 能访问的 HTTPS 服务地址并登录，选择笔记库后点「立即同步」。打开笔记，断网编辑并保存，再次联网同步后，在网页端核对正文。已同步的笔记保存在应用私有目录。
+
 ## 启动 Android 客户端
 
 准备 JDK、Android SDK Platform 36 和 37.0、Build Tools 37 和 NDK，设置 `JAVA_HOME`、`ANDROID_HOME` 与 `NDK_HOME`。在仓库根目录执行以下命令，构建可安装在 ARM64 手机上的调试版。

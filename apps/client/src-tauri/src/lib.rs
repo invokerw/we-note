@@ -38,10 +38,10 @@ async fn sync(
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join(&vault);
-    #[cfg(target_os = "android")]
+    #[cfg(mobile)]
     let root = {
         if !root.as_os_str().is_empty() {
-            return Err("Android 使用应用私有笔记目录".into());
+            return Err("手机端使用应用私有笔记目录".into());
         }
         let root = app
             .path()
@@ -308,8 +308,8 @@ fn print_note(webview: tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 #[tauri::command]
-fn is_android() -> bool {
-    cfg!(target_os = "android")
+fn client_platform() -> &'static str {
+    std::env::consts::OS
 }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -324,7 +324,7 @@ pub fn run() {
             sync,
             notebook,
             devices,
-            is_android,
+            client_platform,
             print_note,
             recent_notebook,
             mobile::mobile_control

@@ -1,6 +1,6 @@
 const byId = (id) => document.getElementById(id);
 const invoke = window.__TAURI__.core.invoke;
-let android = false,
+let platform,
   background = false;
 const mobile = (action, payload = {}) =>
   invoke("mobile_control", { action, payload });
@@ -37,20 +37,21 @@ function backgroundMode(on) {
   byId("vault").disabled = on;
 }
 async function initialize() {
-  android = await invoke("is_android");
+  platform = await invoke("client_platform");
   const recent = await invoke("recent_notebook");
   if (recent) {
     localStorage.setItem("last-notebook", recent.vault);
     byId("open-editor").hidden = false;
     if (!localStorage.getItem("origin")) byId("origin").value = recent.origin;
   }
-  if (!android) return;
-  document.documentElement.classList.add("android-client");
+  if (platform !== "android" && platform !== "ios") return;
+  document.documentElement.classList.add("mobile-client");
   byId("heading").textContent = "笔记同步";
   byId("open-editor").textContent = "打开笔记";
   byId("heading").after(byId("open-editor"));
   byId("folder-label").hidden = true;
   byId("root").required = false;
+  if (platform !== "android") return;
   byId("background-label").hidden = false;
   const session = await mobile("restore");
   if (session?.vault) {
@@ -120,7 +121,7 @@ async function sync() {
     return;
   busy = true;
   const vault = byId("vault").value,
-    root = byId("root").value;
+    root = byId("root").required ? byId("root").value : "";
   byId("vault").disabled = true;
   status("正在同步…");
   try {
@@ -214,7 +215,8 @@ async function access() {
   }
   return renewal;
 }
-byId("open-editor").onclick = () => {
+byId("open-editor").onclick = async () => {
+  await initialized;
   const vault = token
     ? byId("vault").value
     : localStorage.getItem("last-notebook");
@@ -222,7 +224,7 @@ byId("open-editor").onclick = () => {
     new CustomEvent("open-notebook", {
       detail: {
         vault,
-        android,
+        platform,
         access: async () => {
           if (vault !== byId("vault").value)
             throw Error("请登录这个笔记库以访问在线资源");

@@ -1,0 +1,6 @@
+{
+  "identifier": "com.wenote.ios",
+  "bundle": {
+    "iOS": { "minimumSystemVersion": "16.0" }
+  }
+}

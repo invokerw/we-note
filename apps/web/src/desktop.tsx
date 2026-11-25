@@ -29,7 +29,7 @@ import { TrashDocument, TrashList, type TrashEntry, type TrashAction } from "./T
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
 import { AppShell } from "@mantine/core";
 import { WorkspaceShell } from "./WorkspaceShell";
-import { PhoneIcon, useAndroidPhone, useAndroidBack } from "./PhoneUI";
+import { PhoneIcon, useNativePhone, useAndroidBack } from "./PhoneUI";
 import {
   loadLocalPreferences,
   loadNoteMode,
@@ -47,7 +47,7 @@ import "./workspace.css";
 type TrashedFile = { external: boolean; batch: string; path: string };
 
 type Binding = {
-  android?: boolean;
+  platform?: string;
   vault: string;
   access: () => Promise<string>;
 };
@@ -138,7 +138,8 @@ function Workspace({
     [revisions],
   );
   const panes = usePanes();
-  const phone = useAndroidPhone(!!binding.android);
+  const android = binding.platform === "android";
+  const phone = useNativePhone(android || binding.platform === "ios");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const profileRequest = useCallback<ProfileRequest>(async (action, body) => local(binding.vault, "profile", {token: await binding.access(), operation: action, body}), [binding]);
   const profile = useAccountProfile(profileRequest);
@@ -229,7 +230,7 @@ function Workspace({
     }
     if (leave()) close();
   }
-  useAndroidBack(phone, back);
+  useAndroidBack(android && phone, back);
   const client = useMemo<ResourceClient>(
     () => ({
       json: async (route) =>
@@ -319,7 +320,7 @@ function Workspace({
     notify("");
   }
   const output: ExportFile = async (name, bytes) => {
-    if (binding.android) {
+    if (android) {
       await window.__TAURI__.core.invoke("mobile_control", {
         action: "exportDocument",
         payload: { name, data: base64(bytes) },
@@ -375,7 +376,7 @@ function Workspace({
       if (!dirty) await open(p, true, phone);
     },
     print: async (name) => {
-      if (binding.android)
+      if (android)
         await window.__TAURI__.core.invoke("mobile_control", {
           action: "printNote",
           payload: { name },
@@ -786,7 +787,7 @@ function Workspace({
                   markdown={/\.md$/i.test(path)}
                   busy={busy}
                   share={
-                    binding.android && !pluginBytes
+                    android && !pluginBytes
                       ? {
                           label: "系统分享",
                           run: () =>
