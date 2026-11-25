@@ -83,3 +83,11 @@
 - 新版在 1440px、1920px 和 390px 窗口将标题和正文放在编辑区左侧 40px 处。段落添加和拖动按钮在边距内纵向排列。自审复查了缩放窗口后的按钮命中范围与横向溢出。
 - `node apps/web/tests/native-editors.mjs` 和 `node --test apps/web/tests/*test.mjs` 退出 0，浏览器覆盖编辑、保存和三种宽度。实际效果图为 `dist/acceptance/crepe-left-aligned.png`。
 - `npm run build --prefix apps/web`、`npm run android --prefix apps/client -- --debug` 和 `cargo build --locked -p wenote-desktop --release` 退出 0。本工作区的 macOS 程序和 APK 已更新，本轮交互验收使用 Chrome。18274 验收服务实际返回的 Crepe 样式与本次构建一致。
+
+## 11 月 25 日验收反馈 · 可视化编辑自适应左边距
+
+沿用方式 2。在可视化编辑中，标题和正文的左边距按编辑区宽度的 7% 计算，下限 40px，上限 96px。验收覆盖手机、常规桌面和宽屏窗口，并检查段落按钮的可点击范围。
+
+- 红阶段在 925px 宽的编辑区测得原边距为 40px，期望 64.75px。调整后 `node apps/web/tests/native-editors.mjs` 通过，覆盖 390px、1440px 和 1920px 窗口及缩放后段落按钮的位置。宽屏截图为 `dist/acceptance/crepe-fluid-inset.png`。
+- `node --test apps/web/tests/*test.mjs` 的 8 项测试通过。自审复核了正文最大宽度、标题对齐、按钮空间和移动端横向溢出。
+- Web、macOS 和 Android 构建通过，验收客户端已更新，18274 服务返回的样式与此次构建一致。本轮交互检查使用 Chrome。

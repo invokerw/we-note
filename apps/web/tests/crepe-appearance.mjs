@@ -21,8 +21,11 @@ export async function verifyAppearance(page) {
     "Crepe must respect the large text preference",
   );
   await document.evaluate((el) => (el.dataset.markdownFontSize = "medium"));
-  async function textInset() {
-    return (await paragraph.boundingBox()).x - (await document.boundingBox()).x;
+  async function checkTextInset() {
+    const bounds = await document.boundingBox();
+    const actual = (await paragraph.boundingBox()).x - bounds.x;
+    const expected = Math.min(96, Math.max(40, bounds.width * 0.07));
+    assert.ok(Math.abs(actual - expected) < 1, `editor width ${bounds.width}px: expected inset ${expected}px, got ${actual}px`);
   }
   async function checkBlockControls() {
     await paragraph.hover();
@@ -37,10 +40,10 @@ export async function verifyAppearance(page) {
     }
   }
   await page.setViewportSize({ width: 1440, height: 940 });
-  const inset = await textInset();
-  assert.ok(inset >= 24 && inset <= 48, `desktop left inset: ${inset}`);
+  await checkTextInset();
+  await checkBlockControls();
   await page.setViewportSize({ width: 1920, height: 940 });
-  assert.equal(await textInset(), inset, "left inset changes when window widens");
+  await checkTextInset();
   assert.equal((await editor.locator("h1").boundingBox()).x, (await paragraph.boundingBox()).x);
   await checkBlockControls();
   const desktopWidth = (await paragraph.boundingBox()).width;
@@ -62,8 +65,7 @@ export async function verifyAppearance(page) {
     await document.screenshot({ path: process.env.WENOTE_CREPE_PREVIEW });
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  const phoneInset = await textInset();
-  assert.ok(phoneInset >= 16 && phoneInset <= 40, `phone left inset: ${phoneInset}`);
+  await checkTextInset();
   await checkBlockControls();
   const narrowWidth = (await document.boundingBox()).width;
   assert.ok(

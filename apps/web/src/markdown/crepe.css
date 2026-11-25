@@ -1,4 +1,7 @@
 .mode-crepe .milkdown {
+  /* Move the editor and its block controls together as the writing area widens. */
+  --crepe-control-gutter: 40px;
+  margin-inline-start: calc(clamp(var(--crepe-control-gutter), 7%, 96px) - var(--crepe-control-gutter));
   --crepe-font-default: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   --crepe-font-title: var(--crepe-font-default);
   --crepe-base-font-size: 1rem;
@@ -29,7 +32,7 @@
   min-height: 48dvh;
   margin-inline: 0;
   padding-block: clamp(1.5rem, 4vw, 3rem) 4rem;
-  padding-inline: 40px 24px;
+  padding-inline: var(--crepe-control-gutter) 24px;
   caret-color: var(--md-cursor);
   overflow-wrap: anywhere;
 }
