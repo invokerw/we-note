@@ -94,8 +94,17 @@ try {
   await button(b.page, "打开分享").click();
   await b.page.getByText(body, { exact: true }).waitFor();
   assert.equal(new URL(b.page.url()).hash, "");
+  const otherVault = await (await api(b.token, "/api/v1/vaults", "POST", {name:"备用库"})).json();
+  await api(b.token, `/api/v1/vaults/${otherVault.id}/files`, "POST", {
+    path:"收集/.wenote-folder.json", content: bytes('{"wenote":"folder","version":1}'),
+  });
   await button(b.page, "保存到我的笔记").click();
-  await b.page.getByLabel("目标目录").fill("链接");
+  const destination = b.page.getByRole("dialog", {name:"保存到我的笔记"});
+  await button(destination, "备用库").click();
+  await button(destination, "收集").click();
+  await destination.getByText("备用库 / 收集", {exact:true}).waitFor();
+  await button(destination, "接收库").click();
+  await destination.getByText("接收库", {exact:true}).and(destination.locator("strong")).waitFor();
   await button(b.page, "确认保存").click();
   await b.page.getByText("已保存到我的笔记").waitFor();
   await b.page.reload();

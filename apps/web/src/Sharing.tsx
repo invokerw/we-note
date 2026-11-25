@@ -1,7 +1,8 @@
 import { download } from "./Resources";
+import { ShareSaveDialog } from "./ShareSaveDialog";
 import { MarkdownView } from "./markdown/Markdown";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { base64, request, type Vault } from "./api";
+import { base64, request } from "./api";
 
 type Asset = {
   canonical_url: string;
@@ -320,7 +321,6 @@ export function PublicShare({
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedURL, setSavedURL] = useState("");
-  const [vaults, setVaults] = useState<Vault[]>();
   const { message, setMessage, busy, run } = useAction();
   const path = "/s/" + entry.id + "/";
   const file =
@@ -392,45 +392,6 @@ export function PublicShare({
       live = false;
     };
   }, [version, canPreview, path]);
-  useEffect(() => {
-    if (!token || !saving || !snap?.allow_import) return;
-    let live = true;
-    request(token, "/api/v1/vaults")
-      .then((r) => r.json())
-      .then((data) => {
-        if (live) setVaults(data.vaults);
-      })
-      .catch((error) => {
-        if (live) setMessage(String(error));
-      });
-    return () => {
-      live = false;
-    };
-  }, [token, saving, snap?.allow_import]);
-  async function save(fields: FormData) {
-    let vault = String(fields.get("vault") || "");
-    if (!vault) {
-      const created: Vault = await (
-        await request(token, "/api/v1/vaults", "POST", {
-          name: String(fields.get("name")).trim(),
-        })
-      ).json();
-      setVaults([created]);
-      vault = created.id;
-    }
-    const { files } = await (
-      await request(token, path + "import", "POST", {
-        vault_id: vault,
-        folder: fields.get("folder"),
-      })
-    ).json();
-    if (files[0])
-      setSavedURL(
-        "/?" + new URLSearchParams({ vault, note: files[0].file_id }),
-      );
-    setSaving(false);
-    setMessage("已保存到我的笔记");
-  }
   const attachments = useRef<HTMLDetailsElement>(null);
   const assetFor = (url: string) =>
     snap?.assets.find(
@@ -476,7 +437,7 @@ export function PublicShare({
             </label>
           )}
           <div className="share-actions">
-            {snap.allow_import && !saving && !savedURL && (
+            {snap.allow_import && !savedURL && (
               <button className="primary" onClick={() => setSaving(true)}>
                 保存到我的笔记
               </button>
@@ -504,42 +465,34 @@ export function PublicShare({
               </form>
             )}
           </div>
-          {saving &&
-            snap.allow_import &&
-            (!token
-              ? login
-              : vaults && (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const fields = new FormData(e.currentTarget);
-                      void run(() => save(fields));
-                    }}
-                  >
-                    {vaults.length ? (
-                      <label>
-                        目标笔记库
-                        <select name="vault" required>
-                          {vaults.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : (
-                      <label>
-                        新建笔记库
-                        <input name="name" required defaultValue="我的笔记" />
-                      </label>
-                    )}
-                    <label>
-                      目标目录
-                      <input name="folder" placeholder="笔记库根目录" />
-                    </label>
-                    <button disabled={busy}>确认保存</button>
-                  </form>
-                ))}
+          {saving && snap.allow_import && (
+            <ShareSaveDialog
+              token={token}
+              login={login}
+              importPath={path + "import"}
+              close={() => setSaving(false)}
+              saved={(vault, files, folder) => {
+                if (files[0])
+                  setSavedURL(
+                    "/?" +
+                      new URLSearchParams({ vault, note: files[0].file_id }),
+                  );
+                setSaving(false);
+                const previous =
+                  snap.files.length === 1 &&
+                  files[0] &&
+                  files[0].path !==
+                    [folder, file?.path.split("/").at(-1)]
+                      .filter(Boolean)
+                      .join("/");
+                setMessage(
+                  previous
+                    ? `此笔记已保存过，首次保存位置为 ${files[0].path}`
+                    : "已保存到我的笔记",
+                );
+              }}
+            />
+          )}
           {file && !canPreview && <p>此格式暂不支持在线预览。</p>}
           {file &&
             preview?.version === file.version_id &&
@@ -604,7 +557,6 @@ export function PublicShare({
           <a href={savedURL}>打开已保存的笔记</a>
         </p>
       )}
-      <a href="/">我的笔记库</a>
     </main>
   );
 }

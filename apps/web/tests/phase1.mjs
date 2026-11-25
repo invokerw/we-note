@@ -74,6 +74,7 @@ try {
   const guest = await chrome.newPage({ viewport: { width: 390, height: 844 } });
   await guest.goto(link);
   await guest.getByRole("heading", { name: "浏览器快照" }).waitFor();
+  assert.equal(await guest.getByRole("link", { name: "我的笔记库", exact: true }).count(), 0);
   await guest.waitForFunction(
     () => document.querySelector(".reading img")?.naturalWidth === 1,
   );
@@ -85,14 +86,41 @@ try {
     await readFile(await original.path()),
     await readFile(await file.path()),
   );
+  // Seed an existing nested directory in the recipient's vault.
+  await b.evaluate(async () => {
+    const headers = {
+      Authorization: "Bearer " + sessionStorage.getItem("wenote-session"),
+      "Content-Type": "application/json",
+    };
+    const { vaults } = await (
+      await fetch("/api/v1/vaults", { headers })
+    ).json();
+    const res = await fetch(`/api/v1/vaults/${vaults[0].id}/files`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ path: "工作/资料/目录示例.md", content: "" }),
+    });
+    if (!res.ok) throw Error("seed recipient folders");
+  });
   await button(guest, "保存到我的笔记").click();
-  await guest.getByLabel("邮箱").fill(email);
-  await guest.getByLabel("密码", { exact: true }).fill("phase-one-browser");
-  await button(guest, "登录").click();
-  await guest.getByLabel("目标目录").fill("导入");
-  await button(guest, "确认保存").click();
+  const modal = guest.getByRole("dialog", { name: "保存到我的笔记" });
+  await modal.waitFor({ timeout: 3000 });
+  await modal.getByLabel("邮箱").fill(email);
+  await modal.getByLabel("密码", { exact: true }).fill("phase-one-browser");
+  await button(modal, "登录").click();
+  await button(modal, "资料").click();
+  await modal.getByText("Bob / 工作 / 资料", { exact: true }).waitFor();
+  await button(modal, "取消").click();
+  await modal.waitFor({ state: "hidden" });
+  await button(guest, "保存到我的笔记").click();
+  await button(modal, "资料").click();
+  await button(modal, "确认保存").click();
   await guest.getByRole("link", { name: "打开已保存的笔记" }).click();
   await guest.getByRole("heading", { name: "验收.md" }).waitFor();
+  await guest
+    .getByRole("heading", { name: "验收.md" })
+    .and(guest.locator('[title="工作/资料/验收.md"]'))
+    .waitFor();
   await button(a, "打开个人设置").click();
   await button(a, "我的分享").click();
   a.once("dialog", d => d.accept());

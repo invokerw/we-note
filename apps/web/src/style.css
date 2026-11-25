@@ -2566,3 +2566,27 @@ pre {
 .note-share-dialog::backdrop { background: rgb(0 0 0 / 30%); }
 .note-share-dialog input { width: 100%; margin-bottom: 1rem; }
 .note-share-dialog form, .share-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.share-save-dialog {
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: clamp(1rem, 4vw, 1.5rem);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper, Canvas);
+  color: var(--ink);
+}
+.share-save-dialog::backdrop { background: rgb(0 0 0 / 36%); }
+.share-save-dialog h2 { margin: 0 0 1rem; font-size: 1.25rem; }
+.share-save-dialog .share-auth .entry-form { padding: 0; }
+.share-save-dialog fieldset { margin: 0; border: 0; padding: 0; }
+.share-save-dialog legend { margin-bottom: .6rem; }
+.share-save-dialog .destination-tree { max-height: 40dvh; overflow: auto; border: 1px solid var(--line); border-radius: .5rem; padding: .35rem; }
+.share-save-dialog .folder-row { border-radius: .35rem; }
+.share-save-dialog .folder-row.current { background: var(--tint, #edf2ff); }
+.share-save-dialog .folder-row button { margin: 0; min-height: 2.25rem; background: transparent; color: inherit; border: 0; }
+.share-save-dialog .folder-name { flex: 1; min-width: 0; text-align: start; overflow-wrap: anywhere; }
+.share-save-dialog .selected-destination span { display: block; color: var(--muted); font-size: .85rem; }
+.share-save-dialog footer { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }

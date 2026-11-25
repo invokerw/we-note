@@ -1,6 +1,6 @@
 # FEAT-20261125-share-links · 笔记分享链接
 
-- 类型 `feature`，影响 server / web。当前状态 `DELIVERED`。
+- 类型 `feature`，影响 server / web。当前状态 `MERGED`。
 - 开发依据为 `main` 的 `02e790d` 所收录的[笔记分享链接需求](../笔记分享链接需求.md)。用户选择方式 2，先在任务分支验收，通过后合入。
 - 分支 `codex/feature-share-links-20261125`，独立工作区 `/Users/weifei/code/we-note/.worktrees/share-links-20261125`。
 - 从单篇笔记创建可复制的 URL，访客直接阅读正文和快照图片，下载原始文件，登录后选择自己的库和目录保存并打开副本。保留已有链接的密码、撤销与权限规则。
@@ -22,7 +22,27 @@
 
 ## 任务分支验收
 
-- 从任务工作区执行 `./scripts/local.py start --port 19475`。独立 Web 和 API 入口为 `http://localhost:19475`，服务 PID 为 `6823`。
+- 从任务工作区执行 `./scripts/local.py start --port 19475`。独立 Web 和 API 入口为 `http://localhost:19475`，第二轮服务 PID 为 `10390`。
 - 数据目录 `services/api/data`，服务日志 `dist/local/server.log`，构建日志 `dist/local/share-build.log`，演示链接保存在 `dist/local/demo-share.url`。所有路径均相对于本任务 worktree。
 - 打开演示链接即可阅读和下载。要验证保存，点击「保存到我的笔记」，使用独立实例中的普通账号登录，或直接注册。也可从笔记标题栏自行分享并在分享管理中撤销。
 - 方式 2 验收中，保留服务和分支。验收通过后从本工作区执行 `./scripts/local.py stop`。
+
+## 第二轮反馈 · 2026-11-25
+
+状态 `CHANGES_REQUESTED`。访客在弹窗登录，成功后在同一弹窗以树状选择目标库和目录。已登录直接选位置，可取消并回到当前正文。沿用方式 2。
+
+- 原任务分支同步 `main` 后进行返工。浏览器回归 `WENOTE_TEST_ORIGIN=http://localhost:19475 node apps/web/tests/phase1.mjs` 在基线退出 1，等待「保存到我的笔记」弹窗超时。
+- 登录成功后切换弹窗内容。复用工作区目录树，把每个库作为可选根节点，展开时读取其目录。单文件从新选择器保存时直接落入所选目录。旧调用和多文件分享保留已有路径规则。
+- 自审检查了取消、跨库切换、同库重复保存和首次创建笔记库的路径。沿用同一链接在同一笔记库只保存一次的规则，在选定位置与历史副本位置不同时提示首次保存路径。
+- 最终 Web 构建 `npm run build --prefix apps/web`、服务端 `go test -count=1 ./...` 和 `go vet ./...`、`git diff --check` 均退出 0。原验收实例上的 `phase1.mjs` 和 `phase5.mjs` 均退出 0，覆盖手机宽度登录、取消重开、选择两级子目录、跨库切换与库根保存，并核对了保存后打开的实际路径。
+- 本轮状态 `DELIVERED`。使用同一端口、演示链接、数据和日志，继续按方式 2 在原任务分支验收。
+
+## 第三轮反馈 · 2026-11-25
+
+`CHANGES_REQUESTED`。移除分享阅读页底部的「我的笔记库」入口，沿用原任务工作区和验收方式。
+
+`WENOTE_TEST_ORIGIN=http://localhost:19475 node apps/web/tests/phase1.mjs` 首次退出 1，页面上找到一个「我的笔记库」链接。移除该链接后，`npm run build --prefix apps/web` 和相同的浏览器回归命令均退出 0，覆盖访客阅读、下载、登录保存及打开副本。复查完整差异并通过 `git diff --check`，本轮 `DELIVERED`。
+
+## 验收与合入 · 2026-11-25 16:02（上海时间）
+
+用户确认 `c871439` 验收通过，任务状态从 `ACCEPTED` 转为 `MERGED`。本地 `main` 从 `b4d5cc5` 快进至 `c871439`，`git merge-base --is-ancestor c871439 main` 验证通过。已停止 19475 端口的任务服务，移除分享任务工作区并删除对应本地分支。
