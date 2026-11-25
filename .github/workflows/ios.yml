@@ -42,7 +42,7 @@ jobs:
           [[ $(plutil -extract CFBundleIdentifier raw "$plist") == com.wenote.ios ]]
           [[ $(plutil -extract CFBundleSupportedPlatforms.0 raw "$plist") == iPhoneOS ]]
           binary=$(plutil -extract CFBundleExecutable raw "$plist")
-          lipo -verify_arch arm64 "${apps[0]}/$binary"
+          lipo "${apps[0]}/$binary" -verify_arch arm64
           cp "${packages[0]}" "$RUNNER_TEMP/WeNote-iphone-unsigned.ipa"
       - uses: actions/upload-artifact@v4
         with:

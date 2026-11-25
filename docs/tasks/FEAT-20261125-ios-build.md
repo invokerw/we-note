@@ -23,4 +23,4 @@
 
 自审时核对了锁定版本的 Tauri CLI，ARM64 导出目录为 `gen/apple/build/arm64`。工程脚本使用仓库锁定的 CLI 并从客户端目录调用，移除了开发机路径。手机工作区复用紧凑布局，Android 专用后台任务和返回事件仍按平台启用。
 
-待验证的 Actions 工作流为 `.github/workflows/ios.yml`，安装方式见 README 的「用 GitHub Actions 构建并安装到个人 iPhone」。首次推送任务分支会同时上传本地 main 相对远端的 69 个基线提交，已询问用户。当前没有远端运行编号或 IPA。拿到 IPA 后使用个人签名真机验收登录、同步及断网重启编辑。
+用户已允许推送任务分支。首次远端运行 `45618440672` 已生成 `WeNote.ipa` 并通过包标识和 iPhoneOS 检查，`lipo` 参数顺序导致架构检查退出 1。已按该工具的命令格式调整，用本机 ARM64 二进制验证后重新构建。安装步骤见 README 的「用 GitHub Actions 构建并安装到个人 iPhone」。
