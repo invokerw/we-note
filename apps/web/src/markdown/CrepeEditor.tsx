@@ -84,6 +84,7 @@ export default function CrepeEditor(props: Props) {
       root: mount,
       defaultValue: hasHeader ? initial.slice(ranges[0][0]) : initial,
       featureConfigs: {
+        [Crepe.Feature.BlockEdit]: { blockHandle: { getOffset: () => 4 } },
         [Crepe.Feature.ImageBlock]: {
           onUpload: (file) => {
             if (!latest.current.upload) throw Error("当前无法上传图片");

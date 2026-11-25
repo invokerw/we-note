@@ -21,7 +21,28 @@ export async function verifyAppearance(page) {
     "Crepe must respect the large text preference",
   );
   await document.evaluate((el) => (el.dataset.markdownFontSize = "medium"));
-  await page.setViewportSize({ width: 1680, height: 940 });
+  async function textInset() {
+    return (await paragraph.boundingBox()).x - (await document.boundingBox()).x;
+  }
+  async function checkBlockControls() {
+    await paragraph.hover();
+    const controls = document.locator('.milkdown-block-handle[data-show="true"] .operation-item');
+    await controls.first().click({ trial: true });
+    assert.equal(await controls.count(), 2);
+    const left = (await document.boundingBox()).x;
+    const textLeft = (await paragraph.boundingBox()).x;
+    for (const item of await controls.all()) {
+      const box = await item.boundingBox();
+      assert.ok(box && box.x >= left && box.x + box.width <= textLeft, `block control ${box?.x} + ${box?.width} must fit between ${left} and ${textLeft}`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 940 });
+  const inset = await textInset();
+  assert.ok(inset >= 24 && inset <= 48, `desktop left inset: ${inset}`);
+  await page.setViewportSize({ width: 1920, height: 940 });
+  assert.equal(await textInset(), inset, "left inset changes when window widens");
+  assert.equal((await editor.locator("h1").boundingBox()).x, (await paragraph.boundingBox()).x);
+  await checkBlockControls();
   const desktopWidth = (await paragraph.boundingBox()).width;
   assert.ok(desktopWidth <= 800, `desktop text column width: ${desktopWidth}`);
   await page.evaluate(
@@ -37,9 +58,13 @@ export async function verifyAppearance(page) {
     () => (window.document.documentElement.dataset.colorScheme = "light"),
   );
   if (process.env.WENOTE_CREPE_PREVIEW) {
-    await editor.screenshot({ path: process.env.WENOTE_CREPE_PREVIEW });
+    await page.mouse.move(0, 0);
+    await document.screenshot({ path: process.env.WENOTE_CREPE_PREVIEW });
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  const phoneInset = await textInset();
+  assert.ok(phoneInset >= 16 && phoneInset <= 40, `phone left inset: ${phoneInset}`);
+  await checkBlockControls();
   const narrowWidth = (await document.boundingBox()).width;
   assert.ok(
     (await paragraph.boundingBox()).width >= narrowWidth - 82,

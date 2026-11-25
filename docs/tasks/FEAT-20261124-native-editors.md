@@ -74,3 +74,12 @@
 | 构建及交付 | `npm run build --prefix apps/web`、`npm run android --prefix apps/client -- --debug`、`cargo build --locked -p wenote-desktop --release` 退出 0。Web 首页与静态编辑器脚本已核对，任务工作区的 APK 和 macOS 客户端已更新 |
 
 本轮自审核对了手机编辑和新建笔记的入口、普通文本的编辑模式以及 Crepe 遇到专用语法时的分屏入口。默认 Markdown 编辑器采用 Crepe，手机浏览笔记先进入预览。按方式 2 在原分支交付。
+
+## 11 月 25 日验收反馈 · 可视化编辑左对齐
+
+沿用方式 2。正文栏靠左并预留边距，桌面扩宽时标题和段落起点固定，手机可写宽度和段落操作可用。
+
+- 旧版在 1440px 浏览器窗口中正文左边距为 114.5px，`node apps/web/tests/native-editors.mjs` 在新验收条件下退出 1。
+- 新版在 1440px、1920px 和 390px 窗口将标题和正文放在编辑区左侧 40px 处。段落添加和拖动按钮在边距内纵向排列。自审复查了缩放窗口后的按钮命中范围与横向溢出。
+- `node apps/web/tests/native-editors.mjs` 和 `node --test apps/web/tests/*test.mjs` 退出 0，浏览器覆盖编辑、保存和三种宽度。实际效果图为 `dist/acceptance/crepe-left-aligned.png`。
+- `npm run build --prefix apps/web`、`npm run android --prefix apps/client -- --debug` 和 `cargo build --locked -p wenote-desktop --release` 退出 0。本工作区的 macOS 程序和 APK 已更新，本轮交互验收使用 Chrome。18274 验收服务实际返回的 Crepe 样式与本次构建一致。

@@ -25,10 +25,11 @@
 .mode-crepe .milkdown .ProseMirror {
   box-sizing: border-box;
   width: 100%;
-  max-width: 56rem;
+  max-width: 52rem;
   min-height: 48dvh;
-  margin-inline: auto;
-  padding: clamp(1.5rem, 4vw, 3rem) clamp(4.5rem, 5vw, 5rem) 4rem;
+  margin-inline: 0;
+  padding-block: clamp(1.5rem, 4vw, 3rem) 4rem;
+  padding-inline: 40px 24px;
   caret-color: var(--md-cursor);
   overflow-wrap: anywhere;
 }
@@ -57,7 +58,8 @@
 .mode-crepe .milkdown .ProseMirror :not(pre) > code { padding-inline: .32em; }
 .mode-crepe .milkdown .milkdown-code-block { margin-block: .9em; border-radius: .5rem; }
 
+.mode-crepe .milkdown .milkdown-block-handle { flex-direction: column; }
+
 @media (max-width: 720px) {
-  .mode-crepe .milkdown .ProseMirror { padding: 1.25rem 1rem 3rem 3.75rem; }
-  .mode-crepe .milkdown .milkdown-block-handle .operation-item { width: 26px; padding-inline: 1px; }
+  .mode-crepe .milkdown .ProseMirror { padding-block: 1.25rem 3rem; padding-inline-end: 16px; }
 }
