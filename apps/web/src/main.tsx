@@ -1,3 +1,4 @@
+import { useNoteStars } from "./StarredNotes";
 import { lazy, Suspense, useCallback, useMemo } from "react";
 import {
   Sharing,
@@ -397,6 +398,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     return hits.map(hit => hit.path);
   },[base,token,vault,files]);
   const byPath = new Map(files.map((f) => [f.path, f]));
+  const stars = useNoteStars(profile.email && vault ? JSON.stringify([profile.email, vault]) : undefined,
+    path => byPath.get(path)?.file_id, msg);
   const openPath = (path: string) => {
     const file = byPath.get(path);
     if (file) select(file);
@@ -457,6 +460,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         key={vault}
         phone={phone}
         panes={panes}
+        stars={stars}
         paths={paths}
         entries={vault ? entries : undefined}
         sizes={new Map(files.map((f) => [f.path, f.current_content_size]))}
@@ -552,6 +556,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               key={JSON.stringify([note.file_id, note.path, editorRevision])}
               {...{
                 note,
+                stars,
                 phoneBack: phone ? () => panes.setPane("list") : undefined,
                 toggleFocus: panes.toggleFocus,
                 focused: panes.columns === 1,

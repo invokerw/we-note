@@ -1,3 +1,4 @@
+import { StarButton, useNoteStars } from "./StarredNotes";
 import { checkPicture, pictureTypes } from "./api";
 import { markdownWritingMode } from "./markdown/modes";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
@@ -49,6 +50,7 @@ type TrashedFile = { external: boolean; batch: string; path: string };
 type Binding = {
   android?: boolean;
   vault: string;
+  account?: string;
   access: () => Promise<string>;
 };
 declare global {
@@ -142,6 +144,11 @@ function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const profileRequest = useCallback<ProfileRequest>(async (action, body) => local(binding.vault, "profile", {token: await binding.access(), operation: action, body}), [binding]);
   const profile = useAccountProfile(profileRequest);
+  const account = binding.account || profile.email;
+  const stars = useNoteStars(
+    account ? JSON.stringify([localStorage.getItem("origin"), account, binding.vault]) : undefined,
+    path => path, notify,
+  );
   const originalHandler = useRef("");
   const [localHandler, setLocalHandler] = useState("");
   const [trash, setTrash] = useState<TrashedFile[]>([]);
@@ -223,7 +230,7 @@ function Workspace({
       panes.search("");
       return;
     }
-    if (panes.folder !== null) {
+    if (panes.folder !== null || panes.starredOnly) {
       panes.browse(panes.folder ? parentFolder(panes.folder) : null);
       return;
     }
@@ -355,6 +362,7 @@ function Workspace({
         destination,
         expected,
       });
+      if (operation !== "copy") stars.changePaths(source, operation === "move" ? destination : undefined);
       if (affected) {
         if (operation === "delete") {
           choose("");
@@ -630,6 +638,7 @@ function Workspace({
     >
       <LibraryPanes key={vault}
         phone={phone}
+        stars={stars}
         paths={files}
         entries={entries}
         panes={panes}
@@ -780,7 +789,7 @@ function Workspace({
                       : undefined
                   }
                   path={path}
-                  endAction={hasInfo && <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}
+                  endAction={<><StarButton stars={stars} path={path}/>{hasInfo && <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}</>}
                   mode={mode}
                   change={pluginBytes ? undefined : changeMode}
                   markdown={/\.md$/i.test(path)}

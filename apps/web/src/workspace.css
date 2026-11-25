@@ -195,3 +195,6 @@
   --panel-color: var(--ink) !important;
   --panel-border-color: var(--line) !important;
 }
+
+.note-star span { font-size: 20px; line-height: 1; }
+.note-star[aria-pressed="true"] { color: var(--accent); }

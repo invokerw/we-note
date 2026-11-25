@@ -1,3 +1,4 @@
+import type { NoteStars } from "./StarredNotes";
 import { MatchText, SearchField, useDocumentMatches, useRecentSearches } from "./LibrarySearch";
 import { markdownModes, type MarkdownMode } from "./markdown/modes";
 import { AppShell } from "@mantine/core";
@@ -281,12 +282,14 @@ export function usePanes() {
     } catch { /* Use the layout remembered for this session. */ }
     chooseColumns(previous);
   }
-  function browse(dir: string | null) {
+  const [starredOnly, setStarredOnly] = useState(false);
+  function browse(dir: string | null, stars = false) {
+    setStarredOnly(stars);
     search("");
     setFolder(dir);
     setPane("list");
   }
-  return { query, search, folder, browse, pane, setPane, columns, setColumns: chooseColumns, toggleFocus };
+  return { query, search, folder, starredOnly, browse, pane, setPane, columns, setColumns: chooseColumns, toggleFocus };
 }
 type Panes = ReturnType<typeof usePanes>;
 type Folder = { prefix: string; children: Map<string, Folder> };
@@ -382,6 +385,7 @@ export function LibraryPanes({
   trash,
   avatar,
   searchContent,
+  stars,
   historyKey,
   allNotes,
   listActions,
@@ -402,6 +406,7 @@ export function LibraryPanes({
   trash: { active: boolean; open: () => void; disabled?: boolean; list: ReactNode };
   avatar: ReactNode;
   searchContent: (query: string) => Promise<string[]>;
+  stars: NoteStars;
   historyKey: string;
   allNotes?: () => boolean;
   listActions?: ReactNode;
@@ -409,7 +414,7 @@ export function LibraryPanes({
   busy?: boolean;
   libraryTitle: string;
 }) {
-  const { folder, pane, columns, setPane, setColumns } = panes;
+  const { folder, starredOnly, pane, columns, setPane, setColumns } = panes;
   const { query, search } = panes;
   const tablet = useMediaQuery("(min-width: 721px) and (max-width: 1023px)") && !phone;
   const drawer = useRef<HTMLDialogElement>(null);
@@ -460,10 +465,12 @@ export function LibraryPanes({
     const counts = new Map<string, number>();
     const notes: string[] = [];
     for (const path of paths) {
+      if (starredOnly && (isFolder(path) || !stars.has(path))) continue;
       if (q) {
         if (currentOnly && folder && !path.startsWith(folder)) continue;
         const lowerPath = path.toLocaleLowerCase();
         if (!isFolder(path) && (lowerPath.includes(q) || (result?.query === q && result.hits.has(path)))) notes.push(path);
+        if (starredOnly) continue;
         let slash = path.indexOf("/");
         while (slash >= 0) {
           const dir = path.slice(0, slash + 1);
@@ -490,7 +497,11 @@ export function LibraryPanes({
       directories: Array.from(counts).sort(([a], [b]) => compare(a, b)),
       notes: notes.sort(compare),
     };
-  }, [paths, q, folder, reverse, currentOnly, result]);
+  }, [paths, q, folder, reverse, currentOnly, result, starredOnly, stars]);
+  const listTitle = q ? "搜索结果" : starredOnly ? "加星" : folder === null ? "全部笔记" : entryName(folder);
+  const emptyMessage = starredOnly
+    ? "还没有加星的笔记。右键笔记或点击笔记右上角的星形按钮即可加星。"
+    : "此处还没有笔记";
   const sidebar = (
     <AppShell.Navbar className="sidebar" aria-label="笔记库目录">
       {phone ? (
@@ -502,9 +513,14 @@ export function LibraryPanes({
       {vault}
       {!phone && create}
       <div className="side-files">
-        <button aria-label="全部笔记" className={"all-notes" + (!trash.active && folder === null ? " current" : "")}
+        <button aria-label="全部笔记" className={"all-notes" + (!trash.active && !starredOnly && folder === null ? " current" : "")}
           onClick={() => { if (!allNotes || allNotes()) pickFolder(null); }}>
           ▦　全部笔记
+        </button>
+        <button aria-label="加星" className={"all-notes" + (starredOnly && !trash.active ? " current" : "")}
+          aria-current={starredOnly && !trash.active ? "page" : undefined}
+          onClick={() => { if (!trash.active || !allNotes || allNotes()) panes.browse(null, true); }}>
+          <span aria-hidden="true">☆　</span>加星
         </button>
         <FolderTree paths={paths} active={trash.active ? null : folder} select={pickFolder} />
         <button className={"sidebar-trash" + (trash.active ? " current" : "")} aria-current={trash.active ? "page" : undefined}
@@ -535,6 +551,7 @@ export function LibraryPanes({
     <EntryMenus
       paths={paths}
       phone={phone}
+      stars={stars}
       io={busy ? undefined : entries}
       onChange={(src, dst) => {
         if (!src) pickFolder(dst);
@@ -569,7 +586,7 @@ export function LibraryPanes({
       {phone && pane === "list" && (
         <nav className="phone-tabs" aria-label="笔记库导航">
           <button
-            aria-current={!trash.active && folder === null ? "page" : undefined}
+            aria-current={!trash.active && !starredOnly && folder === null ? "page" : undefined}
             onClick={() => {if(!allNotes || allNotes()) pickFolder(null);}}
           >
             <PhoneIcon name="notes" />
@@ -615,11 +632,7 @@ export function LibraryPanes({
               </button>
             )}
             <h1>
-              {trash.active ? "回收站" : q
-                ? "搜索结果"
-                : folder === null
-                  ? "全部笔记"
-                  : entryName(folder)}
+              {trash.active ? "回收站" : listTitle}
             </h1>
             <button aria-label="打开笔记库目录" onClick={() => setPane("nav")}>
               <PhoneIcon name="folder" />
@@ -634,7 +647,7 @@ export function LibraryPanes({
           {trash.list}
         </> : <><div className="list-search">
           {tablet && <button aria-label="打开目录" onClick={() => setPane("nav")}><PhoneIcon name="folder" /></button>}
-          <SearchField input={input} query={query} change={search} folder={folder} currentOnly={currentOnly} setCurrentOnly={setCurrentOnly} history={history}/>
+          <SearchField input={input} query={query} change={search} folder={folder} currentOnly={currentOnly} setCurrentOnly={setCurrentOnly} starredOnly={starredOnly} history={history}/>
           <button
             title={reverse ? "切换为名称升序" : "切换为名称降序"}
             aria-label="切换排序"
@@ -656,13 +669,7 @@ export function LibraryPanes({
                 ‹
               </button>
             )}
-            <strong>
-              {q
-                ? "搜索结果"
-                : folder === null
-                  ? "全部笔记"
-                  : folder.split("/").at(-2) || "我的文件夹"}
-            </strong>
+            <strong>{listTitle}</strong>
           </div>
         )}
         <div
@@ -720,7 +727,7 @@ export function LibraryPanes({
           ))}
           {!notes.length && !directories.length && (
             <p className="list-empty">
-              {q ? (result?.query !== q ? "正在搜索…" : result.error || "没有匹配的笔记") : "此处还没有笔记"}
+              {q ? (result?.query !== q ? "正在搜索…" : result.error || "没有匹配的笔记") : emptyMessage}
             </p>
           )}
         </div>

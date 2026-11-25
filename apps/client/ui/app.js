@@ -6,6 +6,7 @@ const mobile = (action, payload = {}) =>
   invoke("mobile_control", { action, payload });
 let refreshToken = "",
   expires = 0;
+let accountEmail = "";
 let token = "",
   busy = false;
 const status = (s) => {
@@ -60,6 +61,7 @@ async function initialize() {
     localStorage.setItem("last-notebook", session.vault);
     byId("open-editor").hidden = false;
     token = session.token;
+    accountEmail = localStorage.getItem("account:" + session.origin) || "";
     refreshToken = session.refresh;
     expires = session.expires;
     backgroundMode(true);
@@ -91,6 +93,8 @@ byId("login").onsubmit = async (event) => {
     token = session.token;
     refreshToken = session.refresh;
     expires = Date.parse(session.expires);
+    accountEmail = byId("email").value.trim().toLowerCase();
+    localStorage.setItem("account:" + origin, accountEmail);
     localStorage.setItem("origin", origin);
     byId("password").value = "";
     byId("vault").replaceChildren(
@@ -222,6 +226,7 @@ byId("open-editor").onclick = () => {
     new CustomEvent("open-notebook", {
       detail: {
         vault,
+        account: token ? accountEmail : "local",
         android,
         access: async () => {
           if (vault !== byId("vault").value)
