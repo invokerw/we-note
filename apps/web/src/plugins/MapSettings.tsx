@@ -12,7 +12,7 @@ const previewNodes = [
 ];
 
 function ThemePreview({ theme }: { theme: XMindTheme }) {
-  const [scheme] = useColorScheme();
+  const scheme = useColorScheme();
   const colors = xmindColors(theme, scheme);
   const previewEdges = colors.nodeStyle === "lines"
     ? [

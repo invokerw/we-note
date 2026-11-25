@@ -125,7 +125,7 @@ try {
   const modeNames = await page.locator(".popup-list button").allTextContents();
   await button("可视化编辑").click();
   await (await import("./crepe-appearance.mjs")).verifyAppearance(page);
-  assert.equal(await button("插入附件").count(), 0);
+  assert.equal(await button("插入图片").count(), 0);
   assert.deepEqual(modeNames, ["分屏编辑", "可视化编辑", "预览"]);
   await page.locator(".mode-crepe .ProseMirror > p").last().click();
   await page.keyboard.insertText("周日再读。");
@@ -159,7 +159,7 @@ try {
   assert.equal(await saveFile(md), source.replace("编辑段落", "编辑段落完成"));
   await button("编辑模式").click();
   await button("分屏编辑").click();
-  await button("插入附件").waitFor();
+  await button("插入图片").waitFor();
   assert.match(await page.getByLabel("笔记源码").innerText(), /编辑段落完成/);
   await button("编辑模式").click();
   await button("预览").click();

@@ -67,6 +67,7 @@ export default function MindCanvas({
       const data = readMindMap(source);
       const mind = new MindElixir({
         el: mount,
+        theme: MindElixir.THEME,
         alignment: "nodes",
         editable,
         keypress: editable,

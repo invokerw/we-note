@@ -72,7 +72,7 @@ button.primary {
 button.primary:hover:enabled {
   background: var(--navy);
 }
-input:not([type="checkbox"]):not([type="file"]),
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 select,
 textarea {
   min-width: 0;
@@ -2300,7 +2300,7 @@ pre {
   background: var(--paper);
   color: var(--ink);
 }
-[data-color-scheme="dark"] :is(input:not([type="checkbox"]):not([type="file"]), select, textarea) {
+[data-color-scheme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
   color: var(--ink);
   background: #18212d;
   border-color: #405065;
@@ -2452,33 +2452,10 @@ pre {
   background: #151e2a;
   border-color: var(--line);
 }
-[data-color-scheme="dark"] .appearance-toggle {
-  color: #c2d2ed;
-}
-[data-color-scheme="dark"] .appearance-toggle:hover:enabled {
-  background: #202c3d;
-}
 .account-actions {
   display: grid;
   gap: 2px;
 }
-.appearance-toggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  color: #51617c;
-}
-.appearance-toggle[aria-pressed="true"] {
-  color: var(--accent);
-}
-.appearance-toggle-icon {
-  width: 16px;
-  text-align: center;
-  font-size: 15px;
-  line-height: 1;
-}
-
 .document-mode[data-markdown-theme] .reading,
 .document-mode[data-markdown-theme] .source .cm-editor {
   background: var(--md-bg);

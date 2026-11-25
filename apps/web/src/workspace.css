@@ -114,7 +114,7 @@
 .settings-detail h3 { margin: 0 0 15px; }
 .settings-detail .library-avatar { margin: 0; background: #f4f6fa; }
 .settings-detail label { display: block; margin: 10px 0; }
-.settings-detail input:not([type=checkbox]), .settings-detail select { display: block; max-width: 100%; }
+.settings-detail input:not([type=checkbox]):not([type=radio]), .settings-detail select { display: block; max-width: 100%; }
 .settings-detail fieldset { margin: 12px 0; padding: 6px 0; border: 0; }
 .settings-detail article { padding: 0; min-width: 0; }
 @media (max-width: 720px) { .settings-layout nav { flex: 1; } .personal-settings { width: 96vw; } }
@@ -154,3 +154,44 @@
 .trash-blank { min-width: 0; height: 100%; }
 
 .trash-preview-content > pre { white-space: pre-wrap; }
+
+.settings-detail .appearance-modes label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-height: 36px;
+  margin: 0;
+  cursor: pointer;
+}
+.appearance-modes input { accent-color: var(--accent); }
+.appearance-times input { margin-top: 4px; }
+
+[data-color-scheme="dark"] .layout { --paper: #111720; }
+[data-color-scheme="dark"] :is(.personal-settings, .phone-head, .phone-sheet, .phone-tabs, .note-search-options, .library-avatar),
+[data-color-scheme="dark"] .android-phone :is(.sections, .side-files, .phone-library-actions, .account) {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-color-scheme="dark"] :is(.settings-layout nav, .settings-detail .library-avatar, .recent-terms button) { background: var(--rail); }
+[data-color-scheme="dark"] :is(.personal-settings header, .profile-action, .settings-detail details, .choose-avatar, .note-search-options fieldset) { border-color: var(--line); }
+[data-color-scheme="dark"] :is(.settings-layout nav [aria-current=page], .layout .sidebar .current, button[aria-pressed=true]) { background: var(--tint); color: var(--accent); }
+[data-color-scheme="dark"] .layout .note-search-field input[type=search] { background: var(--rail); border-color: var(--line); }
+[data-color-scheme="dark"] :is(.recent-heading, .phone-sheet .sheet-cancel) { color: var(--muted); }
+[data-color-scheme="dark"] :is(.phone-edit, .phone-tabs button[aria-current=page]) { color: var(--accent); }
+[data-color-scheme="dark"] .profile-logout { color: #ffabae; }
+
+/* Mind Elixir writes the file theme inline. Adjust its display without serializing the device preference into the map. */
+[data-color-scheme="dark"] .native-mind .map-container {
+  --bgcolor: var(--paper) !important;
+  --color: var(--ink) !important;
+  --main-bgcolor: var(--rail) !important;
+  --main-bgcolor-transparent: var(--rail) !important;
+  --main-color: var(--ink) !important;
+  --root-bgcolor: var(--tint) !important;
+  --root-color: var(--ink) !important;
+  --panel-bgcolor: var(--rail) !important;
+  --panel-color: var(--ink) !important;
+  --panel-border-color: var(--line) !important;
+}

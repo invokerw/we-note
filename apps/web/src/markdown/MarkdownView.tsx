@@ -20,7 +20,7 @@ import { useColorScheme } from "../appearance";
 let diagramEngine: Promise<(typeof import("mermaid"))["default"]> | undefined;
 function Diagram({ source }: { source: string }) {
   const [result, set] = useState({ url: "", error: "" });
-  const [scheme] = useColorScheme();
+  const scheme = useColorScheme();
   useEffect(() => {
     let active = true,
       url = "";

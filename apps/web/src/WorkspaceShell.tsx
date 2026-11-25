@@ -1,16 +1,12 @@
 import { AppShell, MantineProvider } from "@mantine/core";
 import "@mantine/core/styles/AppShell.layer.css";
-import { useLayoutEffect, type HTMLAttributes } from "react";
-import { applyColorScheme, loadColorScheme } from "./appearance";
+import type { HTMLAttributes } from "react";
+import { useColorScheme } from "./appearance";
 
 export function WorkspaceShell(props: HTMLAttributes<HTMLDivElement>) {
-  useLayoutEffect(() => {
-    const previous = loadColorScheme();
-    applyColorScheme("light");
-    return () => applyColorScheme(previous);
-  }, []);
+  const scheme = useColorScheme();
   return (
-    <MantineProvider forceColorScheme="light">
+    <MantineProvider forceColorScheme={scheme}>
       <AppShell padding={0} transitionDuration={0} {...props} />
     </MantineProvider>
   );

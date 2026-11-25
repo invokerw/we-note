@@ -776,7 +776,7 @@ export function MapEditor({
   theme?: XMindTheme;
 }) {
   const [selected, select] = useState("");
-  const [scheme] = useColorScheme();
+  const scheme = useColorScheme();
   const sheet = book.sheets[index];
   const entries = topicPath(sheet.rootTopic);
   const node = entries.find((entry) => entry.node.id === selected)?.node || sheet.rootTopic;

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { checkPicture, pictureTypes } from "./api";
+import AppearanceSettings from "./AppearanceSettings";
 import Manager from "./plugins/Manager";
 import { BasicMarkdownSettings } from "./markdown/Settings";
 import { markdownPreferences, type UserPreferences } from "./preferences";
@@ -159,6 +160,7 @@ export default function PersonalSettings(props: {
   }
   const categories = [
     "账户与安全",
+    "外观",
     "编辑与插件",
     "导出",
     ...(props.shares ? ["我的分享"] : []),
@@ -354,6 +356,7 @@ export default function PersonalSettings(props: {
                 )}
               </>
             )}
+            {section === "外观" && <AppearanceSettings />}
             {section === "编辑与插件" && (
               <>
                 <BasicMarkdownSettings
