@@ -1,6 +1,6 @@
 # Crepe 编辑器与 Mind Elixir 导图
 
-2026-11-24 · feature · 服务端、Web、桌面与 Android · `DELIVERED`
+2026-11-24 · feature · 服务端、Web、桌面与 Android · `MERGED`
 
 用户选择方式 2，在任务分支验收，通过后才合入 main。基线 `16d29c8`，设计提交 `6d11538`，分支 `codex/feature-crepe-mind-elixir-20261124`，worktree `/Users/weifei/code/we-note/.worktrees/native-editors`。
 
@@ -109,3 +109,9 @@
 - `node apps/web/tests/native-editors.mjs` 通过。Chrome 验证宽屏并排、手机上下占位、同一标题按钮收起、可视化编辑新建及重开后继续编辑双链、Markdown 目标反链，以及通过导图反链返回来源笔记。
 - `ANDROID_SERIAL=emulator-5612 node apps/web/tests/native-editors.mjs --android` 通过。Android WebView 验证导图下方的信息面板、来源笔记列表、长按保存、断网重开和恢复同步。自审核对了链接别名、渲染和索引的区别及 Web 和本地客户端的文件入口。导图内部的关系箭头作用于节点；文件反链由已保存的 Markdown 引用生成。
 - `node --test apps/web/tests/*test.mjs` 的 8 项测试通过。Web、Android 和 macOS 构建成功，更新验收程序，核对 18274 返回的页面和 Crepe 脚本。面板截图为 `dist/acceptance/note-info-docked.png`。macOS 本轮完成构建，界面交互通过 Chrome 和 Android 模拟器验收。
+
+## 验收完成
+
+用户确认验收通过，已将 `09d5c72` 快进合入本地 `main` 并核对提交。2026-11-25 11:19（北京时间）确认 18274 服务和两台任务模拟器停止，实现分支和工作区已清理。
+
+主工作区 `dist/acceptance/FEAT-20261124-native-editors/` 已归档并比对验收文件。`clients/` 保存 macOS 程序、Android APK 与截图，`web/` 保存 Web 构建，`data/` 保存停服后的验收数据。
