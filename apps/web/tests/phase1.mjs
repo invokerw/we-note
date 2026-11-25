@@ -74,6 +74,7 @@ try {
   const guest = await chrome.newPage({ viewport: { width: 390, height: 844 } });
   await guest.goto(link);
   await guest.getByRole("heading", { name: "浏览器快照" }).waitFor();
+  assert.equal(await guest.getByRole("link", { name: "我的笔记库", exact: true }).count(), 0);
   await guest.waitForFunction(
     () => document.querySelector(".reading img")?.naturalWidth === 1,
   );

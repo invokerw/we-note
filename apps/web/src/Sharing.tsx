@@ -718,7 +718,6 @@ export function PublicShare({
           <a href={savedURL}>打开已保存的笔记</a>
         </p>
       )}
-      <a href="/">我的笔记库</a>
     </main>
   );
 }

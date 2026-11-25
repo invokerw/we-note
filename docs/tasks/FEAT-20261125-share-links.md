@@ -36,3 +36,9 @@
 - 自审检查了取消、跨库切换、同库重复保存和首次创建笔记库的路径。沿用同一链接在同一笔记库只保存一次的规则，在选定位置与历史副本位置不同时提示首次保存路径。
 - 最终 Web 构建 `npm run build --prefix apps/web`、服务端 `go test -count=1 ./...` 和 `go vet ./...`、`git diff --check` 均退出 0。原验收实例上的 `phase1.mjs` 和 `phase5.mjs` 均退出 0，覆盖手机宽度登录、取消重开、选择两级子目录、跨库切换与库根保存，并核对了保存后打开的实际路径。
 - 本轮状态 `DELIVERED`。使用同一端口、演示链接、数据和日志，继续按方式 2 在原任务分支验收。
+
+## 第三轮反馈 · 2026-11-25
+
+`CHANGES_REQUESTED`。移除分享阅读页底部的「我的笔记库」入口，沿用原任务工作区和验收方式。
+
+`WENOTE_TEST_ORIGIN=http://localhost:19475 node apps/web/tests/phase1.mjs` 首次退出 1，页面上找到一个「我的笔记库」链接。移除该链接后，`npm run build --prefix apps/web` 和相同的浏览器回归命令均退出 0，覆盖访客阅读、下载、登录保存及打开副本。复查完整差异并通过 `git diff --check`，本轮 `DELIVERED`。
