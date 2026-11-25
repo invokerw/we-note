@@ -27,7 +27,7 @@
 - 打开 Web 首页，选择「创建账户」，填写邮箱和至少 8 位密码，点击「注册并登录」。创建第一个笔记库后，桌面端和 Android 可用同一账号登录此服务。
 - macOS 运行 `./dist/acceptance/WeNote`。Android 安装 `dist/acceptance/WeNote-arm64-debug.apk`；USB 调试时执行 `adb reverse tcp:18274 tcp:18274`，客户端服务地址填 `http://127.0.0.1:18274`。
 - 在笔记库新建 Markdown，切换「编辑模式 → 可视化编辑」，改一段后保存。切换到「分屏编辑」核对 Markdown 源码，再切换「预览」查看正文。
-- 从文件夹或文件的操作菜单选「新建 → 思维导图」，输入名称，创建 `.mind.json`。添加子主题、修改备注、撤销重做，保存后重新打开核对。Android 窄屏可横向滚动节点工具栏。
+- 从文件夹或文件的操作菜单选「新建 → 思维导图」，输入名称，创建 `.mind.json`。添加子主题、修改备注、撤销重做，保存后重新打开核对。Android 长按节点或空白画布后松开即可打开相应菜单。
 
 2026-11-24 已在任务分支交付实现 `4876d60`。保留任务工作区、本地服务、模拟器与产物，待用户验收。
 
@@ -91,3 +91,12 @@
 - 红阶段在 925px 宽的编辑区测得原边距为 40px，期望 64.75px。调整后 `node apps/web/tests/native-editors.mjs` 通过，覆盖 390px、1440px 和 1920px 窗口及缩放后段落按钮的位置。宽屏截图为 `dist/acceptance/crepe-fluid-inset.png`。
 - `node --test apps/web/tests/*test.mjs` 的 8 项测试通过。自审复核了正文最大宽度、标题对齐、按钮空间和移动端横向溢出。
 - Web、macOS 和 Android 构建通过，验收客户端已更新，18274 服务返回的样式与此次构建一致。本轮交互检查使用 Chrome。
+
+## 11 月 25 日验收反馈 · 思维导图画布与右键菜单
+
+沿用方式 2，修复 Web、桌面和 Android 导图编辑区布局。画布应铺满文件标题下方的可用空间。保存、导出、节点编辑及布局操作移入上下文菜单，手机可长按操作，关系箭头等输入浮于画布上。
+
+- 红阶段 `node apps/web/tests/native-editors.mjs` 退出 1。原画布左右各留 22px，上方留 124.4px，底部留 52.6px。
+- `ANDROID_SERIAL=emulator-5612 node apps/web/tests/native-editors.mjs --android` 退出 0。Chrome 验证菜单关闭、备注保存重开、撤销与重做、关系箭头、布局、主题、文件导出和宽窄窗口四边。Android WebView 用触屏手势验证长按节点、长按空白处保存、离线重开和回网同步。
+- 自审与手机实测发现本地客户端底部还有 49px 的反向链接栏。已将导图的反向链接移入标题「更多操作」并复测入口与画布边界。关系箭头与备注使用浮层，打开时画布尺寸不变。
+- 8 项 `node --test apps/web/tests/*test.mjs` 通过。`npm run build --prefix apps/web`、`npm run android --prefix apps/client -- --debug`、`cargo build --locked -p wenote-desktop --release` 退出 0。已核对 18274 验收服务的首页和导图脚本，更新 `dist/acceptance/WeNote`、`dist/acceptance/WeNote-arm64-debug.apk`，截图为 `dist/acceptance/mind-context-menu.png`。macOS 完成构建，本轮界面交互在 Chrome 和 Android 模拟器验证。

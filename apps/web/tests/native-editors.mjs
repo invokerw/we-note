@@ -144,13 +144,13 @@ try {
   await para.click();
   await page.keyboard.press("End");
   await page.keyboard.insertText("完成");
-  async function saveFile(file) {
+  async function saveFile(file, save = () => button("保存").click()) {
     const response = page.waitForResponse(
       (r) =>
         r.url().includes("/" + file.file_id + "/content") &&
         r.request().method() === "PUT",
     );
-    await button("保存").click();
+    await save();
     assert.ok((await response).ok());
     return (await api(folder + "/" + file.file_id + "/content")).text();
   }
@@ -164,40 +164,71 @@ try {
   await page.locator(".reading h2").waitFor();
   await button("路线.mind.json").click();
   const branch = page.locator(".me-tpc").filter({ hasText: "调研" });
-  await branch.click();
-  await button("备注").click();
-  await page.getByLabel("备注", { exact: true }).fill("下周访谈");
+  const surface = page.locator(".mind-host .map-container");
+  const menuItem = (name) => page.getByRole("menuitem", { name, exact: true });
+  async function canvasAction(name) {
+    await surface.click({ button: "right", position: { x: 12, y: 14 } });
+    await menuItem(name).click();
+  }
+  async function nodeAction(name) {
+    await branch.click({ button: "right" });
+    await menuItem(name).click();
+  }
+  async function checkCanvasBounds() {
+    const edges = await surface.evaluate((el) => {
+      const doc = el.closest(".document");
+      const area = doc.getBoundingClientRect();
+      const heading = doc.querySelector(":scope > header").getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      return [box.left - area.left, box.top - heading.bottom, area.right - box.right, area.bottom - box.bottom];
+    });
+    assert.ok(edges.every((gap) => Math.abs(gap) <= 1), `canvas edge gaps: ${edges}`);
+  }
+  await branch.waitFor();
+  await checkCanvasBounds();
+  assert.equal(await page.locator(".plugin-document .toolbar:visible").count(), 0);
+  await branch.click({ button: "right" });
+  await menuItem("备注").waitFor();
+  if (process.env.WENOTE_MIND_PREVIEW) await page.locator(".document").screenshot({ path: process.env.WENOTE_MIND_PREVIEW });
+  await page.keyboard.press("Escape");
+  await menuItem("备注").waitFor({ state: "hidden" });
+  await nodeAction("备注");
+  await page.getByRole("dialog", { name: "备注" }).getByRole("textbox").fill("下周访谈");
+  await checkCanvasBounds();
   await button("确定").click();
-  const saved = JSON.parse(await saveFile(map));
+  const saveMap = () => saveFile(map, () => canvasAction("保存"));
+  const saved = JSON.parse(await saveMap());
   assert.equal(saved.nodeData.children[0].note, "下周访谈");
   await button("普通.json").click();
   assert.equal(await page.locator(".native-mind").count(), 0);
   await button("路线.mind.json").click();
-  await branch.click();
-  await button("备注").click();
-  assert.equal(
-    await page.getByLabel("备注", { exact: true }).inputValue(),
-    "下周访谈",
-  );
+  await nodeAction("备注");
+  assert.equal(await page.getByRole("dialog").getByRole("textbox").inputValue(), "下周访谈");
   await button("取消").click();
-  await button("子主题").click();
+  await nodeAction("子主题");
   const input = page.locator("#input-box");
   if (await input.count()) {
     await input.fill("访谈");
     await input.press("Enter");
   }
-  await button("撤销").click();
-  await button("重做").click();
-  await branch.click();
-  await button("关系箭头").click();
-  await page.getByLabel("关系箭头", { exact: true }).selectOption("root");
+  await canvasAction("撤销");
+  await canvasAction("重做");
+  await nodeAction("关系箭头");
+  await page.getByRole("dialog").getByRole("combobox").selectOption("root");
   await button("确定").click();
-  await button("切换布局").click();
-  await button("切换导图主题").click();
-  const expanded = JSON.parse(await saveFile(map));
+  await canvasAction("切换布局");
+  await canvasAction("切换导图主题");
+  const expanded = JSON.parse(await saveMap());
   assert.equal(expanded.arrows.length, 1);
   assert.ok(expanded.theme.name);
   assert.equal(expanded.nodeData.children[0].children.length, 1);
+  const [download] = await Promise.all([page.waitForEvent("download"), canvasAction("导出当前文件")]);
+  assert.equal(download.suggestedFilename(), "路线.mind.json");
+  const desktopViewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".phone-document-head").waitFor();
+  await checkCanvasBounds();
+  await page.setViewportSize(desktopViewport);
   await page
     .locator('.entry-row[data-library-path="路线.mind.json"]')
     .click({ button: "right" });

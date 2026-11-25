@@ -43,6 +43,20 @@ export async function verifyAndroid(origin, email, password) {
   try {
     let page = await launch();
     const button = (name) => page.getByRole("button", { name, exact: true });
+    const mapSurface = () => page.locator(".mind-host .map-container");
+    async function longPressAction(label, topic) {
+      const target = topic ? page.locator(".me-tpc").filter({ hasText: topic }) : mapSurface();
+      await target.waitFor();
+      const box = await target.boundingBox();
+      const point = { x: box.x + (topic ? box.width / 2 : 12), y: box.y + (topic ? box.height / 2 : 14) };
+      const cdp = await page.context().newCDPSession(page);
+      try {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+        await delay(620);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      } finally { await cdp.detach(); }
+      await page.getByRole("menuitem", { name: label, exact: true }).click();
+    }
     await page.getByLabel("服务地址").fill(origin);
     await page.getByLabel("邮箱").fill(email);
     await page.getByLabel("密码").fill(password);
@@ -54,11 +68,18 @@ export async function verifyAndroid(origin, email, password) {
       .waitFor();
     await button("打开笔记").click();
     await button("路线.mind.json").click();
-    await page.locator(".me-tpc").filter({ hasText: "调研" }).click();
-    await button("备注").click();
-    await page.getByLabel("备注", { exact: true }).fill("手机草稿");
+    await longPressAction("备注", "调研");
+    await page.getByRole("dialog", { name: "备注" }).getByRole("textbox").fill("手机草稿");
     await button("确定").click();
-    await button("保存").click();
+    const doc = await page.locator(".document").boundingBox();
+    const header = await page.locator(".phone-document-head").boundingBox();
+    const canvas = await mapSurface().boundingBox();
+    assert.ok(Math.abs(doc.x - canvas.x) <= 1 && Math.abs(doc.width - canvas.width) <= 1);
+    assert.ok(Math.abs(header.y + header.height - canvas.y) <= 1 && Math.abs(doc.y + doc.height - canvas.y - canvas.height) <= 1);
+    await button("更多操作").click();
+    await button("反向链接").click();
+    await page.getByRole("dialog", { name: "反向链接" }).getByRole("button", { name: "关闭" }).click();
+    await longPressAction("保存");
     await page.getByText("已保存到本地目录").waitFor();
     await button("返回笔记列表").click();
     await button("笔记.md").click();
@@ -82,10 +103,9 @@ export async function verifyAndroid(origin, email, password) {
     page = await launch();
     await button("打开笔记").click();
     await button("路线.mind.json").click();
-    await page.locator(".me-tpc").filter({ hasText: "调研" }).click();
-    await button("备注").click();
+    await longPressAction("备注", "调研");
     assert.equal(
-      await page.getByLabel("备注", { exact: true }).inputValue(),
+      await page.getByRole("dialog", { name: "备注" }).getByRole("textbox").inputValue(),
       "手机草稿",
     );
     adb('reverse',port,port);

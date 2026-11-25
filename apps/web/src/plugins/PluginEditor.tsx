@@ -144,10 +144,15 @@ export function PluginEditor({
       mark(file.current.text !== submitted);
     }
   }
+  const isMind = id === "com.wenote.mind.json";
+  function saveChanges() {
+    if (modified || file.current.text !== savedText.current) void run(persist);
+  }
+  const exportCurrent = () => run(async () => output(name, await encoded()));
   const name = path.split("/").at(-1)!;
   return (
     <section
-      className={id === "com.wenote.xmind" ? "plugin-document xmind-plugin-document" : "plugin-document"}
+      className={id === "com.wenote.xmind" ? "plugin-document xmind-plugin-document" : isMind ? "plugin-document mind-plugin-document" : "plugin-document"}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
           e.preventDefault();
@@ -159,19 +164,19 @@ export function PluginEditor({
       }}
     >
       <div inert={busy}>
-        <div className="toolbar">
+        {!isMind && <div className="toolbar">
           {ready && caps.includes("serialize") && (
             <button
               className="primary"
-              disabled={!modified && id !== "com.wenote.mind.json"}
-              onClick={() => { if (modified || file.current.text !== savedText.current) void run(persist); }}
+              disabled={!modified}
+              onClick={saveChanges}
             >
               保存
             </button>
           )}
           {ready && caps.includes("export") && (
             <button
-              onClick={() => run(async () => output(name, await encoded()))}
+              onClick={exportCurrent}
             >
               导出当前文件
             </button>
@@ -195,7 +200,7 @@ export function PluginEditor({
               下载原文件
             </button>
           )}
-        </div>
+        </div>}
         {!plugin ? (
           <p>此格式的插件已禁用，可在「插件」中启用。</p>
         ) : error ? (
@@ -213,7 +218,8 @@ export function PluginEditor({
               theme={xmindTheme}
             />
           ) : id === "com.wenote.mind.json" ? (
-            <Suspense fallback="正在载入导图…"><MindCanvas source={originalMindText.current} change={edit} /></Suspense>
+            <Suspense fallback="正在载入导图…"><MindCanvas source={originalMindText.current} change={edit}
+              save={caps.includes("serialize") ? saveChanges : undefined} exportFile={caps.includes("export") ? exportCurrent : undefined} /></Suspense>
           ) : id === "com.wenote.json" ? (
             <JsonEditor text={text} edit={edit} />
           ) : (

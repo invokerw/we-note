@@ -85,13 +85,14 @@
 
 .native-mind { width: 100%; min-width: 0; }
 .native-mind .mind-host { position: relative; height: clamp(20rem, 65dvh, 56rem); overflow: hidden; isolation: isolate; }
-.native-mind .mind-actions { display: flex; flex-wrap: wrap; gap: .25rem; }
-@media print { .native-mind .mind-actions, .native-mind .mind-elixir-toolbar { display: none; } }
-@media (max-width: 640px) {
-  .native-mind .mind-actions { flex-wrap: nowrap; overflow-x: auto; }
-  .native-mind .mind-actions button { flex: none; }
-  .native-mind .mind-host { height: clamp(12rem, 52dvh, 32rem); }
-}
+.note-aux-view:has(> .mind-plugin-document), .document > .mind-plugin-document { padding: 0; overflow: hidden; }
+.note-aux-view > .mind-plugin-document { height: 100%; }
+.document > .mind-plugin-document { flex: 1; min-height: 0; }
+.mind-plugin-document > div, .mind-plugin-document :is(.native-mind, .mind-surface, .mind-host) { height: 100%; }
+.mind-menu { inset: auto; margin: 0; max-height: min(75dvh, 34rem); }
+.mind-menu summary { cursor: pointer; padding: 6px 14px; font-size: 13px; }
+@media (pointer: coarse) { .mind-menu :is(button, summary) { min-height: 44px; } }
+@media print { .native-mind .mind-elixir-toolbar { display: none; } }
 /* Keep node text reachable where a relationship arrow meets the node. */
 .native-mind .map-container .me-parent,
 .native-mind .map-container .me-root { z-index: 30; }

@@ -2,6 +2,7 @@ import { markdownWritingMode } from "./markdown/modes";
 import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
+import { isMindMap } from "./plugins/mindFile";
 import { usesPluginEditor } from "./plugins/registry";
 import Manager from "./plugins/Manager";
 import { TextFile } from "./markdown/textFile";
@@ -144,6 +145,8 @@ function Workspace({
   );
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
+  const mindLinks = useRef<HTMLDialogElement>(null);
+  const showMindMap = !!pluginBytes && isMindMap(path);
   const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     editor = useRef<EditorView | null>(null),
@@ -477,6 +480,12 @@ function Workspace({
       changeMode(/\.md$/i.test(path) ? "split" : "edit");
     }
   }
+  const backlinkList = links.length ? links.map((hit) => (
+    <button key={hit.file_id} onClick={() => {
+      mindLinks.current?.close();
+      run(() => open(hit.path));
+    }}>{hit.path}</button>
+  )) : <p>没有笔记链接到此处。</p>;
   return (
     <WorkspaceShell
       className={"layout local-layout" + (phone ? " android-phone" : "")}
@@ -745,6 +754,10 @@ function Workspace({
                           {panes.columns === 1 ? "退出专注" : "专注模式"}
                         </button>
                       )}
+                      {showMindMap && <button onClick={() => {
+                        mindLinks.current?.showModal();
+                        run(backlinks);
+                      }}>反向链接</button>}
                       {!pluginBytes && /\.md$/i.test(path) && (
                         <MarkdownExport
                           path={path}
@@ -840,26 +853,19 @@ function Workspace({
                     </div>
                   </>
                 )}
-                <details
+                {showMindMap ? <dialog ref={mindLinks} aria-label="反向链接" className="entry-dialog">
+                  <h2>反向链接</h2>
+                  {backlinkList}
+                  <form method="dialog"><footer><button>关闭</button></footer></form>
+                </dialog> : <details
                   className="backlinks"
                   onToggle={(e) => {
                     if (e.currentTarget.open) run(backlinks);
                   }}
                 >
                   <summary>反向链接</summary>
-                  {links.length ? (
-                    links.map((h) => (
-                      <button
-                        key={h.file_id}
-                        onClick={() => run(() => open(h.path))}
-                      >
-                        {h.path}
-                      </button>
-                    ))
-                  ) : (
-                    <p>没有笔记链接到此处。</p>
-                  )}
-                </details>
+                  {backlinkList}
+                </details>}
               </>
             )}
           </article>
