@@ -4,6 +4,7 @@ import { base64, request, type Share, type Vault } from "./api";
 
 type Asset = {
   canonical_url: string;
+  reference_urls?: string[];
   asset_id: string;
   name: string;
   media_type: string;
@@ -36,8 +37,7 @@ function useAction() {
   return { message, setMessage, busy, run };
 }
 export function Sharing({ token, vault }: { token: string; vault: string }) {
-  const [assets, setAssets] = useState<Asset[]>([]),
-    [links, setLinks] = useState<Link[]>([]),
+  const [links, setLinks] = useState<Link[]>([]),
     [url, setUrl] = useState(""),
     [kind, setKind] = useState("link");
   const { message, setMessage, busy, run } = useAction();
@@ -58,9 +58,6 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
   useEffect(() => {
     void run(async () => {
       await refresh();
-      setAssets(
-        await (await request(token, `/api/v1/vaults/${vault}/assets`)).json(),
-      );
     });
   }, [token, vault]);
   return (
@@ -77,7 +74,6 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
                 .split("\n")
                 .map((v) => v.trim())
                 .filter(Boolean),
-              asset_ids: form.getAll("asset"),
             };
             if (kind === "account") {
               await request(token, "/api/v1/shares", "POST", {
@@ -149,19 +145,6 @@ export function Sharing({ token, vault }: { token: string; vault: string }) {
             文件或目录，每行一个
             <textarea name="paths" rows={3} placeholder="项目/会议记录" />
           </label>
-          {assets.length > 0 && (
-            <fieldset>
-              <legend>同时分享附件</legend>
-              {assets
-                .filter((a) => a.status === "completed")
-                .map((a) => (
-                  <label key={a.asset_id}>
-                    <input type="checkbox" name="asset" value={a.asset_id} />
-                    {a.name}
-                  </label>
-                ))}
-            </fieldset>
-          )}
           {kind === "account" ? (
             <label>
               接收者邮箱
@@ -572,7 +555,7 @@ export function PublicShare({
                 io={{
                   image: (url, alt) => {
                     const asset = snap.assets.find(
-                      (a) => a.canonical_url === url,
+                      (a) => a.canonical_url === url || a.reference_urls?.includes(url),
                     );
                     return asset ? (
                       <img src={path + "assets/" + asset.asset_id} alt={alt} />
@@ -582,7 +565,7 @@ export function PublicShare({
                   },
                   link: (href) => {
                     const asset = snap.assets.find(
-                      (a) => a.canonical_url === href,
+                      (a) => a.canonical_url === href || a.reference_urls?.includes(href),
                     );
                     if (asset) {
                       document.getElementById(asset.asset_id)?.scrollIntoView();

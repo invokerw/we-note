@@ -499,7 +499,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         tools={
           <>
             {goToSection("搜索", "搜索")}
-            {goToSection("附件", "附件")}
             {!note && vault && (
               <button onClick={() => run(share)}>分享快照</button>
             )}{" "}
@@ -680,7 +679,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
             preferences={preferences}
             updatePluginSetting={updatePluginSetting}
           />
-        ) : ["搜索", "附件", "导出"].includes(view) ? (
+        ) : ["搜索", "导出"].includes(view) ? (
           <LibraryResources
             key={vault + view}
             view={view}

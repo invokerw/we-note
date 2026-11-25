@@ -46,13 +46,14 @@ try {
     b = await account("接收库");
   const files = `/api/v1/vaults/${a.vault}/files`,
     dest = `/api/v1/vaults/${b.vault}/files`;
+  const draft = await (await api(a.token, files, "POST", { path:"上传.md", content:"" })).json();
   async function upload(name) {
-    const data = Buffer.from(name);
+    const data = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAOmSuJkAAAAASUVORK5CYII=", "base64");
     const p = `/api/v1/vaults/${a.vault}/assets`;
     const asset = await (
       await api(a.token, p + "/uploads", "POST", {
-        name,
-        media_type: "application/octet-stream",
+        file_id: draft.file_id, name,
+        media_type: "image/png",
         content_size: data.length,
         content_hash:
           "sha256:" + createHash("sha256").update(data).digest("hex"),
@@ -69,8 +70,8 @@ try {
     );
     return asset;
   }
-  const asset = await upload("说明.bin");
-  await upload("独立.bin");
+  const asset = await upload("说明.png");
+
   const bytes = (s) => Buffer.from(s).toString("base64");
   const body = "初稿 " + asset.canonical_url;
   const file = await (
@@ -81,7 +82,7 @@ try {
   ).json();
   await button(a.page, "分享管理").click();
   await a.page.getByLabel("文件或目录，每行一个").fill("项目/");
-  await a.page.getByLabel("独立.bin").check();
+
   await a.page.getByLabel("分享密码（可选）").fill("phase5-link");
   await a.page.getByLabel("下载和导入次数上限（0 为不限）").fill("1");
   await a.page.getByLabel("允许导入笔记库").check();
@@ -101,7 +102,7 @@ try {
   const copyAssets = await (
     await api(b.token, `/api/v1/vaults/${b.vault}/assets`)
   ).json();
-  assert.equal(copyAssets.length, 2);
+  assert.equal(copyAssets.length, 1);
   await a.page.getByLabel("分享方式").selectOption("account");
   await a.page.getByLabel("接收者邮箱").fill(b.email);
   await button(a.page, "发送到收件箱").click();
@@ -165,7 +166,7 @@ try {
   assert.equal(
     (await (await api(b.token, `/api/v1/vaults/${b.vault}/assets`)).json())
       .length,
-    4,
+    1,
   );
   await button(a.page, "审计日志").click();
   await a.page

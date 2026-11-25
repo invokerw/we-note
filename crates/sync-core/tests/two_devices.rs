@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use reqwest::Method;
 use serde_json::json;
 use std::fs;
@@ -177,22 +178,33 @@ fn two_devices_and_web_converge() -> Result<()> {
     sync_b()?;
     sync_a()?;
     assert_eq!(fs::read(a.join(&copies[0]))?, second);
-    let url = book.upload(&token, "tiny.bin", "application/octet-stream", "YWJj")?;
-    assert_eq!(book.image(&url, "")?["data"], "YWJj");
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAOmSuJkAAAAASUVORK5CYII=";
+    let draft_path = "offline-image.md";
+    let temporary_url = book.stage_image("offline.png", "image/png", png)?;
+    assert_eq!(book.image(&temporary_url, "")?["data"], png);
+    book.save(draft_path, None, &format!("![offline]({temporary_url})"))?;
+    sync_a()?;
+    sync_b()?;
+    let final_note = fs::read_to_string(b.join(draft_path))?;
+    assert!(!final_note.contains("wenote-draft.invalid"));
+    assert!(final_note.contains(&format!("/{vault}/")));
+    assert_eq!(fs::read_to_string(a.join(draft_path))?, final_note);
+    let url = book.upload(&token, note, "tiny.png", "image/png", png)?;
+    assert_eq!(book.image(&url, "")?["data"], png);
     let assets = book.catalog(&token, "/assets", None)?;
     let id = assets
         .as_array()
         .context("asset list")?
         .iter()
-        .find(|asset| asset["canonical_url"] == url)
+        .find(|asset| asset["canonical_url"] == url && asset["name"] == "tiny.png")
         .and_then(|asset| asset["asset_id"].as_str())
         .context("uploaded asset ID")?;
-    assert_eq!(book.asset(id, &token)?["data"], "YWJj");
+    assert_eq!(book.asset(id, &token)?["data"], png);
     let dir = temp.path().join("downloads");
     let downloaded = book.download(&dir, &token, "asset", id)?;
-    assert_eq!(fs::read(downloaded)?, b"abc");
+    assert_eq!(fs::read(downloaded)?, STANDARD.decode(png)?);
     let second = book.download(&dir, &token, "asset", id)?;
-    assert!(second.ends_with("tiny (1).bin"));
+    assert!(second.ends_with("tiny (1).png"));
     let job = book.catalog(&token, "/exports", Some("all".into()))?;
     let job_id = job["job_id"].as_str().context("export ID")?;
     let mut ready = false;

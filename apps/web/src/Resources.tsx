@@ -111,7 +111,6 @@ function Preview({ asset, client }: { asset: Asset; client: ResourceClient }) {
 }
 const scopes: Record<string, string> = {
   notes: "仅笔记",
-  assets: "仅附件",
   all: "完整笔记库",
 };
 export function Resources({
@@ -252,13 +251,13 @@ export function Resources({
           </label>
           {scope === "all" && (
             <label>
-              附件链接
+              图片链接
               <select
                 value={portable ? "portable" : "online"}
                 onChange={(e) => setPortable(e.target.value === "portable")}
               >
                 <option value="online">保留在线链接</option>
-                <option value="portable">离线便携（使用包内附件）</option>
+                <option value="portable">离线便携（使用包内图片）</option>
               </select>
             </label>
           )}

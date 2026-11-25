@@ -7,6 +7,7 @@ import (
 	"github.com/weifei/we-note/services/api/internal/store"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
 
@@ -48,7 +49,7 @@ func TestSnapshotImportIsAtomicIsolatedAndReplayable(t *testing.T) {
 			t.Fatal(err)
 		}
 		again, err := repo.WriteFile(ctx, alice.ID, a.ID, "", "create_file", p, input)
-		if err != nil || again != first {
+		if err != nil || !reflect.DeepEqual(again, first) {
 			t.Fatalf("create replay = %v %v", again, err)
 		}
 	}

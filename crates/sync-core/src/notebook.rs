@@ -10,6 +10,8 @@ use std::{
 };
 use unicode_normalization::UnicodeNormalization;
 
+pub(crate) const DRAFT_PREFIX: &str = "https://wenote-draft.invalid/assets/";
+
 /// Local editor operations are restricted to a folder previously bound by the sync engine.
 pub struct Notebook {
     state_dir: PathBuf,
@@ -268,6 +270,26 @@ impl Notebook {
         disk::atomic(&cache.join("bytes"), bytes)?;
         disk::atomic(&cache.join("type"), media.as_bytes())
     }
+    pub fn stage_image(&self, name: &str, media: &str, encoded: &str) -> Result<String> {
+        if !matches!(
+            media,
+            "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+        ) || name.is_empty()
+        {
+            bail!("请选择支持的图片")
+        }
+        let data = STANDARD.decode(encoded)?;
+        if data.len() > 256 << 20 {
+            bail!("图片超过 256 MiB")
+        }
+        let url = format!("{}{}", DRAFT_PREFIX, &digest(&data)[7..]);
+        self.remember_asset(&url, media, &data)?;
+        disk::atomic(
+            &self.cache().join(&digest(url.as_bytes())[7..]).join("name"),
+            name.as_bytes(),
+        )?;
+        Ok(url)
+    }
     pub fn image(&self, url: &str, token: &str) -> Result<Value> {
         let cache = self.cache().join(&digest(url.as_bytes())[7..]);
         if cache.join("type").is_file() {
@@ -275,6 +297,9 @@ impl Notebook {
                 json!({"type":fs::read_to_string(cache.join("type"))?,"data":STANDARD.encode(fs::read(cache.join("bytes"))?)}),
             );
         };
+        if url.starts_with(DRAFT_PREFIX) {
+            bail!("本机缺少草稿图片")
+        }
         let api = Api::new(&self.origin, token)?;
         let config = api.json(reqwest::Method::GET, "/api/v1/config", None, None)?;
         let prefix = format!(
@@ -284,17 +309,27 @@ impl Notebook {
                 .context("missing public URL")?
         );
         let route = url.strip_prefix(&prefix).context("external image")?;
-        if route.split('/').count() != 4 {
-            identifier(route)?;
-        }
         let (media, bytes) = api.asset_bytes(&self.vault, route)?;
         self.remember_asset(url, &media, &bytes)?;
         Ok(json!({"type":media,"data":STANDARD.encode(bytes)}))
     }
-    pub fn upload(&self, token: &str, name: &str, media: &str, encoded: &str) -> Result<String> {
+    pub fn upload(
+        &self,
+        token: &str,
+        path: &str,
+        name: &str,
+        media: &str,
+        encoded: &str,
+    ) -> Result<String> {
         let bytes = STANDARD.decode(encoded)?;
         let api = Api::new(&self.origin, token)?;
-        let url = api.upload_asset(&self.vault, name, media, &bytes)?;
+        let url = api.upload_asset(
+            &self.vault,
+            &self.file_id(path)?.context("笔记尚未同步")?,
+            name,
+            media,
+            &bytes,
+        )?;
         self.remember_asset(&url, media, &bytes)?;
         Ok(url)
     }

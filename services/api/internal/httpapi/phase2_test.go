@@ -84,7 +84,7 @@ func TestKnowledgeAndFrozenExport(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, opts := range []store.ExportOptions{{Scope: "notes", Mode: "portable"}, {Scope: "all", Mode: "unknown"}} {
+	for _, opts := range []store.ExportOptions{{Scope: "assets"}, {Scope: "notes", Mode: "portable"}, {Scope: "all", Mode: "unknown"}} {
 		res := requestJSON(t, mux, "POST", base+"/exports", token, opts)
 		if res.Code != 400 {
 			t.Fatalf("invalid options: %d", res.Code)
@@ -97,7 +97,7 @@ func TestKnowledgeAndFrozenExport(t *testing.T) {
 	if _, e = repo.CreateExport(ctx, u.ID, v.ID, "portable", store.ExportOptions{Scope: "all"}); e == nil {
 		t.Fatal("accepted same key with changed link mode")
 	}
-	for _, scope := range []string{"notes", "assets", "all"} {
+	for _, scope := range []string{"notes", "all"} {
 		if _, e := repo.CreateExport(ctx, u.ID, v.ID, "key"+scope, store.ExportOptions{Scope: scope}); e != nil {
 			t.Fatal(e)
 		}
@@ -120,7 +120,7 @@ func TestKnowledgeAndFrozenExport(t *testing.T) {
 	deadline := time.Now().Add(6 * time.Second)
 	for {
 		decodeResponse(t, get("/exports", token), &jobs)
-		ready := len(jobs) == 4
+		ready := len(jobs) == 3
 		for _, j := range jobs {
 			ready = ready && j.Status == "completed"
 		}

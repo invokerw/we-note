@@ -38,13 +38,13 @@ func writePortableMarkdown(w io.Writer, source []byte, notePath string, assets m
 	}
 	offsets := map[*byte]int{}
 	for start := 0; start < len(body); {
-		i := bytes.Index(body[start:], []byte("https://"))
+		i := bytes.Index(body[start:], []byte("http"))
 		if i < 0 {
 			break
 		}
 		start += i
 		offsets[&body[start]] = len(source) - len(body) + start
-		start += len("https://")
+		start += len("http")
 	}
 	if len(offsets) == 0 {
 		n, err := w.Write(source)

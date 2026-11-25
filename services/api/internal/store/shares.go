@@ -182,6 +182,16 @@ func (r *Repository) CloseShare(ctx context.Context, user, id string, revoke boo
 	return err
 }
 func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a Asset) (string, error) {
+	now := time.Now().UTC()
+	if PictureType(a.Type) {
+		existing, err := r.scanAsset(tx.QueryRowContext(ctx, assetSelect+` WHERE a.vault_id=? AND a.is_deleted=0 AND u.status='completed' AND substr(a.created_at,1,10)=? AND u.content_hash=? ORDER BY a.id LIMIT 1`, target, now.Format("2006-01-02"), a.Hash))
+		if err == nil {
+			return existing.URL, nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return "", err
+		}
+	}
 	storageKey := a.StorageKey
 	if storageKey == "" {
 		if err := tx.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, a.Vault, a.Hash).Scan(&storageKey); err != nil {
@@ -193,8 +203,7 @@ func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a
 		return "", err
 	}
 	defer body.Close()
-	now := time.Now().UTC()
-	key, err := r.blobStore.PutAt(ctx, target, a.Hash, a.Size, now, body)
+	key, err := putResource(ctx, r.blobStore, target, a.Hash, a.Size, now, body)
 	if err != nil {
 		return "", err
 	}
@@ -215,7 +224,14 @@ func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a
 		return "", err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO assets(id,vault_id,name,media_type,upload_id,created_at) VALUES(?,?,?,?,?,?)`, id, target, a.Name, a.Type, upload, formatTime(now))
-	return canonicalAssetURL(r.publicBase, now, a.Hash), err
+	if err != nil {
+		return "", err
+	}
+	if err = enrollImage(ctx, tx, upload); err != nil {
+		return "", err
+	}
+	asset, err := r.scanAsset(tx.QueryRowContext(ctx, assetSelect+`WHERE a.id=?`, id))
+	return asset.URL, err
 }
 func (r *Repository) AcceptShare(ctx context.Context, user, id, target, folder string) ([]FileResult, error) {
 	if folder != "" && !PortablePath(folder) {
@@ -268,8 +284,8 @@ func (r *Repository) AcceptShare(ctx context.Context, user, id, target, folder s
 
 func (r *Repository) selectSnapshot(ctx context.Context, tx *sql.Tx, vault string, paths, assetIDs []string) (Snapshot, error) {
 	snap := Snapshot{Files: []SnapshotFile{}, Assets: []Asset{}}
-	if len(paths)+len(assetIDs) == 0 {
-		return snap, fileError(400, "INVALID_SHARE", "choose files, folders or attachments")
+	if len(paths) == 0 || len(assetIDs) != 0 {
+		return snap, fileError(400, "INVALID_SHARE", "choose notes or folders to share")
 	}
 	for _, p := range paths {
 		if !PortablePath(strings.TrimSuffix(p, "/")) {
@@ -385,7 +401,7 @@ func (r *Repository) importSnapshot(ctx context.Context, tx *sql.Tx, source, tar
 		if err != nil {
 			return nil, nil, err
 		}
-		result, err := writeFileTx(ctx, tx, target, "", "create_file", op, FileWrite{Device: "web_" + user, Path: p}, ref)
+		result, err := r.writeFileTx(ctx, tx, target, "", "create_file", op, FileWrite{Device: "web_" + user, Path: p}, ref)
 		if err != nil {
 			return nil, nil, err
 		}

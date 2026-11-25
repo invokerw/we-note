@@ -891,7 +891,7 @@ FROM assets a
 JOIN vaults v ON v.id=a.vault_id
 JOIN users u2 ON u2.id=v.owner_user_id
 JOIN upload_sessions us ON us.id=a.upload_id
-WHERE a.is_deleted=0
+WHERE a.is_deleted=0 AND NOT EXISTS(SELECT 1 FROM image_lifetimes WHERE asset_id=a.id)
 ORDER BY a.created_at DESC,a.id DESC`)
 	if err != nil {
 		return nil, err
@@ -937,7 +937,7 @@ func (r *Repository) ChangeAdminAssets(ctx context.Context, actor, operation str
 		}
 		seen[id] = true
 		var current bool
-		if err = tx.QueryRowContext(ctx, `SELECT is_deleted FROM assets WHERE id=?`, id).Scan(&current); errors.Is(err, sql.ErrNoRows) {
+		if err = tx.QueryRowContext(ctx, `SELECT is_deleted FROM assets WHERE id=? AND NOT EXISTS(SELECT 1 FROM image_lifetimes WHERE asset_id=assets.id)`, id).Scan(&current); errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		} else if err != nil {
 			return err

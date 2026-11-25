@@ -62,6 +62,7 @@ func NewMux(repository *store.Repository) *http.ServeMux {
 	mux.HandleFunc("PUT /api/v1/vaults/{vault_id}/assets/{asset_id}/parts/{number}", api.assetParts)
 	mux.HandleFunc("POST /api/v1/vaults/{vault_id}/assets/{asset_id}/assemble", api.assetParts)
 	mux.HandleFunc("DELETE /api/v1/vaults/{vault_id}/assets/{asset_id}", api.asset)
+	mux.HandleFunc("GET /assets/{owner}/{asset_vault}/{year}/{month}/{day}/{hash}", api.asset)
 	mux.HandleFunc("GET /assets/{year}/{month}/{day}/{hash}", api.asset)
 	mux.HandleFunc("GET /assets/{asset_id}", api.asset)
 	mux.HandleFunc("GET /api/v1/devices", api.listDevices)

@@ -23,6 +23,13 @@ func vaultPrefix(vault string) (string, error) {
 		return path.Join("blobs", vault), nil
 	}
 	p := strings.Split(vault, "/")
+	if len(p) == 5 && p[4] == "assets" {
+		prefix, err := vaultPrefix(strings.Join(p[:4], "/"))
+		if err != nil {
+			return "", err
+		}
+		return prefix + "/assets", nil
+	}
 	if len(p) == 4 && p[0] == "users" && p[2] == "vaults" {
 		return VaultNamespace(p[1], p[3])
 	}

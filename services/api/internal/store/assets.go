@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -15,14 +14,18 @@ import (
 
 const assetDateLayout = "2006/01/02"
 
-func canonicalAssetURL(publicBase string, createdAt time.Time, contentHash string) string {
-	return strings.TrimRight(publicBase, "/") + "/assets/" + createdAt.UTC().Format(assetDateLayout) + "/" + strings.TrimPrefix(contentHash, "sha256:")
+func canonicalAssetURL(publicBase, owner, vault string, createdAt time.Time, contentHash string) string {
+	return strings.TrimRight(publicBase, "/") + "/assets/" + owner + "/" + vault + "/" + createdAt.UTC().Format(assetDateLayout) + "/" + strings.TrimPrefix(contentHash, "sha256:")
 }
 
 func (r *Repository) SetPublicBase(raw string) error {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "" {
-		return errors.New("public URL must be an HTTPS origin")
+	if err != nil {
+		return err
+	}
+	localHTTP := u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")
+	if (u.Scheme != "https" && !localHTTP) || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "" {
+		return errors.New("public URL requires HTTPS or a loopback HTTP origin")
 	}
 	r.publicBase = strings.TrimRight(raw, "/")
 	return nil
@@ -42,16 +45,16 @@ type Asset struct {
 	CreatedAt     time.Time `json:"-"`
 	StorageKey    string    `json:"-"`
 	LegacyURL     string    `json:"-"`
-	ReferenceURLs []string  `json:"-"`
+	ReferenceURLs []string  `json:"reference_urls,omitempty"`
 }
 
-const assetSelect = `SELECT a.id,a.vault_id,a.name,a.media_type,u.status,u.content_hash,u.content_size,u.id,a.created_at,u.storage_key FROM assets a JOIN upload_sessions u ON u.id=a.upload_id AND u.vault_id=a.vault_id `
+const assetSelect = `SELECT a.id,a.vault_id,a.name,a.media_type,u.status,u.content_hash,u.content_size,u.id,a.created_at,u.storage_key,v.owner_user_id FROM assets a JOIN vaults v ON v.id=a.vault_id JOIN upload_sessions u ON u.id=a.upload_id AND u.vault_id=a.vault_id `
 
 func (r *Repository) scanAsset(row scanner) (Asset, error) {
 	var a Asset
-	var createdAt string
+	var createdAt, owner string
 	var storageKey sql.NullString
-	err := row.Scan(&a.ID, &a.Vault, &a.Name, &a.Type, &a.Status, &a.Hash, &a.Size, &a.Upload, &createdAt, &storageKey)
+	err := row.Scan(&a.ID, &a.Vault, &a.Name, &a.Type, &a.Status, &a.Hash, &a.Size, &a.Upload, &createdAt, &storageKey, &owner)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -65,12 +68,20 @@ func (r *Repository) scanAsset(row scanner) (Asset, error) {
 	if storageKey.Valid {
 		a.StorageKey = storageKey.String
 	}
-	a.URL = r.publicBase + "/assets/" + a.ID
-	a.LegacyURL = a.URL
-	a.URL = canonicalAssetURL(r.publicBase, a.CreatedAt, a.Hash)
+	a.LegacyURL = r.publicBase + "/assets/" + a.ID
+	a.URL = canonicalAssetURL(r.publicBase, owner, a.Vault, a.CreatedAt, a.Hash)
 	return a, nil
 }
 func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaType, hash, key string, size int64) (Asset, error) {
+	return r.createAsset(ctx, user, vault, "", name, mediaType, hash, key, size)
+}
+func (r *Repository) CreateNoteImage(ctx context.Context, user, vault, note, name, mediaType, hash, key string, size int64) (Asset, error) {
+	if note == "" {
+		return Asset{}, fileError(400, "NOTE_REQUIRED", "请升级客户端，从笔记内插入图片")
+	}
+	return r.createAsset(ctx, user, vault, note, name, mediaType, hash, key, size)
+}
+func (r *Repository) createAsset(ctx context.Context, user, vault, note, name, mediaType, hash, key string, size int64) (Asset, error) {
 	var a Asset
 	allowed, err := r.UserCanWriteVault(ctx, user, vault)
 	if err != nil {
@@ -88,7 +99,18 @@ func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaTy
 		return a, err
 	}
 	defer tx.Rollback()
-	fingerprint, err := FingerprintRequest([]any{user, name, mt, hash, size})
+	params := []any{user, name, mt, hash, size}
+	if note != "" {
+		var exists bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM files WHERE id=? AND vault_id=? AND is_deleted=0)`, note, vault).Scan(&exists); err != nil {
+			return a, err
+		}
+		if !exists {
+			return a, ErrNotFound
+		}
+		params = append(params, note)
+	}
+	fingerprint, err := FingerprintRequest(params)
 	if err != nil {
 		return a, err
 	}
@@ -119,6 +141,11 @@ func (r *Repository) CreateAsset(ctx context.Context, user, vault, name, mediaTy
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO assets(id,vault_id,name,media_type,upload_id,created_at,operation_key,fingerprint) VALUES(?,?,?,?,?,?,NULLIF(?,''),?)`, id, vault, name, mt, upload, now, key, fingerprint); err != nil {
 		return a, err
+	}
+	if note != "" {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO note_image_uploads VALUES(?,?,?)`, id, note, user); err != nil {
+			return a, err
+		}
 	}
 	a, err = r.scanAsset(tx.QueryRowContext(ctx, assetSelect+`WHERE a.id=?`, id))
 	if err != nil {
@@ -174,6 +201,11 @@ func (r *Repository) AssetForPublicPath(ctx context.Context, user, year, month, 
 	return Asset{}, ErrNotFound
 }
 
+func (r *Repository) AssetForScopedPath(ctx context.Context, user, owner, vault, year, month, day, digest string) (Asset, error) {
+	reference := r.publicBase + "/assets/" + strings.Join([]string{owner, vault, year, month, day, digest}, "/")
+	return r.assetForReference(ctx, r.db, user, vault, reference)
+}
+
 func (r *Repository) assetForReference(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, user, vault, reference string) (Asset, error) {
@@ -188,6 +220,11 @@ func (r *Repository) assetForReference(ctx context.Context, queryer interface {
 		args = append(args, assetPath)
 	} else {
 		parts := strings.Split(assetPath, "/")
+		if len(parts) == 6 {
+			where += ` AND v.owner_user_id=? AND a.vault_id=?`
+			args = append(args, parts[0], parts[1])
+			parts = parts[2:]
+		}
 		if len(parts) != 4 || len(parts[0]) != 4 || len(parts[1]) != 2 || len(parts[2]) != 2 || !syncHashPattern.MatchString("sha256:"+parts[3]) {
 			return Asset{}, ErrNotFound
 		}
@@ -208,7 +245,7 @@ func (r *Repository) assetForReference(ctx context.Context, queryer interface {
 	return r.scanAsset(queryer.QueryRowContext(ctx, assetSelect+` WHERE `+where, args...))
 }
 func (r *Repository) DeleteAsset(ctx context.Context, user, vault, id string) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE assets SET is_deleted=1 WHERE vault_id=? AND id=? AND EXISTS(SELECT 1 FROM workspace_members WHERE vault_id=? AND user_id=? AND role IN ('owner','editor'))`, vault, id, vault, user)
+	res, err := r.db.ExecContext(ctx, `UPDATE assets SET is_deleted=1 WHERE vault_id=? AND id=? AND NOT EXISTS(SELECT 1 FROM image_lifetimes WHERE asset_id=assets.id) AND EXISTS(SELECT 1 FROM workspace_members WHERE vault_id=? AND user_id=? AND role IN ('owner','editor'))`, vault, id, vault, user)
 	if err != nil {
 		return err
 	}
@@ -221,7 +258,7 @@ func (r *Repository) DeleteAsset(ctx context.Context, user, vault, id string) er
 
 // Only canonical links on this instance form dependencies. External links survive imports verbatim.
 func (r *Repository) assetReferences(content []byte) []string {
-	pattern := regexp.MustCompile(regexp.QuoteMeta(r.publicBase+"/assets/") + `(asset_[a-zA-Z0-9_-]+|[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9a-f]{64})`)
+	pattern := regexp.MustCompile(regexp.QuoteMeta(r.publicBase+"/assets/") + `((?:[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/)?[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9a-f]{64}|asset_[a-zA-Z0-9_-]+)`)
 	seen := map[string]bool{}
 	refs := []string{}
 	for _, match := range pattern.FindAllSubmatch(content, -1) {
@@ -233,18 +270,6 @@ func (r *Repository) assetReferences(content []byte) []string {
 	}
 	return refs
 }
-func (r *Repository) validateAssetReferences(ctx context.Context, tx *sql.Tx, vault string, content []byte) error {
-	if !bytes.Contains(content, []byte("/assets/")) {
-		return nil
-	}
-	for _, ref := range r.assetReferences(content) {
-		if _, err := r.assetForReference(ctx, tx, "", vault, ref); err != nil {
-			return fileError(409, "ASSET_NOT_READY", "referenced asset is unavailable")
-		}
-	}
-	return nil
-}
-
 func (r *Repository) PublicBase() string { return r.publicBase }
 
 func (r *Repository) ListAssets(ctx context.Context, vault string) ([]Asset, error) {
@@ -281,4 +306,30 @@ func (r *Repository) MailBase() string {
 		return r.mailBase
 	}
 	return r.publicBase
+}
+
+func (r *Repository) copyLinkedImages(ctx context.Context, tx *sql.Tx, user, target string, data []byte) (map[string]string, error) {
+	var links map[string]string
+	for _, url := range r.assetReferences(data) {
+		parts := strings.Split(strings.TrimPrefix(url, r.publicBase+"/assets/"), "/")
+		if len(parts) != 6 || parts[1] == target {
+			continue
+		}
+		a, err := r.assetForReference(ctx, tx, user, parts[1], url)
+		if err != nil {
+			return nil, err
+		}
+		if !PictureType(a.Type) {
+			return nil, fileError(415, "IMAGE_TYPE_REQUIRED", "仅支持跨库复制图片")
+		}
+		dest, err := r.copyAsset(ctx, tx, target, a)
+		if err != nil {
+			return nil, err
+		}
+		if links == nil {
+			links = make(map[string]string)
+		}
+		links[url] = dest
+	}
+	return links, nil
 }

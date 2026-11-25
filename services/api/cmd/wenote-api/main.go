@@ -112,12 +112,18 @@ func main() {
 				return
 			case now := <-ticker.C:
 				repository.CleanupInBackground()
+				if err := repository.PublishVaults(ctx); err != nil {
+					log.Printf("publish vault directories: %v", err)
+				}
 				if err := repository.RunDueBackup(ctx, now); err != nil {
 					log.Printf("scheduled backup: %v", err)
 				}
 			}
 		}
 	}()
+	if err := repository.PublishVaults(ctx); err != nil {
+		log.Printf("publish vault directories: %v", err)
+	}
 	repository.RunExports()
 	mux := httpapi.NewMux(repository)
 	if *webDir != "" {

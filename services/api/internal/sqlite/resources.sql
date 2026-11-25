@@ -203,3 +203,71 @@ END;
 CREATE TRIGGER IF NOT EXISTS retire_export_jobs_key BEFORE DELETE ON export_jobs WHEN OLD.storage_key IS NOT NULL AND OLD.storage_key<>'' AND EXISTS(SELECT 1 FROM vaults WHERE id=OLD.vault_id) BEGIN
  INSERT OR IGNORE INTO retired_object_keys VALUES(OLD.vault_id,OLD.hash,OLD.storage_key);
 END;
+
+-- Only images enrolled by this version participate in automatic reclamation.
+CREATE TABLE IF NOT EXISTS image_lifetimes (
+ asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ orphan_since INTEGER
+);
+CREATE TABLE IF NOT EXISTS version_image_refs (
+ version_id TEXT NOT NULL REFERENCES file_versions(id) ON DELETE CASCADE,
+ asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+ PRIMARY KEY(version_id,asset_id)
+);
+CREATE INDEX IF NOT EXISTS version_image_asset ON version_image_refs(asset_id);
+CREATE TRIGGER IF NOT EXISTS pin_note_image AFTER INSERT ON version_image_refs BEGIN
+ UPDATE image_lifetimes SET orphan_since=NULL WHERE asset_id=NEW.asset_id;
+END;
+CREATE TRIGGER IF NOT EXISTS release_note_image AFTER DELETE ON version_image_refs BEGIN
+ UPDATE image_lifetimes SET orphan_since=unixepoch() WHERE asset_id=OLD.asset_id AND NOT EXISTS(SELECT 1 FROM version_image_refs WHERE asset_id=OLD.asset_id);
+END;
+
+CREATE TABLE IF NOT EXISTS vault_publications (
+ vault TEXT PRIMARY KEY REFERENCES vaults(id) ON DELETE CASCADE,
+ dirty INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS vault_layout_upgrades (
+ vault TEXT PRIMARY KEY REFERENCES vaults(id) ON DELETE CASCADE,
+ backup_id TEXT NOT NULL DEFAULT '', report TEXT NOT NULL DEFAULT ''
+);
+INSERT OR IGNORE INTO vault_layout_upgrades(vault) SELECT id FROM vaults WHERE id NOT IN (SELECT vault FROM vault_publications);
+INSERT OR IGNORE INTO vault_publications(vault) SELECT id FROM vaults;
+CREATE TABLE IF NOT EXISTS vault_published_files (
+ vault TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+ path TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(vault,path)
+);
+CREATE TRIGGER IF NOT EXISTS publish_new_vault AFTER INSERT ON vaults BEGIN
+ INSERT INTO vault_publications(vault) VALUES(NEW.id);
+END;
+CREATE TRIGGER IF NOT EXISTS publish_revision AFTER UPDATE OF current_revision ON vaults BEGIN
+ UPDATE vault_publications SET dirty=1 WHERE vault=NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS publish_asset_completion AFTER UPDATE OF status ON upload_sessions WHEN NEW.status='completed' AND EXISTS(SELECT 1 FROM assets WHERE upload_id=NEW.id) BEGIN
+ UPDATE vault_publications SET dirty=1 WHERE vault=NEW.vault_id;
+END;
+CREATE TRIGGER IF NOT EXISTS publish_removed_asset AFTER DELETE ON assets BEGIN
+ UPDATE vault_publications SET dirty=1 WHERE vault=OLD.vault_id;
+END;
+
+-- Keep the originating note ID after trash is emptied for upload provenance.
+CREATE TABLE IF NOT EXISTS note_image_uploads (
+ asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
+ note_id TEXT NOT NULL, uploader_id TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS publish_purged_file AFTER DELETE ON files BEGIN
+ UPDATE vault_publications SET dirty=1 WHERE vault=OLD.vault_id;
+END;
+
+-- Snapshots that open and close between cleanup runs still interrupt the orphan interval.
+CREATE TRIGGER IF NOT EXISTS pin_export_images AFTER INSERT ON export_jobs BEGIN
+ UPDATE image_lifetimes SET orphan_since=NULL WHERE asset_id IN (SELECT json_extract(value,'$.id') FROM json_each(NEW.snapshot,'$.assets'));
+END;
+CREATE TRIGGER IF NOT EXISTS pin_shares_images AFTER INSERT ON shares BEGIN
+ UPDATE image_lifetimes SET orphan_since=NULL WHERE asset_id IN (SELECT json_extract(value,'$.asset_id') FROM json_each(NEW.snapshot,'$.assets'));
+END;
+CREATE TRIGGER IF NOT EXISTS pin_share_links_images AFTER INSERT ON share_links BEGIN
+ UPDATE image_lifetimes SET orphan_since=NULL WHERE asset_id IN (SELECT json_extract(value,'$.asset_id') FROM json_each(NEW.snapshot,'$.assets'));
+END;
+CREATE TRIGGER IF NOT EXISTS pin_share_publications_images AFTER INSERT ON share_publications BEGIN
+ UPDATE image_lifetimes SET orphan_since=NULL WHERE asset_id IN (SELECT json_extract(value,'$.asset_id') FROM json_each(NEW.snapshot,'$.assets'));
+END;

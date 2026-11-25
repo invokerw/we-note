@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -9,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -223,7 +225,28 @@ func (r *Repository) CompleteUploadSession(ctx context.Context, vaultID, uploadI
 	if session.Status != "pending" {
 		return model.UploadSession{}, fmt.Errorf("upload session is not pending")
 	}
-	storageKey, err := r.blobStore.PutAt(ctx, vaultID, session.ContentHash, session.ContentSize, session.CreatedAt, source)
+	var media string
+	if err = r.db.QueryRowContext(ctx, `SELECT coalesce((SELECT media_type FROM assets WHERE vault_id=? AND upload_id=?),'')`, vaultID, uploadID).Scan(&media); err != nil {
+		return model.UploadSession{}, err
+	}
+	if PictureType(media) {
+		buf := bufio.NewReader(source)
+		header, readErr := buf.Peek(512)
+		if readErr != nil && readErr != io.EOF {
+			return model.UploadSession{}, readErr
+		}
+		if http.DetectContentType(header) != media {
+			return model.UploadSession{}, fileError(415, "INVALID_IMAGE", "图片类型与内容不符")
+		}
+		source = buf
+	}
+	isAsset := media != ""
+	var storageKey string
+	if isAsset {
+		storageKey, err = putResource(ctx, r.blobStore, vaultID, session.ContentHash, session.ContentSize, session.CreatedAt, source)
+	} else {
+		storageKey, err = r.blobStore.PutAt(ctx, vaultID, session.ContentHash, session.ContentSize, session.CreatedAt, source)
+	}
 	if err != nil {
 		return model.UploadSession{}, err
 	}
@@ -254,6 +277,11 @@ func (r *Repository) CompleteUploadSession(ctx context.Context, vaultID, uploadI
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM upload_part_leases WHERE upload_id=?`, uploadID); err != nil {
 		return model.UploadSession{}, err
+	}
+	if isAsset {
+		if err = enrollImage(ctx, tx, uploadID); err != nil {
+			return model.UploadSession{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return model.UploadSession{}, fmt.Errorf("commit upload completion: %w", err)
@@ -508,15 +536,6 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 		}
 	}
 
-	if request.Metadata.Format == "md" {
-		data, err := r.readNoteBlobWithQuery(ctx, tx, request.VaultID, request.ContentHash, request.ContentSize)
-		if err != nil {
-			return SyncSubmitResult{}, err
-		}
-		if err := r.validateAssetReferences(ctx, tx, request.VaultID, data); err != nil {
-			return SyncSubmitResult{}, err
-		}
-	}
 	if currentRevision >= maxSafeRevision {
 		return SyncSubmitResult{}, &SyncError{
 			Status:  503,
@@ -555,6 +574,18 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 		nullableString(currentVersionID), request.DeviceID, request.Metadata.Format,
 		nullableLineEnding(request.Metadata.LineEnding), newRevision, formatTime(createdAt)); err != nil {
 		return SyncSubmitResult{}, fmt.Errorf("create file version: %w", err)
+	}
+	if err := r.writeVersionObject(ctx, tx, request.VaultID, request.FileID, versionID, request.Metadata.Format, request.ContentHash, request.ContentSize); err != nil {
+		return SyncSubmitResult{}, err
+	}
+	if request.Metadata.Format == "md" {
+		data, err := r.readNoteBlobWithQuery(ctx, tx, request.VaultID, request.ContentHash, request.ContentSize)
+		if err != nil {
+			return SyncSubmitResult{}, err
+		}
+		if err := r.indexVersionImages(ctx, tx, request.VaultID, versionID, data); err != nil {
+			return SyncSubmitResult{}, err
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE files

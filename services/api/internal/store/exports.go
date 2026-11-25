@@ -95,8 +95,8 @@ func (r *Repository) CreateExport(ctx context.Context, user, vault, key string, 
 		mode = "online"
 	}
 	var j Export
-	if scope != "notes" && scope != "assets" && scope != "all" {
-		return j, fileError(400, "INVALID_SCOPE", "expected notes, assets or all")
+	if scope != "notes" && scope != "all" {
+		return j, fileError(400, "INVALID_SCOPE", "expected notes or all")
 	}
 	if mode != "online" && (mode != "portable" || scope != "all") {
 		return j, fileError(400, "INVALID_EXPORT_MODE", "portable mode requires a full vault export")
@@ -163,7 +163,11 @@ func (r *Repository) CreateExport(ctx context.Context, user, vault, key string, 
 			if !PortablePath(name) {
 				name = "attachment"
 			}
-			snap.Assets = append(snap.Assets, exportEntry{Path: "assets/" + a.ID + "/" + name, ID: a.ID, Hash: a.Hash, Size: a.Size, Name: a.Name, URL: a.URL, StorageKey: a.StorageKey})
+			archivePath := "assets/" + a.ID + "/" + name
+			if PictureType(a.Type) {
+				archivePath = "assets/" + a.CreatedAt.UTC().Format(assetDateLayout) + "/" + strings.TrimPrefix(a.Hash, "sha256:")
+			}
+			snap.Assets = append(snap.Assets, exportEntry{Path: archivePath, ID: a.ID, Hash: a.Hash, Size: a.Size, Name: a.Name, URL: a.URL, StorageKey: a.StorageKey})
 		}
 		if e = rows.Err(); e != nil {
 			return j, e

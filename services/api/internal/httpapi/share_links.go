@@ -53,6 +53,9 @@ func (a *API) manageLinks(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (a *API) publicLink(w http.ResponseWriter, r *http.Request) {
+	if r.PathValue("asset") != "" && !a.allowAssetRead(w, r) {
+		return
+	}
 	ctx := r.Context()
 	id := r.PathValue("id")
 	w.Header().Set("Cache-Control", "private, no-store")

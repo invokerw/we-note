@@ -144,11 +144,17 @@ enum LocalAction {
         base: Option<String>,
         text: String,
     },
+    StageImage {
+        name: String,
+        media: String,
+        data: String,
+    },
     Image {
         url: String,
         token: String,
     },
     Upload {
+        path: String,
         name: String,
         media: String,
         data: String,
@@ -220,14 +226,18 @@ async fn notebook(
             Save { path, base, text } => book
                 .save(&path, base.as_deref(), &text)
                 .map(serde_json::Value::String),
+            StageImage { name, media, data } => book
+                .stage_image(&name, &media, &data)
+                .map(serde_json::Value::String),
             Image { url, token } => book.image(&url, &token),
             Upload {
+                path,
                 name,
                 media,
                 data,
                 token,
             } => book
-                .upload(&token, &name, &media, &data)
+                .upload(&token, &path, &name, &media, &data)
                 .map(serde_json::Value::String),
         }
         .map_err(|e| format!("{e:#}"))

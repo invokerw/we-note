@@ -97,7 +97,7 @@ func (r *Repository) ChangeEntry(ctx context.Context, user, vault, key string, i
 		if err != nil {
 			return err
 		}
-		_, err = writeFileTx(ctx, tx, vault, f.id, op, changeKey, FileWrite{BasePath: f.path, BaseVersion: f.version, Device: "web_" + user, Path: dst + strings.TrimPrefix(f.path, src)}, f.content)
+		_, err = r.writeFileTx(ctx, tx, vault, f.id, op, changeKey, FileWrite{BasePath: f.path, BaseVersion: f.version, Device: "web_" + user, Path: dst + strings.TrimPrefix(f.path, src)}, f.content)
 		if err != nil {
 			return err
 		}

@@ -492,3 +492,73 @@ func TestRemotePurgeRetriesAfterRestart(t *testing.T) {
 		})
 	}
 }
+
+func TestUnreferencedPictureGracePeriod(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	db, err := sqlite.Open(ctx, filepath.Join(root, "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	local, err := blob.NewLocalStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRepository(db, local)
+	u, err := r.CreateUser(ctx, "orphan@local.test", "unused")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := r.CreateVault(ctx, u.ID, "notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := "\x89PNG\r\n\x1a\nfixture"
+	a, err := r.CreateAsset(ctx, u.ID, v.ID, "sample.png", "image/png", fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(data))), "", int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.CompleteUploadSession(ctx, v.ID, a.Upload, strings.NewReader(data)); err != nil {
+		t.Fatal(err)
+	}
+	a, err = r.AssetForUser(ctx, u.ID, v.ID, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(root, a.StorageKey)
+	note, err := r.WriteFile(ctx, u.ID, v.ID, "", "create_file", "", FileWrite{Path: "note.md", Content: []byte("![](" + a.URL + ")")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.WriteFile(ctx, u.ID, v.ID, note.FileID, "delete_file", "", FileWrite{BaseVersion: note.Version}); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.RunCleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(file); err != nil {
+		t.Fatalf("trashed note lost picture: %v", err)
+	}
+	if _, err = r.ManageTrash(ctx, u.ID, v.ID, "purge", "file", note.FileID); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.RunCleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(file); err != nil {
+		t.Fatalf("no grace period: %v", err)
+	}
+	if _, err = db.Exec(`UPDATE image_lifetimes SET orphan_since=unixepoch()-7*86400 WHERE asset_id=? AND orphan_since IS NOT NULL`, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.RunCleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("expired image still present: %v", err)
+	}
+}

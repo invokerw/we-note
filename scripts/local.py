@@ -25,7 +25,7 @@ LOG = RUN / 'server.log'
 
 
 def command(port):
-    return [str(BINARY), '-addr', f'127.0.0.1:{port}', '-mail-url', f'http://localhost:{port}', '-web-dir', str(WEB / 'dist')]
+    return [str(BINARY), '-addr', f'127.0.0.1:{port}', '-mail-url', f'http://localhost:{port}', '-public-url', f'http://localhost:{port}', '-web-dir', str(WEB / 'dist')]
 
 
 def running():
@@ -40,7 +40,8 @@ def running():
     if ps.stderr or ps.returncode not in (0, 1):
         raise RuntimeError(f'无法核对进程 {pid}：{ps.stderr.strip()}')
     legacy = [str(BINARY), '-addr', f'127.0.0.1:{port}', '-web-dir', str(WEB / 'dist')]
-    if ps.stdout.strip() in (' '.join(command(port)), ' '.join(legacy)):
+    previous = legacy[:3] + ['-mail-url', f'http://localhost:{port}'] + legacy[3:]
+    if ps.stdout.strip() in (' '.join(command(port)), ' '.join(previous), ' '.join(legacy)):
         return pid, port
     STATE.unlink()
     return None

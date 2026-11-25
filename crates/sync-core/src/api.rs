@@ -196,8 +196,18 @@ impl Api {
 
 impl Api {
     pub(crate) fn asset_bytes(&self, vault: &str, route: &str) -> Result<(String, Vec<u8>)> {
-        if route.split('/').count() == 4 {
-            let parts: Vec<&str> = route.split('/').collect();
+        let route_parts: Vec<&str> = route.split('/').collect();
+        let parts = match route_parts.as_slice() {
+            [owner, resource_vault, date @ ..] if date.len() == 4 => {
+                super::identifier(owner)?;
+                if *resource_vault != vault {
+                    bail!("asset belongs to another vault")
+                }
+                date
+            }
+            parts => parts,
+        };
+        if parts.len() == 4 {
             if parts[0].len() != 4
                 || parts[1].len() != 2
                 || parts[2].len() != 2
@@ -257,21 +267,58 @@ impl Api {
     pub(crate) fn upload_asset(
         &self,
         vault: &str,
+        note: &str,
         name: &str,
         media: &str,
         bytes: &[u8],
     ) -> Result<String> {
         let base = format!("/api/v1/vaults/{vault}/assets");
-        let meta=self.json(Method::POST,&format!("{base}/uploads"),Some(json!({"name":name,"media_type":media,"content_hash":super::digest(bytes),"content_size":bytes.len()})),Some(&uuid::Uuid::new_v4().to_string()))?;
+        let meta=self.json(Method::POST,&format!("{base}/uploads"),Some(json!({"file_id":note,"name":name,"media_type":media,"content_hash":super::digest(bytes),"content_size":bytes.len()})),Some(&super::digest(&serde_json::to_vec(&(note,name,media,super::digest(bytes)))?)))?;
         let id = meta["asset_id"].as_str().context("missing asset ID")?;
         super::identifier(id)?;
-        checked(
-            self.client
-                .post(format!("{}{base}/{id}/complete", self.origin))
-                .bearer_auth(&self.token)
-                .body(bytes.to_vec())
-                .send()?,
-        )?;
+        if meta["status"] != "completed" {
+            if bytes.len() >= 4 << 20 {
+                use base64::{engine::general_purpose::STANDARD, Engine};
+                let state = self.transfer(vault, AssetTransfer::Parts { id: id.into() })?;
+                let size = state["part_size"]
+                    .as_u64()
+                    .filter(|s| (1..=8 << 20).contains(s))
+                    .context("invalid part size")? as usize;
+                let done = state["completed_parts"]
+                    .as_array()
+                    .context("invalid part list")?;
+                for (i, chunk) in bytes.chunks(size).enumerate() {
+                    if done.contains(&json!(i)) {
+                        continue;
+                    }
+                    let start = i * size;
+                    self.transfer(
+                        vault,
+                        AssetTransfer::Put {
+                            id: id.into(),
+                            number: i as u32,
+                            range: format!(
+                                "bytes {}-{}/{}",
+                                start,
+                                start + chunk.len() - 1,
+                                bytes.len()
+                            ),
+                            hash: super::digest(chunk),
+                            data: STANDARD.encode(chunk),
+                        },
+                    )?;
+                }
+                self.transfer(vault, AssetTransfer::Assemble { id: id.into() })?;
+            } else {
+                checked(
+                    self.client
+                        .post(format!("{}{base}/{id}/complete", self.origin))
+                        .bearer_auth(&self.token)
+                        .body(bytes.to_vec())
+                        .send()?,
+                )?;
+            }
+        }
         Ok(meta["canonical_url"]
             .as_str()
             .context("missing asset URL")?

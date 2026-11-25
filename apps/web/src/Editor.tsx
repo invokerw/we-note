@@ -13,7 +13,7 @@ import { Document, type Mode } from "./markdown/Markdown";
 import { formatMarkdown } from "./markdown/saveFormat";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { download } from "./Resources";
-import { base64, Note, request, uploadAsset, Version } from "./api";
+import { base64, Note, pictureTypes, request, uploadAsset, Version } from "./api";
 import {
   loadNoteMode,
   markdownPreferences,
@@ -198,12 +198,19 @@ export default function Editor({
     formatBeforeSave();
     const submitted = source.current.text;
     const value = source.current.serialize();
-    await saveBytes(new TextEncoder().encode(value));
+    const replacements = await persistBytes(new TextEncoder().encode(value));
     if (!alive.current) return;
-    saved.current = submitted;
-    dirty(source.current.text !== submitted);
+    const rewrite = (s: string) => Object.entries(replacements ?? {}).reduce((v,[old,url]) => v.split(old).join(url),s);
+    if (replacements) {
+      const text = rewrite(source.current.text);
+      source.current.edit(text);
+      setText(text);
+    }
+    saved.current = rewrite(submitted);
+    dirty(source.current.text !== saved.current);
   }
-  async function saveBytes(data: Uint8Array) {
+  async function saveBytes(data: Uint8Array) { await persistBytes(data); }
+  async function persistBytes(data: Uint8Array): Promise<Record<string,string> | undefined> {
     const out = await (
       await request(token, path + "/content", "PUT", {
         base_version_id: base,
@@ -214,6 +221,7 @@ export default function Editor({
     setBase(out.version_id);
     await changed();
     notify("已保存新版本");
+    return out.image_urls;
   }
   const alive = useRef(true);
   useEffect(() => {
@@ -227,7 +235,7 @@ export default function Editor({
     const insertHere = rich.current?.insertion() ?? captureInsertion(editor.current);
     const parts = [];
     for (const file of files) {
-      const url = await uploadAsset(token, vault, file, notify);
+      const url = await uploadAsset(token, vault, note.file_id, file, notify);
       parts.push(
         (file.type.startsWith("image/") ? "!" : "") +
           "[" +
@@ -389,6 +397,7 @@ export default function Editor({
         type="file"
         hidden
         ref={assetPicker}
+        accept={pictureTypes}
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) run(() => insert([f]));
@@ -451,7 +460,7 @@ export default function Editor({
           <div className="note-content" inert={!base || busy}>
             <Document
               writing={rich}
-              upload={file => uploadAsset(token, vault, file, notify)}
+              upload={file => uploadAsset(token, vault, note.file_id, file, notify)}
               imageURL={async url => {
                 if (!url.startsWith(origin + "/assets/")) return url;
                 const blob = await (await request(token, new URL(url).pathname)).blob();

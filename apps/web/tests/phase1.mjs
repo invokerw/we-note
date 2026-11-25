@@ -32,7 +32,7 @@ try {
   a.once("dialog", (d) => d.accept("daily/验收.md"));
   await button(a, "新建笔记").click();
   await button(a, "编辑模式").click();
-  await button(a, "源码").click();
+  await button(a, "分屏编辑").click();
   await a.getByLabel("笔记源码").fill("# 浏览器快照");
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aQAAAABJRU5ErkJggg==",
@@ -47,7 +47,7 @@ try {
   await button(a, "保存").click();
   await a.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();
   await button(a, "编辑模式").click();
-  await button(a, "预览模式").click();
+  await button(a, "预览").click();
   await a.getByRole("heading", { name: "浏览器快照" }).waitFor();
   await a.waitForFunction(
     () => document.querySelector("article img")?.naturalWidth === 1,
@@ -65,7 +65,7 @@ try {
   await a.getByText("快照已发送").waitFor();
   a.off("dialog", dialogs);
   await button(a, "编辑模式").click();
-  await button(a, "源码").click();
+  await button(a, "分屏编辑").click();
   await a.getByLabel("笔记源码").fill("# 发件人后续修改");
   await button(a, "保存").click();
   await a.getByText("已保存新版本").waitFor();
@@ -79,13 +79,13 @@ try {
   await b.getByText(/已导入/).waitFor();
   await button(b, "验收.md").click();
   await button(b, "编辑模式").click();
-  await button(b, "预览模式").click();
+  await button(b, "预览").click();
   await b.getByRole("heading", { name: "浏览器快照" }).waitFor();
   await b.waitForFunction(
     () => document.querySelector("article img")?.naturalWidth === 1,
   );
   await button(b, "编辑模式").click();
-  await button(b, "源码").click();
+  await button(b, "分屏编辑").click();
   await b.getByLabel("笔记源码").fill("Bob 独立编辑");
   await button(b, "保存").click();
   await b.getByText("已保存新版本").waitFor();
@@ -97,7 +97,7 @@ try {
   await button(b, "恢复").click();
   await button(b, "恢复.md").click();
   await button(b, "编辑模式").click();
-  await button(b, "预览模式").click();
+  await button(b, "预览").click();
   assert.equal(await b.locator(".reading").innerText(), "Bob 独立编辑");
   console.log(
     "Browser acceptance passed: registration, source editing, private asset preview, version history, frozen directory share, recipient copy, trash and restore.",

@@ -1,3 +1,4 @@
+import { checkPicture, pictureTypes } from "./api";
 import { markdownWritingMode } from "./markdown/modes";
 import EncryptedVaults, { type EncryptedIO } from "./EncryptedVaults";
 import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
@@ -72,7 +73,7 @@ function local<T>(
   });
 }
 function isAsset(src: string) {
-  return /^https?:\/\/[^/]+\/assets\/(?:asset_[\w-]+|\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{64})$/.test(src);
+  return src.startsWith("https://wenote-draft.invalid/assets/") || /^https?:\/\/[^/]+\/assets\/(?:asset_[\w-]+|(?:[\w-]+\/[\w-]+\/)?\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{64})$/.test(src);
 }
 function LocalImage({
   binding,
@@ -417,7 +418,16 @@ function Workspace({
     setText(next);
   }
   async function uploadFile(f: File) {
-    const token = await binding.access();
+    checkPicture(f);
+    if (f.size > 256 << 20) throw Error("图片超过 256 MiB");
+    async function stage() {
+      const url = await local<string>(vault,"stage_image",{name:f.name,media:f.type,data:base64(new Uint8Array(await f.arrayBuffer()))});
+      notify("图片已存到本机，保存笔记并同步后将生成正式地址");
+      return url;
+    }
+    const token = await binding.access().catch(() => "");
+    const fileID = await local<string | null>(vault, "file_id", { path });
+    if (!fileID || !token || !navigator.onLine) return stage();
     const transfer = async <T,>(
       step: string,
       args: Record<string, unknown> = {},
@@ -426,16 +436,16 @@ function Workspace({
         token: await binding.access(),
         request: { step, ...args },
       });
-    return f.size >= multipartThreshold
+    try { return f.size >= multipartThreshold
         ? await multipart(
             f,
             [
               localStorage.getItem("origin") || "",
-              vault,
+              vault, path,
               (await transfer<{ id: string }>("user")).id,
             ],
             {
-              create: (meta, key) => transfer("create", { meta, key }),
+              create: (meta, key) => transfer("create", { meta: { ...meta, file_id: fileID }, key }),
               parts: (id) => transfer("parts", { id }),
               put: (id, number, range, hash, data) =>
                 transfer("put", {
@@ -452,11 +462,15 @@ function Workspace({
               local(vault, "upload_key", { slot, complete }),
           )
         : await local<string>(vault, "upload", {
-            token,
+            path, token,
             name: f.name,
             media: f.type || "application/octet-stream",
             data: base64(new Uint8Array(await f.arrayBuffer())),
           });
+    } catch (error) {
+      if (/network|connect|offline|error sending request|timed out|failed to fetch/i.test(String(error))) return stage();
+      throw error;
+    }
   }
   async function attach(input: File[]) {
     const insertHere = rich.current?.insertion() ?? captureInsertion(editor.current),
@@ -501,6 +515,7 @@ function Workspace({
         type="file"
         hidden
         ref={picker}
+        accept={pictureTypes}
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) run(() => attach([f]));
@@ -626,7 +641,7 @@ function Workspace({
         tools={
           <>
             {" "}
-            {["笔记", "搜索", "附件", "导出", "插件"]
+            {["笔记", "搜索", "导出", "插件"]
               .filter((v) => !phone || v !== "笔记")
               .map((v) => (
                 <button

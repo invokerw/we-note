@@ -82,7 +82,7 @@ try {
     path: "工作/目标.md",
     content: Buffer.from("# 目标文件").toString("base64"),
   });
-  const page = await chrome.newPage();
+  const page = await chrome.newPage({ viewport: { width: 1600, height: 1000 } });
   page.setDefaultTimeout(12000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -127,10 +127,13 @@ try {
   await panelToggle.click();
   assert.equal(await metadata.isVisible(), false);
   const divider = split.getByRole("separator");
+  await split.locator('[aria-orientation="vertical"]').waitFor();
+  await divider.scrollIntoViewIfNeeded();
   const grip = await divider.boundingBox();
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
   await page.mouse.down();
-  await page.mouse.move(grip.x + 65, grip.y + grip.height / 2);
+  const resizedBox = await split.boundingBox();
+  await page.mouse.move(resizedBox.x + resizedBox.width * 0.65, grip.y + grip.height / 2, {steps:8});
   await page.mouse.up();
   assert.ok(Number(await divider.getAttribute("aria-valuenow")) > 50);
   await divider.dblclick();
@@ -207,18 +210,18 @@ try {
   await button("我的文件夹").click();
   assert.equal(await split.getByLabel("笔记源码").innerText(), "**分屏草稿**");
   await button("编辑模式").click();
-  await button("所见所得").click();
-  const writing = page.getByRole("textbox", { name: "笔记正文" });
+  await button("可视化编辑").click();
+  const writing = page.getByLabel("可视化编辑器").locator(".ProseMirror[contenteditable=true]");
   const keys = page.keyboard;
   async function switchMode(name) {
     await button("编辑模式").click();
     await button(name).click();
   }
   async function checkSource(expected) {
-    await switchMode("源码");
+    await switchMode("分屏编辑");
     const lines = page.getByLabel("笔记源码").locator(".cm-line");
     assert.equal((await lines.allTextContents()).join("\n"), expected);
-    await switchMode("所见所得");
+    await switchMode("可视化编辑");
   }
   async function writeDraft(value) {
     await writing.press("ControlOrMeta+a");
@@ -358,7 +361,7 @@ try {
   await button("目标.md").click();
   await button("路线.md").click();
   await button("编辑模式").click();
-  await button("所见所得").click();
+  await button("可视化编辑").click();
   await writing.locator(".live-preview table td").first().waitFor();
   await writing.locator(".katex").waitFor();
   await writing.locator(".callout").waitFor();
@@ -412,7 +415,7 @@ try {
     .getByRole("region", { name: "反向链接" })
     .getByRole("button", { name: "工作/路线.md" })
     .click();
-  await switchMode("所见所得");
+  await switchMode("可视化编辑");
   await clickTextAt(writing, "新的正文。", "新的正文。".length);
   const png =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aQAAAABJRU5ErkJggg==";
@@ -438,19 +441,15 @@ try {
     () => document.activeElement?.getAttribute("aria-label") === "笔记正文",
   );
   await keys.insertText("图注");
-  await switchMode("源码");
+  await switchMode("分屏编辑");
   const withImage = (
     await page.getByLabel("笔记源码").locator(".cm-line").allTextContents()
   ).join("\n");
   assert.match(withImage, /新的正文。\n!\[剪贴板.png\]\([^)]+\)\n图注/);
   await button("保存").click();
   await page.getByText("已保存新版本").waitFor();
-  await button("附件").click();
-  await page.getByText("剪贴板.png", { exact: true }).waitFor();
-  await button("预览").click();
-  await page.waitForFunction(
-    () => document.querySelector(".asset-row img")?.naturalWidth === 1,
-  );
+  await switchMode("预览");
+  await page.waitForFunction(() => document.querySelector('img[alt="剪贴板.png"]')?.naturalWidth === 1);
   await button("搜索").click();
   await page.getByLabel("全文搜索").fill("新的正文");
   await button("#例会 · 1").click();
@@ -461,7 +460,7 @@ try {
   const wait = page.waitForEvent("download");
   await button("下载 ZIP").click();
   assert.equal((await wait).suggestedFilename(), "wenote-all.zip");
-  await page.getByLabel("附件链接").selectOption("portable");
+  await page.getByLabel("图片链接").selectOption("portable");
   await button("创建导出").click();
   const portableDownload = page.waitForEvent("download");
   await page
@@ -500,11 +499,11 @@ try {
   }
   await button("路线.md").click();
   await button("编辑模式").click();
-  await button("源码").click();
+  await button("分屏编辑").click();
   const file = {
-    name: "resume.bin",
-    mimeType: "application/octet-stream",
-    buffer: Buffer.alloc((4 << 20) + 17, 0x6a),
+    name: "resume.png",
+    mimeType: "image/png",
+    buffer: Buffer.concat([Buffer.from(png, "base64"), Buffer.alloc(4 << 20, 0x6a)]),
   };
   const seen = [];
   let interrupt = true;
@@ -527,14 +526,14 @@ try {
   await page.reload();
   await button("路线.md").click();
   await button("编辑模式").click();
-  await button("源码").click();
+  await button("分屏编辑").click();
   await picker.setInputFiles(file);
   await page.waitForFunction(() =>
-    document.querySelector(".cm-content")?.textContent.includes("resume.bin"),
+    document.querySelector(".cm-content")?.textContent.includes("resume.png"),
   );
   assert.deepEqual(seen.sort(), [2, 4]);
   const assets = await (await api(base + "/assets")).json();
-  const completed = assets.filter((a) => a.name === "resume.bin");
+  const completed = assets.filter((a) => a.name === "resume.png");
   assert.equal(completed.length, 1);
   assert.deepEqual(
     Buffer.from(

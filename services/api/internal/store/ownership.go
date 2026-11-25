@@ -32,6 +32,17 @@ func (s ownedStore) PutAt(ctx context.Context, v, h string, size int64, createdA
 	}
 	return s.raw.PutAt(ctx, key, h, size, createdAt, in)
 }
+func putResource(ctx context.Context, store blob.Store, vault, hash string, size int64, date time.Time, body io.Reader) (string, error) {
+	scoped, ok := store.(ownedStore)
+	if !ok {
+		return "", errors.New("resource requires a vault owner")
+	}
+	ns, err := scoped.namespace(vault)
+	if err != nil {
+		return "", err
+	}
+	return scoped.raw.PutAt(ctx, ns+"/assets", hash, size, date, body)
+}
 func (s ownedStore) OpenContext(ctx context.Context, v, h, storageKey string) (io.ReadCloser, error) {
 	key, err := s.namespace(v)
 	if err != nil {

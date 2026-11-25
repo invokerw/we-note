@@ -104,7 +104,7 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 	if w.Code != 200 || !bytes.Equal(w.Body.Bytes(), data) {
 		t.Fatal("wrong assembled bytes", w.Code)
 	}
-	wantURL := "https://localhost:8443/assets/" + asset.CreatedAt.UTC().Format("2006/01/02") + "/" + strings.TrimPrefix(asset.Hash, "sha256:")
+	wantURL := "https://localhost:8443/assets/" + alice.ID + "/" + v.ID + "/" + asset.CreatedAt.UTC().Format("2006/01/02") + "/" + strings.TrimPrefix(asset.Hash, "sha256:")
 	if asset.URL != wantURL {
 		t.Fatalf("asset URL = %q, want %q", asset.URL, wantURL)
 	}
@@ -117,7 +117,7 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := strings.TrimPrefix(asset.Hash, "sha256:")
-	wantKey := filepath.Join("users", alice.ID, "vaults", v.ID, asset.CreatedAt.UTC().Format("2006/01/02"), digest)
+	wantKey := filepath.Join("users", alice.ID, "vaults", v.ID, "assets", asset.CreatedAt.UTC().Format("2006/01/02"), digest)
 	if storageKey != wantKey {
 		t.Fatalf("storage key = %q, want %q", storageKey, wantKey)
 	}

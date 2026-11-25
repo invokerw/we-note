@@ -123,7 +123,7 @@ try {
   await click("自动格式化.md");
   await page.locator('.document-mode.mode-split[data-markdown-theme="clean"]').waitFor();
   await click("编辑模式");
-  await click("源码");
+  await click("分屏编辑");
   const messyMarkdown = [
     "---",
     "title: 你好world",
@@ -178,7 +178,7 @@ try {
   const stored = await (await api("/api/v1/me/plugin-settings")).json();
   assert.equal(stored.plugins["com.wenote.md"].syncScroll, false);
   await click("编辑模式");
-  await click("所见所得");
+  await click("可视化编辑");
   // Sample painted pixels: the caret is in a separate blinking layer above the text.
   await page.addStyleTag({ content: ".cm-cursorLayer { animation: none !important }" });
   async function caretContrast() {

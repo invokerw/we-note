@@ -90,22 +90,28 @@ export function base64(data: Uint8Array) {
     s += String.fromCharCode(...data.subarray(i, i + 8192));
   return btoa(s);
 }
+export const pictureTypes = "image/png,image/jpeg,image/gif,image/webp";
+export function checkPicture(file: File) {
+  if (!pictureTypes.split(",").includes(file.type)) throw Error("请选择 PNG、JPEG、GIF 或 WebP 图片");
+}
 export async function uploadAsset(
   token: string,
   vault: string,
+  note: string,
   file: File,
   progress?: (message: string) => void,
 ) {
+  checkPicture(file);
   const path = `/api/v1/vaults/${vault}/assets`;
   if (file.size >= multipartThreshold) {
     const user = await (await request(token, "/api/v1/me")).json();
     return multipart(
       file,
-      [location.origin, vault, user.id],
+      [location.origin, vault, note, user.id],
       {
         create: async (meta, key) =>
           (
-            await request(token, path + "/uploads", "POST", meta, {
+            await request(token, path + "/uploads", "POST", { ...meta, file_id:note }, {
               "Idempotency-Key": key,
             })
           ).json(),
@@ -134,6 +140,7 @@ export async function uploadAsset(
     Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
   const asset = await (
     await request(token, path + "/uploads", "POST", {
+      file_id: note,
       name: file.name,
       media_type: file.type || "application/octet-stream",
       content_hash: hash,

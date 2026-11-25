@@ -88,6 +88,74 @@ impl Sync<'_> {
         base: Option<&Entry>,
         bytes: Option<&[u8]>,
     ) -> Result<()> {
+        if let Some(original) = bytes.filter(|d| {
+            path.to_ascii_lowercase().ends_with(".md")
+                && d.windows(notebook::DRAFT_PREFIX.len())
+                    .any(|w| w == notebook::DRAFT_PREFIX.as_bytes())
+        }) {
+            let text = std::str::from_utf8(original)?;
+            if method == Method::POST {
+                // Reserve the durable file identity before uploading a new offline note's images.
+                self.send(Method::POST, "", path, None, Some(b""))?;
+                let (id, entry) = self
+                    .state
+                    .files
+                    .iter()
+                    .find(|(_, e)| e.path == path)
+                    .context("missing created note")?;
+                return self.send(
+                    Method::PUT,
+                    &format!("/{id}/content"),
+                    path,
+                    Some(&entry.clone()),
+                    Some(original),
+                );
+            }
+            let id = suffix
+                .trim_start_matches('/')
+                .split('/')
+                .next()
+                .context("missing note ID")?;
+            let mut resolved = text.to_string();
+            for (index, prefix) in text.match_indices(notebook::DRAFT_PREFIX) {
+                let tail = &text[index + prefix.len()..];
+                let hash = tail
+                    .get(..64)
+                    .filter(|h| h.bytes().all(|b| b.is_ascii_hexdigit()))
+                    .context("草稿图片链接无效")?;
+                let url = format!("{}{hash}", notebook::DRAFT_PREFIX);
+                let dir = self
+                    .state_dir
+                    .join("asset-cache")
+                    .join(&digest(url.as_bytes())[7..]);
+                let data = fs::read(dir.join("bytes")).context("本机缺少草稿图片")?;
+                if &digest(&data)[7..] != hash {
+                    bail!("草稿图片校验失败")
+                }
+                let media = fs::read_to_string(dir.join("type"))?;
+                let remote = self.api.upload_asset(
+                    &self.state.vault,
+                    id,
+                    &fs::read_to_string(dir.join("name"))?,
+                    &media,
+                    &data,
+                )?;
+                let cache = self
+                    .state_dir
+                    .join("asset-cache")
+                    .join(&digest(remote.as_bytes())[7..]);
+                disk::atomic(&cache.join("bytes"), &data)?;
+                disk::atomic(&cache.join("type"), media.as_bytes())?;
+                resolved = resolved.replace(&url, &remote);
+            }
+            disk::replace(
+                self.root,
+                path,
+                Some(&digest(original)),
+                resolved.as_bytes(),
+            )?;
+            return self.send(method, suffix, path, base, Some(resolved.as_bytes()));
+        }
         let mut body = json!({"device_id":self.state.device});
         if !path.is_empty() {
             body["path"] = json!(path)
@@ -135,6 +203,21 @@ impl Sync<'_> {
         if op.method == "DELETE" {
             self.state.files.remove(&receipt.file_id);
         } else {
+            if let Some(submitted) = op.body["content"].as_str() {
+                let original = digest(&STANDARD.decode(submitted)?);
+                if original != receipt.content_hash {
+                    let file = disk::local_path(self.root, &receipt.path)?;
+                    if disk::current(&file)?.is_some_and(|data| digest(&data) == original) {
+                        let updated = self.api.version(
+                            &self.state.vault,
+                            &receipt.file_id,
+                            &receipt.version_id,
+                            &receipt.content_hash,
+                        )?;
+                        disk::replace(self.root, &receipt.path, Some(&original), &updated)?;
+                    }
+                }
+            }
             self.state.files.insert(
                 receipt.file_id,
                 Entry {

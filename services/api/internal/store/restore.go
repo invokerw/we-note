@@ -161,6 +161,8 @@ func keepRecoveryCatalog(ctx context.Context, conn *sql.Conn, filename, owner, a
 		`UPDATE recovered.users SET status='disabled',disabled_at=CURRENT_TIMESTAMP,disabled_reason='从未完成的清理任务恢复，请管理员核实' WHERE status='purging'`,
 		`DELETE FROM recovered.account_cleanup`,
 		`DELETE FROM recovered.garbage_objects`,
+		`DELETE FROM recovered.vault_published_files`,
+		`UPDATE recovered.vault_publications SET dirty=1`,
 		`DELETE FROM recovered.sessions`,
 		`DELETE FROM recovered.refresh_sessions`,
 		`DELETE FROM recovered.password_reset_tokens`,

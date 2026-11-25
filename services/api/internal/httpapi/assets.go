@@ -16,6 +16,7 @@ func (a *API) createAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		Note string `json:"file_id"`
 		Name string `json:"name"`
 		Type string `json:"media_type"`
 		Hash string `json:"content_hash"`
@@ -25,14 +26,33 @@ func (a *API) createAsset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "INVALID_REQUEST", err.Error())
 		return
 	}
-	asset, err := a.repository.CreateAsset(r.Context(), user.ID, r.PathValue("vault_id"), req.Name, req.Type, req.Hash, r.Header.Get("Idempotency-Key"), req.Size)
+	if !store.PictureType(req.Type) {
+		writeError(w, 415, "IMAGE_TYPE_REQUIRED", "请选择 PNG、JPEG、GIF 或 WebP 图片")
+		return
+	}
+	asset, err := a.repository.CreateNoteImage(r.Context(), user.ID, r.PathValue("vault_id"), req.Note, req.Name, req.Type, req.Hash, r.Header.Get("Idempotency-Key"), req.Size)
 	if err != nil {
 		resourceError(w, err)
 		return
 	}
 	writeJSON(w, 201, asset)
 }
+func (a *API) allowAssetRead(w http.ResponseWriter, r *http.Request) bool {
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+	w.Header().Set("Cache-Control", "private, no-store")
+	site := r.Header.Get("Sec-Fetch-Site")
+	origin := r.Header.Get("Origin")
+	if site == "same-site" || site == "cross-site" || (origin != "" && origin != a.repository.PublicBase()) {
+		writeError(w, http.StatusForbidden, "INVALID_ORIGIN", "cross-origin resource access denied")
+		return false
+	}
+	return true
+}
+
 func (a *API) asset(w http.ResponseWriter, r *http.Request) {
+	if r.PathValue("vault_id") == "" && !a.allowAssetRead(w, r) {
+		return
+	}
 	user, ok := a.authenticatedUser(w, r)
 	if !ok {
 		return
@@ -40,7 +60,9 @@ func (a *API) asset(w http.ResponseWriter, r *http.Request) {
 	id, vault := r.PathValue("asset_id"), r.PathValue("vault_id")
 	var asset store.Asset
 	var err error
-	if r.PathValue("hash") != "" {
+	if r.PathValue("owner") != "" {
+		asset, err = a.repository.AssetForScopedPath(r.Context(), user.ID, r.PathValue("owner"), r.PathValue("asset_vault"), r.PathValue("year"), r.PathValue("month"), r.PathValue("day"), r.PathValue("hash"))
+	} else if r.PathValue("hash") != "" {
 		asset, err = a.repository.AssetForPublicPath(r.Context(), user.ID, r.PathValue("year"), r.PathValue("month"), r.PathValue("day"), r.PathValue("hash"))
 	} else {
 		asset, err = a.repository.AssetForUser(r.Context(), user.ID, vault, id)

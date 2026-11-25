@@ -236,7 +236,7 @@ func (r *Repository) UpdateCopy(ctx context.Context, user, id, file string, q Up
 	if err != nil {
 		return result, err
 	}
-	result, err = writeFileTx(ctx, tx, c.target, file, "update_file_content", op, FileWrite{BaseVersion: c.LocalVersion, Content: data, Device: "web_" + user}, ref)
+	result, err = r.writeFileTx(ctx, tx, c.target, file, "update_file_content", op, FileWrite{BaseVersion: c.LocalVersion, Content: data, Device: "web_" + user}, ref)
 	if err != nil {
 		return result, err
 	}

@@ -31,11 +31,12 @@ type FileWrite struct {
 	Device      string `json:"device_id,omitempty"`
 }
 type FileResult struct {
-	FileID   string `json:"file_id"`
-	Path     string `json:"path"`
-	Version  string `json:"version_id"`
-	Hash     string `json:"content_hash"`
-	Revision int64  `json:"vault_revision"`
+	FileID    string            `json:"file_id"`
+	Path      string            `json:"path"`
+	Version   string            `json:"version_id"`
+	Hash      string            `json:"content_hash"`
+	Revision  int64             `json:"vault_revision"`
+	ImageURLs map[string]string `json:"image_urls,omitempty"`
 }
 
 func fileError(status int, code, message string) error {
@@ -132,10 +133,7 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 		if len(input.Content) > maxNoteBytes {
 			return result, fileError(413, "NOTE_TOO_LARGE", "note exceeds 16 MiB")
 		}
-		ref, err = r.putBytes(ctx, vault, input.Content)
-		if err != nil {
-			return result, err
-		}
+
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -172,15 +170,35 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 	if used {
 		return result, fileError(409, "IDEMPOTENCY_KEY_REUSED", "operation already used")
 	}
-	result, err = writeFileTx(ctx, tx, vault, id, operation, key, input, ref)
-	if err != nil {
-		return result, err
-	}
-	if !strings.EqualFold(path.Ext(result.Path), ".xmind") {
-		if err := r.validateAssetReferences(ctx, tx, vault, input.Content); err != nil {
+	var replaced map[string]string
+	if input.Content != nil && (operation == "create_file" || operation == "update_file_content") {
+		notePath := input.Path
+		if notePath == "" && bytes.Contains(input.Content, []byte("/assets/")) {
+			if err = tx.QueryRowContext(ctx, `SELECT path FROM files WHERE id=? AND vault_id=?`, id, vault).Scan(&notePath); errors.Is(err, sql.ErrNoRows) {
+				return result, ErrNotFound
+			} else if err != nil {
+				return result, err
+			}
+		}
+		if strings.EqualFold(path.Ext(notePath), ".md") {
+			replaced, err = r.copyLinkedImages(ctx, tx, user, vault, input.Content)
+			if err != nil {
+				return result, err
+			}
+			for old, dest := range replaced {
+				input.Content = bytes.ReplaceAll(input.Content, []byte(old), []byte(dest))
+			}
+		}
+		ref, err = r.putBytes(ctx, vault, input.Content)
+		if err != nil {
 			return result, err
 		}
 	}
+	result, err = r.writeFileTx(ctx, tx, vault, id, operation, key, input, ref)
+	if err != nil {
+		return result, err
+	}
+	result.ImageURLs = replaced
 	out, err := json.Marshal(result)
 	if err != nil {
 		return result, err
@@ -191,7 +209,7 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 	return result, tx.Commit()
 }
 
-func writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op, key string, input FileWrite, ref storedContent) (FileResult, error) {
+func (r *Repository) writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op, key string, input FileWrite, ref storedContent) (FileResult, error) {
 	var result FileResult
 	now := time.Now().UTC()
 	stamp := formatTime(now)
@@ -267,6 +285,21 @@ func writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op, key string, inp
 		if err != nil {
 			return result, err
 		}
+		if err = r.writeVersionObject(ctx, tx, vault, id, version, format, ref.Hash, ref.Size); err != nil {
+			return result, err
+		}
+		if format == "md" {
+			data := input.Content
+			if data == nil {
+				data, err = r.readNoteBlobWithQuery(ctx, tx, vault, ref.Hash, ref.Size)
+				if err != nil {
+					return result, err
+				}
+			}
+			if err = r.indexVersionImages(ctx, tx, vault, version, data); err != nil {
+				return result, err
+			}
+		}
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE files SET path=?,format=?,current_version_id=?,current_content_hash=?,current_content_size=?,current_blob_id=?,is_deleted=?,updated_at=? WHERE vault_id=? AND id=?`, p, format, version, ref.Hash, ref.Size, blobID, op == "delete_file", stamp, vault, id)
 	if err != nil {
@@ -280,7 +313,7 @@ func writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op, key string, inp
 	if err != nil {
 		return result, err
 	}
-	return FileResult{id, p, version, ref.Hash, revision}, nil
+	return FileResult{FileID: id, Path: p, Version: version, Hash: ref.Hash, Revision: revision}, nil
 }
 
 func (r *Repository) Trash(ctx context.Context, vault string) ([]model.File, error) {

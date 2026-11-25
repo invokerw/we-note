@@ -215,7 +215,7 @@ export function Document({
               </button>
             ))}
           {attach && (
-            <button aria-label="插入附件" title="插入附件" onClick={attach}>
+            <button aria-label="插入图片" title="插入图片" onClick={attach}>
               ⊕
             </button>
           )}

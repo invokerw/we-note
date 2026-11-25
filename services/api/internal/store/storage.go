@@ -158,8 +158,13 @@ func copyObjects(ctx context.Context, db *sql.DB, source, target blob.Store, fro
 			return errors.New("缺少内容存储位置")
 		}
 		var date time.Time
+		var resource bool
 		if stored != "" {
 			parts := strings.Split(stored, "/")
+			if len(parts) == 9 && parts[4] == "assets" {
+				resource = true
+				parts = parts[1:]
+			}
 			if len(parts) != 8 {
 				return errors.New("invalid dated storage key")
 			}
@@ -176,7 +181,12 @@ func copyObjects(ctx context.Context, db *sql.DB, source, target blob.Store, fro
 		if err != nil {
 			return err
 		}
-		key, err := target.PutAt(ctx, vault, hash, size, date, in)
+		var key string
+		if resource {
+			key, err = putResource(ctx, target, vault, hash, size, date, in)
+		} else {
+			key, err = target.PutAt(ctx, vault, hash, size, date, in)
+		}
 		in.Close()
 		if err != nil {
 			return err

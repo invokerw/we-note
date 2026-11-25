@@ -24,6 +24,12 @@ func (r *Repository) writeExportSnapshot(ctx context.Context, z *zip.Writer, vau
 	if snap.Mode == "portable" {
 		for _, a := range snap.Assets {
 			targets[a.URL] = a.Path
+			if i := strings.Index(a.URL, "/assets/"); i >= 0 {
+				p := strings.Split(a.URL[i+len("/assets/"):], "/")
+				if len(p) == 6 {
+					targets[a.URL[:i]+"/assets/"+strings.Join(p[2:], "/")] = a.Path
+				}
+			}
 			targets[r.publicBase+"/assets/"+a.ID] = a.Path
 		}
 	}
@@ -52,7 +58,12 @@ func (r *Repository) writeExportSnapshot(ctx context.Context, z *zip.Writer, vau
 		}
 		fmt.Fprintf(&checksums, "%s  %s\n", strings.TrimPrefix(f.Hash, "sha256:"), f.Path)
 	}
+	written := map[string]bool{}
 	for _, a := range snap.Assets {
+		if written[a.Path] {
+			continue
+		}
+		written[a.Path] = true
 		if err := r.writeExportEntry(ctx, z, vault, a); err != nil {
 			return err
 		}

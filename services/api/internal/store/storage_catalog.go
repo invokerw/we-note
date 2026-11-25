@@ -184,6 +184,15 @@ func (r *Repository) editCatalog(ctx context.Context, actor string, revision int
 		if err = copyObjects(ctx, r.db.DB, source, target, false); err != nil {
 			return fmt.Errorf("在线内容迁移失败：%w", err)
 		}
+		ids, e := stringList(ctx, r.db.DB, `SELECT id FROM vaults ORDER BY id`)
+		if e != nil {
+			return e
+		}
+		for _, id := range ids {
+			if e = r.publishVault(ctx, target, id, true); e != nil {
+				return fmt.Errorf("迁移笔记目录失败: %w", e)
+			}
+		}
 	}
 	if backup != oldBackup {
 		if backup.Kind != "local" {
@@ -234,6 +243,11 @@ func (r *Repository) editCatalog(ctx context.Context, actor string, revision int
 			if err = put("backup_root", backup.Directory); err != nil {
 				return err
 			}
+		}
+	}
+	if target != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE vault_publications SET dirty=1`); err != nil {
+			return err
 		}
 	}
 	cat.Revision++
