@@ -184,7 +184,7 @@ impl Notebook {
                 bail!("无效的回收站目录")
             }
         } else {
-            self.path(name)?;
+            Self::validate_note_extension(name)?;
             if !source.is_file() {
                 bail!("回收站笔记不存在")
             }
@@ -215,16 +215,33 @@ impl Notebook {
         }
         Ok(())
     }
+    fn folder_exists(&self, path: &str) -> Result<bool> {
+        match disk::local_path(&self.root, path) {
+            Ok(dir) => Ok(dir.is_dir()),
+            Err(e)
+                if e.downcast_ref::<std::io::Error>()
+                    .is_some_and(|io| io.kind() == std::io::ErrorKind::NotADirectory) =>
+            {
+                Ok(false)
+            }
+            Err(e) => Err(e),
+        }
+    }
     pub fn restore_file(&self, item: &TrashedFile) -> Result<()> {
         let _lock = self.trash_lock()?;
         let source = self.trashed_path(item)?;
-        let dest = disk::local_path(&self.root, item.path.trim_end_matches('/'))?;
+        let folder = item.path.ends_with('/');
+        let target = match item.path.rsplit_once('/') {
+            Some((dir, name)) if !folder && !self.folder_exists(dir)? => name,
+            _ => item.path.trim_end_matches('/'),
+        };
+        let dest = disk::local_path(&self.root, target)?;
         if dest.try_exists()? {
-            bail!("原位置已有同名文件，请先移动或重命名它")
+            bail!("恢复位置已有同名项目，请先移动或重命名它")
         }
         let parent = dest.parent().context("无效的恢复路径")?;
-        fs::create_dir_all(parent)?;
-        if item.path.ends_with('/') {
+        if folder {
+            fs::create_dir_all(parent)?;
             fs::rename(source, dest)?;
             return Ok(());
         }
@@ -381,7 +398,7 @@ impl Notebook {
         fs::rename(&staged, &to)?;
         Ok(())
     }
-    fn path(&self, path: &str) -> Result<PathBuf> {
+    fn validate_note_extension(path: &str) -> Result<()> {
         if !matches!(
             Path::new(path)
                 .extension()
@@ -393,6 +410,10 @@ impl Notebook {
         ) {
             bail!("请选择 Markdown、TXT、JSON 或 XMind 笔记")
         };
+        Ok(())
+    }
+    fn path(&self, path: &str) -> Result<PathBuf> {
+        Self::validate_note_extension(path)?;
         disk::local_path(&self.root, path)
     }
     pub fn search_notes(&self, query: &str, paths: &[String]) -> Result<Vec<String>> {
@@ -691,6 +712,37 @@ mod entry_tests {
         ];
         assert_eq!(book.search_notes("linux", &paths)?, vec!["本地.md"]);
         assert_eq!(book.search_notes("其他内容", &paths)?, vec!["配置.json"]);
+        Ok(())
+    }
+    #[test]
+    fn restore_note_uses_existing_parent_or_vault_root() -> Result<()> {
+        let data = tempfile::tempdir()?;
+        let book = Notebook {
+            root: data.path().join("notes"),
+            state_dir: data.path().join("state"),
+            vault: "test".into(),
+            origin: String::new(),
+        };
+        fs::create_dir_all(&book.state_dir)?;
+        fs::File::create(book.state_dir.join("lock"))?;
+        let path = "docs/sub/note.md";
+        let expected = BTreeMap::from([(path.into(), digest(b"original"))]);
+        book.save(path, None, "original")?;
+        book.change_entry("delete", path, "", &expected)?;
+        book.restore_file(&book.trash_files()?.pop().unwrap())?;
+        assert_eq!(fs::read(book.root.join(path))?, b"original");
+
+        book.change_entry("delete", path, "", &expected)?;
+        fs::remove_dir(book.root.join("docs/sub"))?;
+        let note = book.trash_files()?.pop().unwrap();
+        book.save("note.md", None, "occupied")?;
+        assert!(book.restore_file(&note).is_err());
+        assert_eq!(fs::read(book.root.join("note.md"))?, b"occupied");
+        fs::remove_file(book.root.join("note.md"))?;
+        book.restore_file(&note)?;
+        assert_eq!(fs::read(book.root.join("note.md"))?, b"original");
+        assert!(!book.root.join("docs/sub").exists());
+        assert!(book.trash_files()?.is_empty());
         Ok(())
     }
     #[test]

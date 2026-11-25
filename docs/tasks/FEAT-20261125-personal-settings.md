@@ -59,10 +59,20 @@
 - 在独立服务依次执行 `apps/web/tests/` 中的 `trash.mjs`、`personal-settings.mjs`、`phase1.mjs`、`phase5.mjs` 和 `library-search.mjs`，五项通过。回收站专项覆盖只读 Markdown 和任务框、目录留白、右键菜单、删除取消及确认、目录和单篇删除批次隔离。
 - 扩展 `gm.mjs` 回归仍在旧文本附件样例上传时返回 415，未执行到后台附件恢复场景。Android 真机待验收。
 
-## 当前验收交付
+## 第四轮验收交付
 
 - 服务地址 `http://localhost:19486`，PID `20278`，日志 `dist/local/server.log`，数据目录为本 worktree 下的 `services/api/data/`。
 - macOS ARM64 产物为 `target/release/wenote-desktop`。Android SDK 仍不可用，手机布局使用 Chrome 宽度回归验证。
 - 任务分支保留在 `codex/feature-personal-settings-20261125`，等待用户验收后再合入本地 `main`。
 
 验收账号保存在本工作树 `dist/local/验收账号.txt`。登录后选择「回收站交互验收」，点击左侧回收站。左键点「周会记录.md」查看正文和右上角按钮，再点「归档资料」查看空白内容区。两项都可以右键恢复或永久删除。
+
+## 第五轮 · 单篇笔记一键恢复
+
+用户要求从预览或右键菜单直接恢复笔记。恢复时原父目录仍存在就回到原处，原父目录已不存在就用原文件名恢复到笔记库根目录。本轮在原任务分支按方式 2 返工，验证网页与本地笔记库。
+
+- `CHANGES_REQUESTED` 时先运行新增的 Chrome 和 Rust 用例。`node apps/web/tests/trash.mjs` 退出 1，点击恢复后笔记仍留在回收站。`cargo test --locked -p wenote-sync --lib restore_note_uses_existing_parent_or_vault_root` 退出 101，旧逻辑重建了已删除的目录。
+- 在同一事务内按当前库的有效文件或目录标记判断原目录是否存在，再校验目标路径。目标已有同名项时提示冲突，待恢复的版本留在回收站。自审核对了整目录恢复仍使用批次内各成员的完整路径，并保留旧目录标记的恢复方式。本地库按实际文件系统目录判断。
+- `go -C services/api test ./...`、`go -C services/api vet ./...`、`cargo test --locked -p wenote-sync --lib`、`node --test apps/web/tests/*test.mjs` 和 `git diff --check` 通过。Web 构建、`npm run build:desktop --prefix apps/web` 和 `cargo build --locked -p wenote-desktop --release` 通过。
+- 在 `http://localhost:19486` 运行 `apps/web/tests/trash.mjs` 和 `phase1.mjs` 均退出 0。覆盖原目录仍存在、仅父级或相似目录存在、右键和预览恢复全程无弹窗、同名冲突，以及恢复后重新打开正文。
+- 按方式 2 重新交付，专用服务 PID `21807`，数据与账号沿用上轮。刷新网页，打开回收站即可验收。macOS 客户端为本工作区 `target/release/wenote-desktop`，Android 真机待验。

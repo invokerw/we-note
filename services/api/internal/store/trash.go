@@ -252,15 +252,15 @@ func (r *Repository) changeTrashFolder(ctx context.Context, user, vault, operati
 		if operation == "purge" {
 			err = r.purgeItemTx(ctx, tx, vault, "file", id)
 		} else {
-			var version string
-			if err = tx.QueryRowContext(ctx, `SELECT current_version_id FROM files WHERE vault_id=? AND id=?`, vault, id).Scan(&version); err != nil {
+			var version, originalPath string
+			if err = tx.QueryRowContext(ctx, `SELECT current_version_id,path FROM files WHERE vault_id=? AND id=?`, vault, id).Scan(&version, &originalPath); err != nil {
 				return err
 			}
 			key, keyErr := newID("op")
 			if keyErr != nil {
 				return keyErr
 			}
-			_, err = r.writeFileTx(ctx, tx, vault, id, "restore_file", key, FileWrite{BaseVersion: version, Device: "web_" + user}, storedContent{})
+			_, err = r.writeFileTx(ctx, tx, vault, id, "restore_file", key, FileWrite{Path: originalPath, BaseVersion: version, Device: "web_" + user}, storedContent{})
 		}
 		if err != nil {
 			return err

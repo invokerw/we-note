@@ -16,7 +16,6 @@ import {
   entryName,
   entryPath,
   isFolder,
-  marker,
   type EntryIO,
 } from "./libraryEntries";
 import Editor, { AssetImage } from "./Editor";
@@ -328,11 +327,9 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     try {
       const file = entry && trash.files.find(f => f.file_id === entry.key);
       if (operation === 'restore' && file && entry) {
-        const path = prompt('恢复路径',entry.path);
-        if (!path) return;
         await request(token,`${base}/files/${file.file_id}/restore`,'POST',{
           base_version_id:file.current_version_id, base_path:file.path,
-          path:entry.path === file.path ? path : path.replace(/\/$/,'') + '/' + marker,
+          path: entry.kind === 'folder' ? file.path : undefined,
         });
       } else {
         const result = await (await request(token,base + '/trash','POST',{

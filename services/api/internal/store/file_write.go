@@ -83,7 +83,7 @@ func checkAvailablePath(ctx context.Context, tx *sql.Tx, vault, id, p string) er
 		}
 		other = fold.String(norm.NFC.String(other))
 		if other == key || strings.HasPrefix(key, other+"/") || strings.HasPrefix(other, key+"/") {
-			return fileError(409, "PATH_CONFLICT", "another file occupies the requested path")
+			return fileError(409, "PATH_CONFLICT", "目标位置已有同名项目或路径冲突，请先移动或重命名已有项目")
 		}
 	}
 	return rows.Err()
@@ -241,6 +241,18 @@ func (r *Repository) writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op,
 		}
 		if op == "move_file" || op == "restore_file" && input.Path != "" {
 			p = input.Path
+		} else if op == "restore_file" {
+			dir, name := path.Split(p)
+			if dir != "" {
+				var parentExists bool
+				err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM files WHERE vault_id=? AND is_deleted=0 AND instr(path,?)=1)`, vault, dir).Scan(&parentExists)
+				if err != nil {
+					return result, err
+				}
+				if !parentExists {
+					p = name
+				}
+			}
 		}
 		if op == "update_file_content" {
 			ref.Size = int64(len(input.Content))
