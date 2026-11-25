@@ -43,6 +43,8 @@ try {
   assert.equal(await desktop.getByLabel("笔记库菜单").count(), 0);
   await desktop.locator(".side-files .folders + button", {hasText: "回收站"}).click();
   await desktop.getByRole("heading", {name:"回收站"}).waitFor();
+  assert.equal(await button(desktop, "草稿.md").count(), 0);
+  await button(desktop, "全部笔记").click();
   await button(desktop, "草稿.md").click();
   await button(desktop, "编辑模式").click();
   await button(desktop, "分屏编辑").click();
@@ -103,7 +105,7 @@ try {
   await button(mobile, "打开笔记库目录").click();
   await button(mobile, "回收站").click();
   await mobile.getByRole("heading", {name:"回收站"}).waitFor();
-  await button(mobile, "返回笔记列表").click();
+  await button(mobile, "笔记").click();
   await button(mobile, "打开个人设置").click();
   await button(mobile, "导出").click();
   await button(mobile, "下载 ZIP").waitFor();

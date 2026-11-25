@@ -127,6 +127,16 @@ impl Notebook {
                     continue;
                 }
                 let dir = entry.path();
+                if let Some(folder) = Self::trashed_folder(&dir)? {
+                    if disk::local_path(&dir, &folder)?.is_dir() {
+                        files.push(TrashedFile {
+                            external,
+                            batch,
+                            path: format!("{folder}/"),
+                        });
+                    }
+                    continue;
+                }
                 for file in walkdir::WalkDir::new(&dir) {
                     let file = file?;
                     if !file.file_type().is_file() {
@@ -150,21 +160,74 @@ impl Notebook {
         files.sort_by(|a, b| a.path.cmp(&b.path).then(a.batch.cmp(&b.batch)));
         Ok(files)
     }
-    pub fn restore_file(&self, item: &TrashedFile) -> Result<()> {
+    fn trashed_folder(batch: &Path) -> Result<Option<String>> {
+        let meta = batch.join(".wenote");
+        match fs::symlink_metadata(&meta) {
+            Ok(m) if m.is_file() && m.len() <= 2048 => {
+                let name = fs::read_to_string(meta)?;
+                disk::relative(&name)?;
+                Ok(Some(name))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            _ => bail!("无效的回收站目录记录"),
+        }
+    }
+    fn trashed_path(&self, item: &TrashedFile) -> Result<PathBuf> {
+        let root = self
+            .trash_root(item.external)?
+            .context("回收站项目不存在")?;
+        let batch = disk::local_path(&root, &item.batch.to_string())?;
+        let name = item.path.trim_end_matches('/');
+        let source = disk::local_path(&batch, name)?;
+        if item.path.ends_with('/') {
+            if Self::trashed_folder(&batch)?.as_deref() != Some(name) || !source.is_dir() {
+                bail!("无效的回收站目录")
+            }
+        } else {
+            self.path(name)?;
+            if !source.is_file() {
+                bail!("回收站笔记不存在")
+            }
+        }
+        Ok(source)
+    }
+    pub fn read_trash(&self, item: &TrashedFile) -> Result<Value> {
+        let path = self.trashed_path(item)?;
+        if !path.is_file() || path.metadata()?.len() > 16 << 20 {
+            bail!("无法预览此项目")
+        }
+        Ok(json!(STANDARD.encode(fs::read(path)?)))
+    }
+    fn trash_lock(&self) -> Result<fs::File> {
         let lock = fs::OpenOptions::new()
             .write(true)
             .open(self.state_dir.join("lock"))?;
         lock.try_lock_exclusive().context("正在同步，请稍后重试")?;
-        let root = self
-            .trash_root(item.external)?
-            .context("回收站项目不存在")?;
-        let source = disk::local_path(&root, &format!("{}/{}", item.batch, item.path))?;
-        let dest = self.path(&item.path)?;
+        Ok(lock)
+    }
+    pub fn purge_trash(&self, item: &TrashedFile) -> Result<()> {
+        let _lock = self.trash_lock()?;
+        let source = self.trashed_path(item)?;
+        if item.path.ends_with('/') {
+            fs::remove_dir_all(source)?;
+        } else {
+            fs::remove_file(source)?;
+        }
+        Ok(())
+    }
+    pub fn restore_file(&self, item: &TrashedFile) -> Result<()> {
+        let _lock = self.trash_lock()?;
+        let source = self.trashed_path(item)?;
+        let dest = disk::local_path(&self.root, item.path.trim_end_matches('/'))?;
         if dest.try_exists()? {
             bail!("原位置已有同名文件，请先移动或重命名它")
         }
         let parent = dest.parent().context("无效的恢复路径")?;
         fs::create_dir_all(parent)?;
+        if item.path.ends_with('/') {
+            fs::rename(source, dest)?;
+            return Ok(());
+        }
         let mut input = fs::File::open(&source)?;
         let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
         std::io::copy(&mut input, &mut tmp)?;
@@ -225,12 +288,9 @@ impl Notebook {
                 }
             }
         }
+        let trash_batch = uuid::Uuid::new_v4().to_string();
         let to = match operation {
-            "delete" => self
-                .state_dir
-                .join("trash")
-                .join(uuid::Uuid::new_v4().to_string())
-                .join(name),
+            "delete" => self.state_dir.join("trash").join(&trash_batch).join(name),
             "move" | "copy" => {
                 let dest = destination.strip_suffix('/').unwrap_or(destination);
                 if folder != destination.ends_with('/')
@@ -263,6 +323,16 @@ impl Notebook {
         };
         let parent = to.parent().context("无效的目标位置")?;
         fs::create_dir_all(parent)?;
+        if operation == "delete" && folder {
+            disk::atomic(
+                &self
+                    .state_dir
+                    .join("trash")
+                    .join(&trash_batch)
+                    .join(".wenote"),
+                name.as_bytes(),
+            )?;
+        }
         if operation != "copy" {
             match fs::rename(&from, &to) {
                 Ok(()) => return Ok(()),
@@ -281,8 +351,12 @@ impl Notebook {
                             bail!("无效的本地回收站")
                         }
                     }
-                    let location = trash.join(uuid::Uuid::new_v4().to_string()).join(name);
+                    let batch = trash.join(&trash_batch);
+                    let location = batch.join(name);
                     fs::create_dir_all(location.parent().context("无效的回收站路径")?)?;
+                    if folder {
+                        disk::atomic(&batch.join(".wenote"), name.as_bytes())?;
+                    }
                     fs::rename(from, location)?;
                     return Ok(());
                 }
@@ -671,12 +745,27 @@ mod entry_tests {
         let items = book.trash_files()?;
         assert_eq!(items.len(), 1);
         let item = &items[0];
+        assert_eq!(book.read_trash(item)?, json!(STANDARD.encode(b"changed")));
         book.save("new.md", None, "replacement")?;
         assert!(book.restore_file(item).is_err());
         assert_eq!(fs::read(trash.join("new.md"))?, b"changed");
         fs::remove_file(book.root.join("new.md"))?;
         book.restore_file(item)?;
         assert_eq!(fs::read(book.root.join("new.md"))?, b"changed");
+        assert!(book.trash_files()?.is_empty());
+        book.save("trash-folder/child/a.md", None, "nested")?;
+        let members = BTreeMap::from([("trash-folder/child/a.md".into(), digest(b"nested"))]);
+        book.change_entry("delete", "trash-folder/", "", &members)?;
+        let folder = book.trash_files()?.pop().unwrap();
+        assert_eq!(folder.path, "trash-folder/");
+        assert!(book.read_trash(&folder).is_err());
+        book.restore_file(&folder)?;
+        assert_eq!(
+            fs::read(book.root.join("trash-folder/child/a.md"))?,
+            b"nested"
+        );
+        book.change_entry("delete", "trash-folder/", "", &members)?;
+        book.purge_trash(&book.trash_files()?.pop().unwrap())?;
         assert!(book.trash_files()?.is_empty());
         Ok(())
     }

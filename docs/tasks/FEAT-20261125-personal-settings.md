@@ -50,8 +50,19 @@
 - `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo test --locked -p wenote-sync --lib`、`cargo build --locked -p wenote-desktop --release` 和 `git diff --check` 通过。
 - `WENOTE_TEST_ORIGIN=http://localhost:19486 node apps/web/tests/{personal-settings,phase1,phase5,library-search}.mjs` 顺序执行，四项均退出 0。覆盖桌面和手机宽度的设置、头像、密码、导出、回收站位置、单篇分享、旧入口消失和全文搜索。
 
+## 第四轮 · 回收站列表、只读预览与目录操作
+
+收到反馈后按 `CHANGES_REQUESTED` 在原工作树返工，继续使用验收方式 2。网页和本地客户端共用第二栏的回收站列表、右键菜单和右侧只读预览。点击目录清除预览，永久删除前需要确认。单篇笔记和目录按删除时的标识操作。服务端对同一次目录删除的成员在同一事务中恢复或清理，保留历史记录中独立删除的笔记。旧版逐文件保存的回收站记录可以继续逐项管理。
+
+- `go test ./internal/httpapi -run TestTrashContentPreviewIsReadOnly -count=1` 首次运行得到预期的 404，补齐接口后通过。复查覆盖未登录和其他账号读取拒绝。`go test ./...`、`go vet ./...` 通过。
+- `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`node --test apps/web/tests/*test.mjs`、`cargo test --locked -p wenote-sync --lib` 和 `cargo build --locked -p wenote-desktop --release` 通过。Rust 回归实际验证本地文件预览、整目录恢复、清理及同名冲突。
+- 在独立服务依次执行 `apps/web/tests/` 中的 `trash.mjs`、`personal-settings.mjs`、`phase1.mjs`、`phase5.mjs` 和 `library-search.mjs`，五项通过。回收站专项覆盖只读 Markdown 和任务框、目录留白、右键菜单、删除取消及确认、目录和单篇删除批次隔离。
+- 扩展 `gm.mjs` 回归仍在旧文本附件样例上传时返回 415，未执行到后台附件恢复场景。Android 真机待验收。
+
 ## 当前验收交付
 
-- 服务地址 `http://localhost:19486`，PID `14610`，日志 `dist/local/server.log`，数据目录为本 worktree 下的 `services/api/data/`。
+- 服务地址 `http://localhost:19486`，PID `20278`，日志 `dist/local/server.log`，数据目录为本 worktree 下的 `services/api/data/`。
 - macOS ARM64 产物为 `target/release/wenote-desktop`。Android SDK 仍不可用，手机布局使用 Chrome 宽度回归验证。
 - 任务分支保留在 `codex/feature-personal-settings-20261125`，等待用户验收后再合入本地 `main`。
+
+验收账号保存在本工作树 `dist/local/验收账号.txt`。登录后选择「回收站交互验收」，点击左侧回收站。左键点「周会记录.md」查看正文和右上角按钮，再点「归档资料」查看空白内容区。两项都可以右键恢复或永久删除。

@@ -303,9 +303,10 @@ try {
   await user.getByLabel("笔记库", { exact: true }).selectOption(vault.id);
   await button(user, "回收站").click();
   for (const name of ["sample.txt", "pending.pdf"]) {
-    const item = user.locator(".row").filter({ hasText: name });
+    const item = user.locator(".note-list-pane .entry-row").filter({ hasText: name });
     await item.getByText(/起可自动清理/).waitFor();
-    await button(item, "恢复").click();
+    await item.click({button:"right"});
+    await user.getByRole("menuitem",{name:"恢复"}).click();
     await item.waitFor({ state: "hidden" });
   }
   await user.getByText("回收站为空。").waitFor();
@@ -319,12 +320,14 @@ try {
     });
   }
   await button(user, "回收站").click();
-  const discard = user.locator(".row").filter({ hasText: "discard-a.md" });
+  const discard = button(user,"discard-a.md");
   user.once("dialog", (d) => d.dismiss());
-  await button(discard, "彻底删除").click();
+  await discard.click({button:"right"});
+  await user.getByRole("menuitem",{name:"永久删除"}).click();
   await discard.waitFor();
   user.once("dialog", (d) => d.accept());
-  await button(discard, "彻底删除").click();
+  await discard.click({button:"right"});
+  await user.getByRole("menuitem",{name:"永久删除"}).click();
   await discard.waitFor({ state: "hidden" });
   user.once("dialog", (d) => d.accept());
   await button(user, "清空回收站").click();

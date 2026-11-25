@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback } from "react";
+import { lazy, Suspense, useCallback, useMemo } from "react";
 import {
   Sharing,
   Audit,
@@ -13,11 +13,14 @@ import { browserExport } from "./plugins/archive";
 import {
   newContent,
   containsEntry,
+  entryName,
   entryPath,
+  isFolder,
   marker,
   type EntryIO,
 } from "./libraryEntries";
 import Editor, { AssetImage } from "./Editor";
+import { TrashDocument, TrashList, type TrashEntry, type TrashAction } from "./TrashPane";
 import { useMediaQuery } from "@mantine/hooks";
 import { PhoneIcon } from "./PhoneUI";
 import { AppShell } from "@mantine/core";
@@ -134,6 +137,8 @@ type TrashItem = {
   kind: "asset" | "file";
   name: string;
   expires_at: number;
+  batch?: string;
+  folder?: string;
 };
 function Library({ token, logout }: { token: string; logout: () => void }) {
   const [vaults, setVaults] = useState<Vault[]>([]),
@@ -147,6 +152,9 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       items: TrashItem[];
       can_manage: boolean;
     }>(),
+    [trashSelected, setTrashSelected] = useState(""),
+    [trashBusy,setTrashBusy] = useState(false),
+    [trashError,setTrashError] = useState(''),
     [settingsOpen, setSettingsOpen] = useState(false),
     [shareVault, setShareVault] = useState(""),
     [message, msg] = useState(""),
@@ -282,54 +290,64 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     let live = true;
     request(token, base + "/trash").then(r => r.json()).then(data => {
       if (live) setTrash(data);
-    }).catch(e => { if (live) msg(String(e)); });
+    }).catch(e => { if (live) setTrashError(String(e)); });
     return () => { live = false; };
   }, [token, base, view, trashRevision]);
   function openTrash() {
     if (!leave()) return;
     setNote(null);
     setTrash(undefined);
+    setTrashSelected("");
+    setTrashError('');
     setView("trash");
     refreshTrash(n => n + 1);
-    panes.setPane("doc");
+    panes.browse(null);
   }
-  async function changeTrash(
-    operation: "restore" | "purge" | "empty",
-    item?: TrashItem,
-  ) {
-    if (
-      operation === "empty" &&
-      !confirm("彻底清空这个笔记库的回收站？仍被引用的项目将保留。")
-    )
-      return;
-    if (
-      operation === "purge" &&
-      !confirm(`彻底删除「${item?.name}」及其历史版本？`)
-    )
-      return;
-    if (operation === "restore" && item?.kind === "file") {
-      const f = trash?.files.find((note) => note.file_id === item.id);
-      if (!f) throw Error("笔记已变化，请重新打开回收站");
-      const old = entryPath(f.path, f.current_content_hash),
-        path = prompt("恢复路径", old);
-      if (!path) return;
-      await request(token, base + "/files/" + f.file_id + "/restore", "POST", {
-        base_version_id: f.current_version_id,
-        path: old === f.path ? path : path.replace(/\/$/, "") + "/" + marker,
-      });
-    } else {
-      const result = await (
-        await request(token, base + "/trash", "POST", {
-          operation,
-          kind: item?.kind,
-          id: item?.id,
-        })
-      ).json();
-      if (result.retained) msg(`${result.retained} 个项目仍被引用，已保留。`);
+  const trashEntries = useMemo(() => {
+    if (!trash) return undefined;
+    const notes = new Map(trash.files.map(file => [file.file_id,file]));
+    const rows = new Map<string,TrashEntry>();
+    for (const item of trash.items) {
+      const file = notes.get(item.id);
+      const path = item.folder || (file ? entryPath(file.path,file.current_content_hash) : item.name);
+      const key = item.batch ? `folder:${item.batch}` : item.id;
+      const kind = item.folder || isFolder(path) ? 'folder' : item.kind;
+      const expiry = new Date(item.expires_at * 1000).toLocaleDateString();
+      rows.set(key,{key,path,kind,detail:`${path} · ${expiry} 起可自动清理`});
     }
-    await list();
-    refreshTrash(n => n + 1);
+    return Array.from(rows.values()).sort((a,b) => Number(b.kind === 'folder') - Number(a.kind === 'folder'));
+  }, [trash]);
+  const selectedTrash = trashEntries?.find(item => item.key === trashSelected);
+  const readTrash = useCallback(async (entry: TrashEntry) => new Uint8Array(await
+    (await request(token,`${base}/trash/files/${entry.key}/content`)).arrayBuffer()),[token,base]);
+  async function changeTrash(operation: 'restore' | 'purge' | 'empty', entry?: TrashEntry) {
+    if (trashBusy || !trash) return;
+    if (operation === 'empty' && !confirm('彻底清空这个笔记库的回收站？仍被引用的项目将保留。')) return;
+    if (operation === 'purge' && entry && !confirm(`永久删除「${entryName(entry.path)}」及其内容？`)) return;
+    setTrashBusy(true);
+    try {
+      const file = entry && trash.files.find(f => f.file_id === entry.key);
+      if (operation === 'restore' && file && entry) {
+        const path = prompt('恢复路径',entry.path);
+        if (!path) return;
+        await request(token,`${base}/files/${file.file_id}/restore`,'POST',{
+          base_version_id:file.current_version_id, base_path:file.path,
+          path:entry.path === file.path ? path : path.replace(/\/$/,'') + '/' + marker,
+        });
+      } else {
+        const result = await (await request(token,base + '/trash','POST',{
+          operation,kind:file ? 'file' : entry?.kind,id:entry?.key.replace(/^folder:/,''),
+        })).json();
+        if (result.retained) msg(`${result.retained} 个项目仍被引用，已保留。`);
+      }
+      if (!entry || entry.key === trashSelected) {setTrashSelected('');panes.setPane('list');}
+      await list();
+    } finally {
+      refreshTrash(n => n+1);
+      setTrashBusy(false);
+    }
   }
+  const trashAction: TrashAction = (op,entry) => void run(() => changeTrash(op,entry));
   async function create(path: string, bytes: Uint8Array) {
     const r = await (
       await request(token, base + "/files", "POST", {
@@ -485,8 +503,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         avatar={<SettingsButton avatar={profile.avatar} open={openSettings}/>}
         searchContent={searchContent}
         historyKey={vault}
-        trash={{active: view === "trash", disabled: !vault, open: openTrash}}
-        allNotes={() => { if (view === "trash") setView("files"); return true; }}
+        trash={{active:view === 'trash',disabled:!vault,open:openTrash,list:<TrashList
+          entries={trashEntries} error={trashError} selected={trashSelected} action={trashAction} busy={trashBusy} canPurge={!!trash?.can_manage}
+          select={entry => {setTrashSelected(entry.key);panes.setPane(entry.kind === 'file' ? 'doc' : 'list');}}
+          footer={!!trashEntries?.length && trash?.can_manage && <button disabled={trashBusy} onClick={() => run(() => changeTrash('empty'))}>清空回收站</button>}/>}}
+        allNotes={() => { if (view === 'trash') setView('files'); return true; }}
         listActions={
           <button disabled={!vault} onClick={() => picker.current?.click()}>
             上传笔记
@@ -615,59 +636,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               {vault ? "写一篇笔记" : "创建笔记库"}
             </button>
           </article>
+        ) : selectedTrash?.kind === 'file' ? (
+          <TrashDocument key={selectedTrash.key} entry={selectedTrash} read={readTrash} io={{image:entries.image}}
+            action={trashAction} busy={trashBusy} canPurge={!!trash?.can_manage}/>
         ) : (
-          <article>
-            <h1>回收站</h1>
-            {!trash ? <p>{message || "正在加载回收站…"}</p> :
-              (trash.items.length ? (
-                <>
-                  {trash.can_manage && (
-                    <button onClick={() => run(() => changeTrash("empty"))}>
-                      清空回收站
-                    </button>
-                  )}
-                  {trash.items.map((item) => {
-                    const f = trash.files.find((n) => n.file_id === item.id);
-                    return (
-                      <div className="row" key={item.id}>
-                        <span>
-                          {f
-                            ? entryPath(f.path, f.current_content_hash)
-                            : item.name}
-                          <small className="trash-expiry">
-                            {item.kind === "asset" ? "附件" : "笔记"} ·{" "}
-                            {new Date(
-                              item.expires_at * 1000,
-                            ).toLocaleDateString()}{" "}
-                            起可自动清理
-                          </small>
-                        </span>
-                        {(trash.can_manage || item.kind === "file") && (
-                          <button
-                            onClick={() =>
-                              run(() => changeTrash("restore", item))
-                            }
-                          >
-                            恢复
-                          </button>
-                        )}
-                        {trash.can_manage && (
-                          <button
-                            onClick={() =>
-                              run(() => changeTrash("purge", item))
-                            }
-                          >
-                            彻底删除
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </>
-              ) : (
-                <p>回收站为空。</p>
-              ))}
-          </article>
+          <article className="trash-blank" aria-label="回收站空白内容区" />
         )}
       </AppShell.Main>
     </WorkspaceShell>

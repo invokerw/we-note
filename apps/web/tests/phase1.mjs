@@ -145,8 +145,12 @@ try {
   await button(b, "更多操作").click();
   await button(b, "移入回收站").click();
   await button(b, "回收站").click();
+  await button(b, "验收.md").click();
+  assert.equal(await b.locator(".trash-preview-content .reading").innerText(), "Bob 独立编辑");
   b.once("dialog", (d) => d.accept("恢复.md"));
   await button(b, "恢复").click();
+  await button(b, "验收.md").waitFor({state:"detached"});
+  await button(b, "全部笔记").click();
   await button(b, "恢复.md").click();
   await button(b, "编辑模式").click();
   await button(b, "预览").click();

@@ -19,13 +19,14 @@ const activeFileQuery = `
 	LEFT JOIN blobs b ON b.id = COALESCE(v.blob_id, f.current_blob_id) AND b.vault_id = f.vault_id
 	WHERE f.vault_id = ? AND f.is_deleted = 0`
 
-const fileVersionQuery = `
+const versionSelect = `
 	SELECT v.id, v.vault_id, v.file_id, v.blob_id, COALESCE(b.storage_key, ''), v.content_hash, v.content_size, v.parent_version_id,
 		v.created_by_device_id, COALESCE(NULLIF(v.metadata_format, ''), f.format), v.metadata_line_ending,
 		v.vault_revision, v.created_at
 	FROM file_versions v JOIN files f ON f.id = v.file_id AND f.vault_id = v.vault_id
 	LEFT JOIN blobs b ON b.id = v.blob_id AND b.vault_id = v.vault_id
-	WHERE f.vault_id = ? AND f.id = ? AND f.is_deleted = 0`
+	WHERE f.vault_id = ? AND f.id = ?`
+const fileVersionQuery = versionSelect + ` AND f.is_deleted = 0`
 
 func (r *Repository) ListFiles(ctx context.Context, vaultID string) ([]model.File, error) {
 	rows, err := r.db.QueryContext(ctx, activeFileQuery+` ORDER BY f.path, f.id`, vaultID)
@@ -78,7 +79,15 @@ func (r *Repository) FileVersion(ctx context.Context, vaultID, fileID, versionID
 }
 
 func (r *Repository) OpenFileContent(ctx context.Context, vaultID, fileID string) (model.FileVersion, io.ReadCloser, error) {
-	version, err := scanFileVersion(r.db.QueryRowContext(ctx, fileVersionQuery+` AND v.id = f.current_version_id`, vaultID, fileID))
+	return r.openCurrentContent(ctx, vaultID, fileID, false)
+}
+
+func (r *Repository) OpenTrashFileContent(ctx context.Context, vaultID, fileID string) (model.FileVersion, io.ReadCloser, error) {
+	return r.openCurrentContent(ctx, vaultID, fileID, true)
+}
+
+func (r *Repository) openCurrentContent(ctx context.Context, vaultID, fileID string, deleted bool) (model.FileVersion, io.ReadCloser, error) {
+	version, err := scanFileVersion(r.db.QueryRowContext(ctx, versionSelect+` AND f.is_deleted = ? AND v.id = f.current_version_id`, vaultID, fileID, deleted))
 	if err != nil {
 		return model.FileVersion{}, nil, err
 	}

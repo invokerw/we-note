@@ -399,7 +399,7 @@ export function LibraryPanes({
   panes: Panes;
   vault?: ReactNode;
   create: ReactNode;
-  trash: { active: boolean; open: () => void; disabled?: boolean };
+  trash: { active: boolean; open: () => void; disabled?: boolean; list: ReactNode };
   avatar: ReactNode;
   searchContent: (query: string) => Promise<string[]>;
   historyKey: string;
@@ -422,7 +422,7 @@ export function LibraryPanes({
   const [reverse, sort] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   function pickFolder(path: string | null) {
-    if (trash.active && path !== null) allNotes?.();
+    if (trash.active && path !== null && allNotes && !allNotes()) return;
     panes.browse(path);
   }
   useEffect(() => {
@@ -433,6 +433,7 @@ export function LibraryPanes({
         e.key.toLowerCase() === "f"
       ) {
         e.preventDefault();
+        if (trash.active && allNotes && !allNotes()) return;
         setColumns(3);
         setPane("list");
         requestAnimationFrame(() => input.current?.focus());
@@ -440,7 +441,7 @@ export function LibraryPanes({
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [setColumns, setPane]);
+  }, [setColumns, setPane, allNotes, trash.active]);
   const q = query.trim().toLocaleLowerCase();
   const history = useRecentSearches(historyKey);
   const [currentOnly, setCurrentOnly] = useState(false);
@@ -568,7 +569,7 @@ export function LibraryPanes({
       {phone && pane === "list" && (
         <nav className="phone-tabs" aria-label="笔记库导航">
           <button
-            aria-current={folder === null ? "page" : undefined}
+            aria-current={!trash.active && folder === null ? "page" : undefined}
             onClick={() => {if(!allNotes || allNotes()) pickFolder(null);}}
           >
             <PhoneIcon name="notes" />
@@ -605,7 +606,7 @@ export function LibraryPanes({
         {phone && (
           <header className="phone-head phone-library-head">
             {avatar}
-            {folder && (
+            {!trash.active && folder && (
               <button
                 aria-label="上一级目录"
                 onClick={() => pickFolder(parentFolder(folder))}
@@ -614,7 +615,7 @@ export function LibraryPanes({
               </button>
             )}
             <h1>
-              {q
+              {trash.active ? "回收站" : q
                 ? "搜索结果"
                 : folder === null
                   ? "全部笔记"
@@ -625,7 +626,13 @@ export function LibraryPanes({
             </button>
           </header>
         )}
-        <div className="list-search">
+        {trash.active ? <>
+          {!phone && <div className="list-title trash-list-title">
+            {tablet && <button aria-label="打开目录" onClick={() => setPane("nav")}><PhoneIcon name="folder" /></button>}
+            <h1>回收站</h1>
+          </div>}
+          {trash.list}
+        </> : <><div className="list-search">
           {tablet && <button aria-label="打开目录" onClick={() => setPane("nav")}><PhoneIcon name="folder" /></button>}
           <SearchField input={input} query={query} change={search} folder={folder} currentOnly={currentOnly} setCurrentOnly={setCurrentOnly} history={history}/>
           <button
@@ -719,7 +726,7 @@ export function LibraryPanes({
         </div>
         <footer>
           总共 {directories.length + notes.length} 项{!phone && listActions}
-        </footer>
+        </footer></>}
       </section>
     </EntryMenus>
   );

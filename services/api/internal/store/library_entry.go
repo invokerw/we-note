@@ -101,6 +101,11 @@ func (r *Repository) ChangeEntry(ctx context.Context, user, vault, key string, i
 		if err != nil {
 			return err
 		}
+		if folder && in.Operation == "delete" {
+			if _, err = tx.ExecContext(ctx, `INSERT INTO trash_folder_members(vault_id,item,batch,folder) VALUES(?,?,?,?)`, vault, f.id, key, src); err != nil {
+				return err
+			}
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO file_requests(vault_id,operation_id,fingerprint,response) VALUES(?,?,?,'{}')`, vault, key, fingerprint); err != nil {
 		return err

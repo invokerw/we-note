@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"github.com/weifei/we-note/services/api/internal/blob"
 	"github.com/weifei/we-note/services/api/internal/sqlite"
@@ -86,6 +87,67 @@ func TestSnapshotImportIsAtomicIsolatedAndReplayable(t *testing.T) {
 	}
 	if _, err := repo.WriteFile(ctx, bob.ID, b.ID, files[0].ID, "update_file_content", "badasset", store.FileWrite{BaseVersion: *files[0].CurrentVersionID, Content: []byte("![](https://localhost:8443/assets/asset_missing)")}); err == nil {
 		t.Fatal("unavailable asset accepted")
+	}
+}
+
+func TestTrashContentPreviewIsReadOnly(t *testing.T) {
+	ctx := context.Background()
+	database, err := sqlite.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := database.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	enableOpenRegistration(t, database)
+	blobStore, err := blob.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := store.NewRepository(database, blobStore)
+	mux := NewMux(repository)
+	user := registerUser(t, mux, "trash-preview@test.invalid", "trash password")
+	authorization := loginUser(t, mux, "trash-preview@test.invalid", "trash password")
+	vault, err := repository.CreateVault(ctx, user.ID, "Trash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := repository.WriteFile(ctx, user.ID, vault.ID, "", "create_file", "", store.FileWrite{
+		Path:    "folder/preview.md",
+		Content: []byte("# read only trash preview"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.WriteFile(ctx, user.ID, vault.ID, created.FileID, "delete_file", "", store.FileWrite{
+		BaseVersion: created.Version,
+		Path:        "folder/preview.md",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	url := "/api/v1/vaults/" + vault.ID + "/trash/files/" + created.FileID + "/content"
+	if got := requestJSON(t, mux, http.MethodGet, url, "", nil).Code; got != http.StatusUnauthorized {
+		t.Fatalf("anonymous preview returned %d", got)
+	}
+	registerUser(t, mux, "other-preview@test.invalid", "other password")
+	other := loginUser(t, mux, "other-preview@test.invalid", "other password")
+	if got := requestJSON(t, mux, http.MethodGet, url, other, nil).Code; got != http.StatusNotFound {
+		t.Fatalf("foreign preview returned %d", got)
+	}
+
+	trashContent := requestJSON(t, mux, http.MethodGet, url, authorization, nil)
+	if trashContent.Code != http.StatusOK {
+		t.Fatalf("trash content status = %d, body = %s", trashContent.Code, trashContent.Body.String())
+	}
+	if !bytes.Equal(trashContent.Body.Bytes(), []byte("# read only trash preview")) {
+		t.Fatalf("trash content = %q", trashContent.Body.Bytes())
+	}
+
+	activeContent := requestJSON(t, mux, http.MethodGet, "/api/v1/vaults/"+vault.ID+"/files/"+created.FileID+"/content", authorization, nil)
+	if activeContent.Code != http.StatusNotFound {
+		t.Fatalf("active content after deletion returned %d", activeContent.Code)
 	}
 }
 

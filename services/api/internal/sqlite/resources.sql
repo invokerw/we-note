@@ -163,6 +163,11 @@ CREATE TABLE IF NOT EXISTS garbage_objects (
 CREATE TABLE IF NOT EXISTS trash_items (
  vault_id TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,kind TEXT NOT NULL,item TEXT NOT NULL,deleted INTEGER NOT NULL DEFAULT(unixepoch()), PRIMARY KEY(vault_id,kind,item)
 );
+CREATE TABLE IF NOT EXISTS trash_folder_members (
+ vault_id TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'file' CHECK(kind='file'), item TEXT NOT NULL,
+ batch TEXT NOT NULL, folder TEXT NOT NULL, PRIMARY KEY(vault_id,item),
+ FOREIGN KEY(vault_id,kind,item) REFERENCES trash_items(vault_id,kind,item) ON DELETE CASCADE
+);
 CREATE INDEX IF NOT EXISTS trash_expiry ON trash_items(deleted);
 INSERT OR IGNORE INTO system_settings(key,value,updated_at) VALUES('trash_retention_days','30',CURRENT_TIMESTAMP);
 CREATE TRIGGER IF NOT EXISTS trash_files AFTER UPDATE OF is_deleted ON files WHEN NEW.is_deleted<>OLD.is_deleted BEGIN

@@ -40,27 +40,34 @@ func (a *API) getFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, file)
 }
 
-func (a *API) getFileContent(w http.ResponseWriter, r *http.Request) {
-	if !a.canReadFiles(w, r) {
-		return
+func (a *API) fileContent(deleted bool) http.HandlerFunc {
+	open := a.repository.OpenFileContent
+	if deleted {
+		open = a.repository.OpenTrashFileContent
 	}
-	vaultID := r.PathValue("vault_id")
-	version, reader, err := a.repository.OpenFileContent(r.Context(), vaultID, r.PathValue("file_id"))
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "file content not found")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not open file content")
-		return
-	}
-	defer reader.Close()
-	writeContentHeaders(w, version)
-	if r.Method != http.MethodHead {
-		if _, err := io.Copy(w, reader); err != nil {
-			panic(http.ErrAbortHandler)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !a.canReadFiles(w, r) {
+			return
+		}
+		vaultID := r.PathValue("vault_id")
+		version, reader, err := open(r.Context(), vaultID, r.PathValue("file_id"))
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "file content not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not open file content")
+			return
+		}
+		defer reader.Close()
+		writeContentHeaders(w, version)
+		if r.Method != http.MethodHead {
+			if _, err := io.Copy(w, reader); err != nil {
+				panic(http.ErrAbortHandler)
+			}
 		}
 	}
+
 }
 
 func (a *API) listFileVersions(w http.ResponseWriter, r *http.Request) {

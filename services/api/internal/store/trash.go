@@ -9,6 +9,8 @@ import (
 )
 
 type TrashItem struct {
+	Batch   string `json:"batch,omitempty"`
+	Folder  string `json:"folder,omitempty"`
 	Kind    string `json:"kind"`
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -20,7 +22,7 @@ func (r *Repository) TrashItems(ctx context.Context, vault string) ([]TrashItem,
 	return r.trashItems(ctx, vault, false)
 }
 func (r *Repository) trashItems(ctx context.Context, vault string, expired bool) ([]TrashItem, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT t.kind,t.item,coalesce(f.path,a.name),t.deleted,t.deleted+86400*`+retentionDays+` FROM trash_items t LEFT JOIN files f ON t.kind='file' AND f.id=t.item LEFT JOIN assets a ON t.kind='asset' AND a.id=t.item WHERE t.vault_id=? AND (?=0 OR t.deleted+86400*`+retentionDays+`<=unixepoch()) ORDER BY t.kind DESC,t.deleted,t.item`, vault, expired)
+	rows, err := r.db.QueryContext(ctx, `SELECT coalesce(g.batch,''),coalesce(g.folder,''),t.kind,t.item,coalesce(f.path,a.name),t.deleted,t.deleted+86400*`+retentionDays+` FROM trash_items t LEFT JOIN trash_folder_members g ON g.vault_id=t.vault_id AND g.kind=t.kind AND g.item=t.item LEFT JOIN files f ON t.kind='file' AND f.id=t.item LEFT JOIN assets a ON t.kind='asset' AND a.id=t.item WHERE t.vault_id=? AND (?=0 OR t.deleted+86400*`+retentionDays+`<=unixepoch()) ORDER BY t.kind DESC,t.deleted,t.item`, vault, expired)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +30,7 @@ func (r *Repository) trashItems(ctx context.Context, vault string, expired bool)
 	items := []TrashItem{}
 	for rows.Next() {
 		var i TrashItem
-		if err = rows.Scan(&i.Kind, &i.ID, &i.Name, &i.Deleted, &i.Expires); err != nil {
+		if err = rows.Scan(&i.Batch, &i.Folder, &i.Kind, &i.ID, &i.Name, &i.Deleted, &i.Expires); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -80,6 +82,13 @@ func (r *Repository) purgeItem(ctx context.Context, vault, kind, id string) erro
 		return err
 	}
 	defer tx.Rollback()
+	if err := r.purgeItemTx(ctx, tx, vault, kind, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+func (r *Repository) purgeItemTx(ctx context.Context, tx *sql.Tx, vault, kind, id string) error {
+	var err error
 	var exists bool
 	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM trash_items WHERE vault_id=? AND kind=? AND item=?)`, vault, kind, id).Scan(&exists); err != nil {
 		return err
@@ -146,7 +155,7 @@ func (r *Repository) purgeItem(ctx context.Context, vault, kind, id string) erro
 	if _, err = tx.ExecContext(ctx, `DELETE FROM trash_items WHERE vault_id=? AND kind=? AND item=?`, vault, kind, id); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 func queueUnused(ctx context.Context, tx *sql.Tx, vault, hash string) error {
 	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO garbage_objects SELECT vault_id,content_hash,content_size FROM blobs WHERE vault_id=?1 AND content_hash=?2 AND NOT EXISTS(SELECT 1 FROM file_versions WHERE vault_id=?1 AND content_hash=?2 UNION ALL SELECT 1 FROM upload_sessions WHERE vault_id=?1 AND content_hash=?2 AND status IN ('pending','completed') UNION ALL SELECT 1 FROM export_jobs WHERE vault_id=?1 AND hash=?2 UNION ALL SELECT 1 FROM (`+snapshots+`) WHERE vault=?1 AND instr(snapshot,?2)>0)`, vault, hash)
@@ -224,10 +233,59 @@ func (r *Repository) expireTrash(ctx context.Context) error {
 	}
 	return errors.Join(failures...)
 }
+
+// A folder operation uses only members of this deletion, including nested notes.
+func (r *Repository) changeTrashFolder(ctx context.Context, user, vault, operation, batch string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	ids, err := stringList(ctx, tx, `SELECT item FROM trash_folder_members WHERE vault_id=? AND batch=? ORDER BY item`, vault, batch)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return ErrNotFound
+	}
+	for _, id := range ids {
+		if operation == "purge" {
+			err = r.purgeItemTx(ctx, tx, vault, "file", id)
+		} else {
+			var version string
+			if err = tx.QueryRowContext(ctx, `SELECT current_version_id FROM files WHERE vault_id=? AND id=?`, vault, id).Scan(&version); err != nil {
+				return err
+			}
+			key, keyErr := newID("op")
+			if keyErr != nil {
+				return keyErr
+			}
+			_, err = r.writeFileTx(ctx, tx, vault, id, "restore_file", key, FileWrite{BaseVersion: version, Device: "web_" + user}, storedContent{})
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
 func (r *Repository) ManageTrash(ctx context.Context, user, vault, operation, kind, id string) (int, error) {
 	v, err := r.VaultForUser(ctx, user, vault)
 	if err != nil {
 		return 0, err
+	}
+	if kind == "folder" && (operation == "restore" || operation == "purge") {
+		if operation == "restore" {
+			ok, err := r.UserCanWriteVault(ctx, user, vault)
+			if err != nil {
+				return 0, err
+			}
+			if !ok {
+				return 0, ErrNotFound
+			}
+		} else if v.OwnerUserID != user {
+			return 0, ErrNotFound
+		}
+		return 0, r.changeTrashFolder(ctx, user, vault, operation, id)
 	}
 	if v.OwnerUserID != user {
 		return 0, ErrNotFound

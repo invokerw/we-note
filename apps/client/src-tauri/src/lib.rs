@@ -136,6 +136,12 @@ enum LocalAction {
     List,
     Library,
     Trash,
+    ReadTrash {
+        item: wenote_sync::notebook::TrashedFile,
+    },
+    PurgeTrash {
+        item: wenote_sync::notebook::TrashedFile,
+    },
     RestoreFile {
         item: wenote_sync::notebook::TrashedFile,
     },
@@ -231,6 +237,8 @@ async fn notebook(
                     .map(serde_json::Value::String)
             }
             Trash => book.trash_files().map(|items| serde_json::json!(items)),
+            ReadTrash { item } => book.read_trash(&item),
+            PurgeTrash { item } => book.purge_trash(&item).map(|()| serde_json::Value::Null),
             RestoreFile { item } => book.restore_file(&item).map(|()| serde_json::Value::Null),
             SearchNotes { query, paths } => book
                 .search_notes(&query, &paths)

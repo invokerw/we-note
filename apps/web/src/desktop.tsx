@@ -25,6 +25,7 @@ import {
   type EntryIO,
 } from "./libraryEntries";
 import { NoteInfoPanel, NoteInfoToggle } from "./NoteInfo";
+import { TrashDocument, TrashList, type TrashEntry, type TrashAction } from "./TrashPane";
 import { LibraryPanes, NoteHeading, usePanes } from "./LibraryUI";
 import { AppShell } from "@mantine/core";
 import { WorkspaceShell } from "./WorkspaceShell";
@@ -144,6 +145,23 @@ function Workspace({
   const originalHandler = useRef("");
   const [localHandler, setLocalHandler] = useState("");
   const [trash, setTrash] = useState<TrashedFile[]>([]);
+  const [trashKey, setTrashKey] = useState('');
+  const trashRows = useMemo(() => trash.map(item => ({key:JSON.stringify([item.external,item.batch,item.path]),
+    kind:item.path.endsWith('/') ? 'folder' as const : 'file' as const,path:item.path,item})),[trash]);
+  const selectedTrash = trashRows.find(row => row.key === trashKey);
+  const readTrash = useCallback(async (entry: TrashEntry) => {
+    const row = trashRows.find(row => row.key === entry.key);
+    if (!row) throw Error('回收站项目已变化');
+    return fromBase64(await local<string>(binding.vault,'read_trash',{item:row.item}));
+  },[binding.vault,trashRows]);
+  const trashAction: TrashAction = (op,entry) => run(async () => {
+    const row = trashRows.find(row => row.key === entry.key);
+    if (!row || (op === 'purge' && !confirm(`永久删除「${row.path}」及其内容？`))) return;
+    await local(binding.vault,op === 'purge' ? 'purge_trash' : 'restore_file',{item:row.item});
+    if (trashKey === row.key) {setTrashKey('');panes.setPane('list');}
+    setTrash(await local<TrashedFile[]>(binding.vault,'trash'));
+    await load();
+  });
   const [view, setView] = useState("笔记"),
     [newPath, setNewPath] = useState<string | null>(null),
     [links, setLinks] = useState<Hit[]>([]);
@@ -194,7 +212,7 @@ function Workspace({
       return;
     }
     if (panes.pane === "doc") {
-      panes.setPane(view === "笔记" ? "list" : "nav");
+      panes.setPane("list");
       return;
     }
     if (panes.pane === "nav") {
@@ -641,8 +659,10 @@ function Workspace({
           if (!leave()) return;
           setTrash(await local<TrashedFile[]>(vault, "trash"));
           choose(""); setPluginBytes(null); setPluginDirty(false); setSaved(text); setNewPath(null);
-          setView("回收站"); panes.setPane("doc");
-        }) }}
+          setView("回收站"); setTrashKey(''); panes.browse(null);
+        }), list:<TrashList entries={trashRows} selected={trashKey} select={entry => {
+          setTrashKey(entry.key);panes.setPane(entry.kind === 'file' ? 'doc' : 'list');
+        }} action={trashAction} canPurge busy={busy}/> }}
         listActions={
           <>
             {" "}
@@ -681,7 +701,7 @@ function Workspace({
       <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (
           <header className="phone-head">
-            <button aria-label="返回笔记库目录" onClick={back}>
+            <button aria-label="返回笔记列表" onClick={back}>
               <PhoneIcon name="back" />
             </button>
           </header>
@@ -725,17 +745,8 @@ function Workspace({
           </p>
         )}
         {view !== "笔记" ? (
-          <article>
-            <h1>回收站</h1>
-            {trash.length ? trash.map(item => <div className="row" key={`${item.external}/${item.batch}/${item.path}`}>
-              <span>{item.path}</span>
-              <button disabled={busy} onClick={() => run(async () => {
-                await local(vault, "restore_file", { item });
-                setTrash(await local<TrashedFile[]>(vault, "trash"));
-                await load();
-              })}>恢复</button>
-            </div>) : <p>回收站为空。</p>}
-          </article>
+          selectedTrash?.kind === 'file' ? <TrashDocument key={selectedTrash.key} entry={selectedTrash} read={readTrash}
+            io={{image:entries.image}} action={trashAction} canPurge busy={busy}/> : <article className="trash-blank"/>
         ) : (
           <article className={path ? "document" : "blank-document"}>
             {!path && (
