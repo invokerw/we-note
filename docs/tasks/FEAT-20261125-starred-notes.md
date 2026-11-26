@@ -1,6 +1,6 @@
 # 笔记加星与快速访问
 
-- 任务 `FEAT-20261125-starred-notes`，类型 `feature`，状态 `DELIVERED`。
+- 任务 `FEAT-20261125-starred-notes`，类型 `feature`，状态 `ACCEPTED`。
 - 已验收需求来自 `main` 的 `c6f8589`，见[笔记加星需求](../笔记加星需求.md)。
 - 用户选择方式 2，在任务分支验收，通过后合入本地 `main`。
 - 分支 `codex/feature-starred-notes-20261125`，工作区 `.worktrees/starred-notes-20261125`。
@@ -22,3 +22,7 @@
 - 测试账号与直达笔记库地址见工作区的 `dist/local/验收账号.txt`。选「加星验收」，右键 `工作/计划.md` 加星，在左侧「加星」打开它，编辑正文后用右上角星形取消。回到原文件夹可再次加星。
 - macOS 可执行程序位于 `target/release/wenote-desktop`。手机交互已在 Chrome 的 390 px 视口验证，原生客户端完成 macOS 构建，真机交互待验收。
 - 2026-11-25 任务由 `IN_PROGRESS` 转为 `DELIVERED`。任务分支、worktree 和服务保留至用户明确验收通过。
+
+## 用户验收与合入
+
+2026-11-26，用户确认版本 `7e0ffc1` 验收完毕，按方式 2 收尾。
