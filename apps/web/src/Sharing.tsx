@@ -17,8 +17,6 @@ type Link = {
   id: string;
   title: string;
   expires: number;
-  downloads: number;
-  max_downloads: number;
   password_required: boolean;
   allow_download: boolean;
   allow_import: boolean;
@@ -125,7 +123,7 @@ export function Sharing({ token, vaults }: { token: string; vaults: Vault[] }) {
               <div>
                 <strong>{link.title}</strong>
                 <p>{link.expires ? `${new Date(link.expires * 1000).toLocaleString()} 到期` : "永久有效"}</p>
-                <small>{link.password_required && "有密码 · "}已用 {link.downloads} / {link.max_downloads || "不限"} 次</small>
+                {link.password_required && <small>有密码</small>}
               </div>
               <button disabled={busy} onClick={() => run(() => stop(link))}>停止分享</button>
             </li>

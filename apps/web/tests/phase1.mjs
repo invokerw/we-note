@@ -131,6 +131,7 @@ try {
   a.once("dialog", d => d.accept());
   await a.getByRole("heading", { name: "Alice", exact: true }).waitFor();
   await a.getByText("永久有效", { exact: true }).waitFor();
+  assert.doesNotMatch(await a.locator(".share-list").innerText(), /已用\s*\d+\s*\//);
   await button(a, "停止分享").click();
   await a.getByText("暂无有效分享").waitFor();
   const expired = await chrome.newPage();

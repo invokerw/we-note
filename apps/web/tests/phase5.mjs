@@ -81,7 +81,7 @@ try {
   const secret = randomBytes(32).toString("base64url");
   const {id} = await (await api(a.token, "/api/v1/share-links", "POST", {
     vault_id: a.vault, paths: ["项目/记录.md"], token_hash: createHash("sha256").update(secret).digest("hex"),
-    password: "phase5-link", max_downloads: 1, expires: Math.floor(Date.now()/1000) + 3600,
+    password: "phase5-link", expires: Math.floor(Date.now()/1000) + 3600,
     allow_import: true, allow_download: true,
   })).json();
   const link = `${origin}/#share=${id}.${secret}`;
@@ -104,7 +104,7 @@ try {
   await button(b.page, "确认保存").click();
   await b.page.getByText("已保存到我的笔记").waitFor();
   await b.page.reload();
-  await b.page.getByText("分享链接已失效").waitFor();
+  await b.page.getByText(body, { exact: true }).waitFor();
   const copyAssets = await (
     await api(b.token, `/api/v1/vaults/${b.vault}/assets`)
   ).json();
@@ -135,7 +135,7 @@ try {
   await p.getByRole("heading",{name:"账户审计日志"}).waitFor();
   await button(p,"关闭个人设置").click();
   for (const name of ["笔记库菜单", "加密笔记库", "批量分享"]) assert.equal(await p.getByLabel(name).count(), 0);
-  console.log("通过单篇分享、密码、附件复制、次数限制及账户活动验收。");
+  console.log("通过单篇分享、密码、附件复制、重复访问及账户活动验收。");
 } finally {
   await browser.close();
 }

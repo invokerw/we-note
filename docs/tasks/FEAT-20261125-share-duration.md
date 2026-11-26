@@ -23,3 +23,14 @@
 在 `http://localhost:19526` 使用普通验收账号 `share-review@example.invalid` 登录（密码随交付提供），或自行注册。进入「个人设置 → 我的分享」可看到「工作笔记」中的 3 天分享和「读书笔记」中的永久分享。打开任一示例笔记，点击「分享」，选择有效期并生成链接。可在「我的分享」停止对应链接，复查列表与访客访问。
 
 独立实例 PID `32282`。相对于本任务 worktree，数据目录为 `services/api/data`，运行日志为 `dist/local/server.log`，构建日志为 `dist/local/share-build.log`。验收通过后在此目录执行 `./scripts/local.py stop`。
+
+## 第二轮反馈 · 2026-11-26
+
+用户要求删除「我的分享」中的「已用 0 / 不限 次」功能。沿用方式 2。验收时核对列表省去次数一行，新分享可在有效期内重复下载与保存，创建与查询结果均省去次数字段。已有明确设置过上限的历史链接继续遵守创建时的权限，已耗尽的链接继续失效。
+
+基于上轮交付 `c22be3b` 进入 `CHANGES_REQUESTED`，同步本地 main 后复现并修改。
+
+- 失败测试：`go test -count=1 ./internal/httpapi -run 'TestSharedSourceDownload|TestShareDurationsAndActiveList'` 退出 1，原接口接受新限次链接，普通链接下载两次后计数为 2。`WENOTE_TEST_ORIGIN=http://localhost:19526 node apps/web/tests/phase1.mjs` 退出 1，实际呈现「已用 2 / 不限 次」。
+- 实现与自审：删除列表中的用量、创建和列表响应中的次数字段，以及普通链接下载和导入时的计数更新。审核了下载权限、审计记录和历史链接的请求重试。已有设置上限的链接按原约定执行，防止已失效的链接重新开放。
+- 复测：`go test -count=1 ./...`、`go vet ./...`、`git diff --check` 均退出 0。从任务工作区执行 `./scripts/local.py stop`、`./scripts/local.py start --port 19526`，重新构建 Web/API。`curl -fsS http://127.0.0.1:19526/healthz` 返回 `ok`。同一实例上重新运行 `phase1.mjs`、`phase5.mjs` 均退出 0。
+- 本轮 `DELIVERED`。服务 PID `46753`，沿用上轮地址、账号、数据及日志。刷新后进入「个人设置 → 我的分享」可验收。

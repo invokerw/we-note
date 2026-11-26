@@ -17,35 +17,33 @@ import (
 )
 
 type LinkOptions struct {
-	TokenHash    string   `json:"token_hash"`
-	Vault        string   `json:"vault_id"`
-	Paths        []string `json:"paths"`
-	AssetIDs     []string `json:"asset_ids"`
-	Password     string   `json:"password"`
-	Expires      int64    `json:"expires"`
-	DurationDays *int     `json:"duration_days,omitempty"`
-	MaxDownloads int      `json:"max_downloads"`
-	Download     bool     `json:"allow_download"`
-	Import       bool     `json:"allow_import"`
+	TokenHash          string   `json:"token_hash"`
+	Vault              string   `json:"vault_id"`
+	Paths              []string `json:"paths"`
+	AssetIDs           []string `json:"asset_ids"`
+	Password           string   `json:"password"`
+	Expires            int64    `json:"expires"`
+	DurationDays       *int     `json:"duration_days,omitempty"`
+	LegacyMaxDownloads int      `json:"max_downloads"` // Retain the original request fingerprint for retries.
+	Download           bool     `json:"allow_download"`
+	Import             bool     `json:"allow_import"`
 }
 type ShareLink struct {
-	Vault        string `json:"vault_id"`
-	Title        string `json:"title"`
-	ID           string `json:"id"`
-	Expires      int64  `json:"expires"`
-	MaxDownloads int    `json:"max_downloads"`
-	Downloads    int    `json:"downloads"`
-	Download     bool   `json:"allow_download"`
-	Import       bool   `json:"allow_import"`
-	Revoked      bool   `json:"revoked"`
-	Protected    bool   `json:"password_required"`
+	Vault     string `json:"vault_id"`
+	Title     string `json:"title"`
+	ID        string `json:"id"`
+	Expires   int64  `json:"expires"`
+	Download  bool   `json:"allow_download"`
+	Import    bool   `json:"allow_import"`
+	Revoked   bool   `json:"revoked"`
+	Protected bool   `json:"password_required"`
 }
 
-const linkColumns = `vault,id,expires,max_downloads,downloads,allow_download,allow_import,revoked,password_hash<>'',coalesce(json_extract(snapshot,'$.files[0].path'),json_extract(snapshot,'$.assets[0].name'),'分享') || CASE WHEN json_array_length(snapshot,'$.files')>1 THEN ' 等 ' || json_array_length(snapshot,'$.files') || ' 篇笔记' ELSE '' END`
+const linkColumns = `vault,id,expires,allow_download,allow_import,revoked,password_hash<>'',coalesce(json_extract(snapshot,'$.files[0].path'),json_extract(snapshot,'$.assets[0].name'),'分享') || CASE WHEN json_array_length(snapshot,'$.files')>1 THEN ' 等 ' || json_array_length(snapshot,'$.files') || ' 篇笔记' ELSE '' END`
 
 func scanLink(row scanner) (ShareLink, error) {
 	var l ShareLink
-	err := row.Scan(&l.Vault, &l.ID, &l.Expires, &l.MaxDownloads, &l.Downloads, &l.Download, &l.Import, &l.Revoked, &l.Protected, &l.Title)
+	err := row.Scan(&l.Vault, &l.ID, &l.Expires, &l.Download, &l.Import, &l.Revoked, &l.Protected, &l.Title)
 	return l, err
 }
 func ownedVaultTx(ctx context.Context, tx *sql.Tx, user, vault string) error {
@@ -60,8 +58,8 @@ func ownedVaultTx(ctx context.Context, tx *sql.Tx, user, vault string) error {
 }
 func (r *Repository) CreateLink(ctx context.Context, user, key string, q LinkOptions) (ShareLink, error) {
 	var l ShareLink
-	if !syncHashPattern.MatchString("sha256:"+q.TokenHash) || q.MaxDownloads < 0 || len(q.Password) > 512 {
-		return l, fileError(400, "INVALID_LINK", "choose a future expiry and a nonnegative download limit")
+	if !syncHashPattern.MatchString("sha256:"+q.TokenHash) || len(q.Password) > 512 {
+		return l, fileError(400, "INVALID_LINK", "invalid token hash or password")
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -90,6 +88,9 @@ func (r *Repository) CreateLink(ctx context.Context, user, key string, q LinkOpt
 		if !errors.Is(err, sql.ErrNoRows) {
 			return l, err
 		}
+	}
+	if q.LegacyMaxDownloads != 0 {
+		return l, fileError(400, "INVALID_LINK", "分享链接已取消次数设置")
 	}
 	// Resolve relative durations after replay lookup so retries retain the original expiry.
 	if q.DurationDays != nil {
@@ -136,7 +137,7 @@ func (r *Repository) CreateLink(ctx context.Context, user, key string, q LinkOpt
 	if err != nil {
 		return l, err
 	}
-	l, err = scanLink(tx.QueryRowContext(ctx, `INSERT INTO share_links(id,owner,vault,token_hash,password_hash,snapshot,expires,max_downloads,allow_download,allow_import,operation_key,fingerprint) VALUES(?,?,?,?,?,?,?,?,?,?,NULLIF(?,''),?) RETURNING `+linkColumns, id, user, q.Vault, q.TokenHash, pass, string(raw), q.Expires, q.MaxDownloads, q.Download, q.Import, key, fingerprint))
+	l, err = scanLink(tx.QueryRowContext(ctx, `INSERT INTO share_links(id,owner,vault,token_hash,password_hash,snapshot,expires,max_downloads,allow_download,allow_import,operation_key,fingerprint) VALUES(?,?,?,?,?,?,?,0,?,?,NULLIF(?,''),?) RETURNING `+linkColumns, id, user, q.Vault, q.TokenHash, pass, string(raw), q.Expires, q.Download, q.Import, key, fingerprint))
 	if err != nil {
 		return l, err
 	}
@@ -209,15 +210,16 @@ func (r *Repository) ExchangeLink(ctx context.Context, id, secret, pass string) 
 
 type LinkSnapshot struct {
 	Snapshot
-	Download bool   `json:"allow_download"`
-	Import   bool   `json:"allow_import"`
-	Vault    string `json:"-"`
+	legacyLimited bool
+	Download      bool   `json:"allow_download"`
+	Import        bool   `json:"allow_import"`
+	Vault         string `json:"-"`
 }
 
 func readLink(ctx context.Context, tx *sql.Tx, id, session string) (LinkSnapshot, error) {
 	var s LinkSnapshot
 	var raw string
-	err := tx.QueryRowContext(ctx, `SELECT vault,snapshot,allow_download,allow_import FROM share_links WHERE id=? AND `+activeLink+` AND EXISTS(SELECT 1 FROM share_link_sessions WHERE link=? AND token_hash=? AND expires>unixepoch())`, id, id, secretHash(session)).Scan(&s.Vault, &raw, &s.Download, &s.Import)
+	err := tx.QueryRowContext(ctx, `SELECT vault,snapshot,allow_download,allow_import,max_downloads>0 FROM share_links WHERE id=? AND `+activeLink+` AND EXISTS(SELECT 1 FROM share_link_sessions WHERE link=? AND token_hash=? AND expires>unixepoch())`, id, id, secretHash(session)).Scan(&s.Vault, &raw, &s.Download, &s.Import, &s.legacyLimited)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s, ErrNotFound
 	}
@@ -239,18 +241,23 @@ func (r *Repository) LinkSnapshot(ctx context.Context, id, session string, downl
 		return s, err
 	}
 	if download {
-		if err = countLinkDownload(ctx, tx, id, s); err != nil {
+		if err = recordLinkDownload(ctx, tx, id, s); err != nil {
 			return s, err
 		}
 	}
 	return s, tx.Commit()
 }
 
-func countLinkDownload(ctx context.Context, tx *sql.Tx, id string, s LinkSnapshot) error {
+func recordLinkDownload(ctx context.Context, tx *sql.Tx, id string, s LinkSnapshot) error {
 	if !s.Download {
 		return fileError(403, "DOWNLOAD_DISABLED", "此链接未开放下载")
 	}
-	_, err := tx.ExecContext(ctx, `UPDATE share_links SET downloads=downloads+1 WHERE id=?`, id)
+	if s.legacyLimited {
+		// This update also fires the legacy download audit trigger.
+		_, err := tx.ExecContext(ctx, `UPDATE share_links SET downloads=downloads+1 WHERE id=?`, id)
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO audit_events(owner,action,object_id) SELECT owner,'link.download',id FROM share_links WHERE id=?`, id)
 	return err
 }
 
@@ -268,7 +275,7 @@ func (r *Repository) DownloadLinkFile(ctx context.Context, id, session, version 
 		if f.Version != version {
 			continue
 		}
-		if err = countLinkDownload(ctx, tx, id, s); err != nil {
+		if err = recordLinkDownload(ctx, tx, id, s); err != nil {
 			return "", nil, err
 		}
 		data, err := r.readNoteBlobWithQuery(ctx, tx, s.Vault, f.Hash, f.Size)
@@ -323,8 +330,10 @@ func (r *Repository) ImportLink(ctx context.Context, user, id, session, target, 
 	if _, err = tx.ExecContext(ctx, `INSERT INTO share_link_imports VALUES(?,?,?)`, id, target, string(data)); err != nil {
 		return nil, err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE share_links SET downloads=downloads+1 WHERE id=?`, id); err != nil {
-		return nil, err
+	if s.legacyLimited {
+		if _, err = tx.ExecContext(ctx, `UPDATE share_links SET downloads=downloads+1 WHERE id=?`, id); err != nil {
+			return nil, err
+		}
 	}
 	return files, tx.Commit()
 }
