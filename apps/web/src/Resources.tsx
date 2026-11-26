@@ -37,11 +37,13 @@ export type ResourceClient = {
 export function LibraryResources({
   base,
   token,
+  vaultName,
   onImported,
   viewFolder,
 }: {
   base: string;
   token: string;
+  vaultName: string;
   onImported: () => Promise<void>;
   viewFolder: (folder: string) => void;
 }) {
@@ -82,6 +84,7 @@ export function LibraryResources({
     <Resources
       key={base}
       client={client}
+      vaultName={vaultName}
       onImported={onImported}
       viewFolder={viewFolder}
     />
@@ -93,11 +96,13 @@ const scopes: Record<string, string> = {
 };
 export function Resources({
   client,
+  vaultName,
   onImported,
   viewFolder,
   unavailable,
 }: {
   client: ResourceClient;
+  vaultName: string;
   onImported?: () => Promise<void>;
   viewFolder: (folder: string) => Promise<void> | void;
   unavailable?: boolean;
@@ -134,6 +139,7 @@ export function Resources({
   }, [client, revision]);
   return (
     <>
+      <p>当前笔记库 · {vaultName}</p>
       <article>
         <h3>导出</h3>
         <label>
@@ -210,6 +216,7 @@ export function Resources({
       <PortableImport
         client={client}
         unavailable={unavailable}
+        vaultName={vaultName}
         onImported={onImported}
         viewFolder={viewFolder}
       />

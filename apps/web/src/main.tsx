@@ -505,7 +505,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         createAtPath={async (path, bytes) => { if (leave()) await create(path, bytes); }}
         browse={folder => { setView("files"); panes.browse(folder); }} />}
       {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={() => !dirty.current || confirm("放弃尚未保存的编辑？")} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
-        exportPanel={vault ? <><p>当前笔记库 · {vaults.find(v => v.id === vault)?.name}</p><LibraryResources base={base} token={token} onImported={list} viewFolder={folder => { if (!leave()) return; setNote(null); setView("files"); panes.browse(folder ? folder + "/" : null); closeSettings(); }}/></> : <p>请先选择笔记库。</p>}
+        exportPanel={vault ? <LibraryResources vaultName={vaults.find(v => v.id === vault)?.name || vault} base={base} token={token} onImported={list} viewFolder={folder => { if (!leave()) return; setNote(null); setView("files"); panes.browse(folder ? folder + "/" : null); closeSettings(); }}/> : <p>请先选择笔记库。</p>}
         audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
         shares={<Sharing token={token} vaults={vaults}/>}/>}
       <AppShell.Main className="workspace">

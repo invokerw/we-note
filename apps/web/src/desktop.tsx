@@ -712,11 +712,11 @@ function Workspace({
         paths={files} io={entries} close={() => setCreateAnchor(null)}
         create={format => { setNewPath((panes.folder || "") + formats[format]); panes.setPane("doc"); }}
         browse={folder => { setView("笔记"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<><p>当前笔记库 · {binding.name || vault}</p><Resources client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
+      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
         if (!leave()) return;
         if (!await binding.synchronize?.()) throw Error("请完成同步后查看导入的笔记");
         await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); setNewPath(null); panes.browse(folder ? folder + "/" : null);
-      }}/></>} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
+      }}/>} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
       <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (
           <header className="phone-head">

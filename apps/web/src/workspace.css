@@ -245,3 +245,20 @@
   .plugin-primary-action { display: none; }
   .plugin-folded-action, .plugin-overflow.only-primary { display: inline-block; }
 }
+
+.import-preview[open] {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
+}
+.import-preview-content { overflow-y: auto; }
+.import-preview-content dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+}
+.import-preview-content dt { color: var(--muted); }
+.import-preview-content dd { margin: 0; }
+.import-preview footer { flex-shrink: 0; }
