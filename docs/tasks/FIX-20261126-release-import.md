@@ -25,3 +25,4 @@
 - `79f25aa` 在 [Windows 和 macOS](https://github.com/invokerw/we-note/actions/runs/45813207935) 完整通过，本地 `cargo test --locked -p wenote-sync --lib` 的四项回归通过。由本工作区 `npm run build:desktop --prefix apps/web`、`cargo build --locked -p wenote-desktop --bin wenote-desktop` 构建的 Apple Silicon 客户端可直接运行 `./target/debug/wenote-desktop`，服务地址填写 `http://localhost:19461`。
 - [Android 复测](https://github.com/invokerw/we-note/actions/runs/45813271349) 已通过模式选择和返回，等待软键盘时超时。模拟器验收启用带硬件键盘时显示软键盘，点按源码行并检查可视视口缩小与复原。
 - `aca351c` 的 [Android 模拟器](https://github.com/invokerw/we-note/actions/runs/45814787835) 已通过软键盘、草稿和本地保存，随后系统选择器导出 `.log` 后未找到原名文件。验收要求核对实际保存文件的原名与完整内容，并在成功后提供可安装的模拟器 APK。
+- [Android 原文件导出复测](https://github.com/invokerw/we-note/actions/runs/45816544946) 核对 `.log` 原名与完整内容通过，插件编辑和后台冲突恢复也通过。旧用例随后向仅接收图片的编辑器粘贴 `.bin`，等待 90 秒超时。分片验收改用超过 4 MiB 的 PNG，并核对图片链接、服务端大小与 SHA-256。

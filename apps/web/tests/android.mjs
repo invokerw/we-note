@@ -428,34 +428,36 @@ try {
   await button("打开笔记").click();
   await button("原稿.md").click();
   await editMarkdownSource();
-  await page.getByLabel("笔记源码").evaluate((el) => {
+  const image = await page.getByLabel("笔记源码").evaluate(async (el) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1536;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d");
+    const pixels = ctx.createImageData(canvas.width, canvas.height);
+    for (let i = 0; i < pixels.data.length; i += 65536)
+      crypto.getRandomValues(pixels.data.subarray(i, i + 65536));
+    for (let i = 3; i < pixels.data.length; i += 4) pixels.data[i] = 255;
+    ctx.putImageData(pixels, 0, 0);
+    const png = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    const file = new File([png], "手机图片.png", { type: "image/png" });
+    const hash = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
     const data = new DataTransfer();
-    data.items.add(
-      new File([new Uint8Array((4 << 20) + 7)], "手机附件.bin", {
-        type: "application/octet-stream",
-      }),
-    );
-    el.dispatchEvent(
-      new ClipboardEvent("paste", {
-        clipboardData: data,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
+    data.items.add(file);
+    el.dispatchEvent(new ClipboardEvent("paste", {
+      clipboardData: data, bubbles: true, cancelable: true,
+    }));
+    return { name: file.name, size: file.size,
+      hash: "sha256:" + Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("") };
   });
+  assert.ok(image.size > (4 << 20), "PNG exercises multipart upload");
   await page.waitForFunction(
-    () =>
-      document
-        .querySelector(".cm-content")
-        ?.textContent.includes("手机附件.bin"),
-    null,
-    { timeout: 90000 },
+    name => document.querySelector(".cm-content")?.textContent.includes(`![${name}](`),
+    image.name, { timeout: 90000 },
   );
   const assets = await (await api(base + "/assets")).json();
-  assert.equal(
-    assets.find((a) => a.name === "手机附件.bin")?.content_size,
-    (4 << 20) + 7,
-  );
+  const uploaded = assets.find(a => a.name === image.name);
+  assert.equal(uploaded?.content_size, image.size);
+  assert.equal(uploaded.content_hash, image.hash);
   await tap(button("完成"));
   await page.getByText("已保存到本地目录").waitFor();
   await openSettings("导出/导入");
@@ -478,7 +480,7 @@ try {
   await button(conflict.path).click();
   await page.locator(".reading").getByText("手机离线编辑").waitFor();
   console.log(
-    "Android emulator passed offline restart, system share, scheduled sync, conflict recovery, multipart attachment upload and portable ZIP download.",
+    "Android emulator passed offline restart, system share, scheduled sync, conflict recovery, multipart image upload and portable ZIP download.",
   );
 } finally {
   if (adb("reverse", "--list").includes(port + " "))
