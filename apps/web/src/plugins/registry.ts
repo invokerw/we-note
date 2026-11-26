@@ -10,7 +10,9 @@ export const permissionNames: Record<Capability, string> = {
   serialize: "保存当前文件",
   export: "导出文件副本",
 };
+export type DocumentAction = { id: string; label: string; kind: "edit" | "message" };
 export type Manifest = {
+  actions?: DocumentAction[];
   id: string;
   name: string;
   version: string;
@@ -19,6 +21,20 @@ export type Manifest = {
   capabilities: Capability[];
   entry?: { core: string };
 };
+export function documentActions(manifest: Manifest): DocumentAction[] {
+  if (manifest.actions === undefined) return [];
+  const { actions, capabilities } = manifest;
+  if (!Array.isArray(actions)) throw Error("插件操作必须是数组");
+  const ids = new Set<string>();
+  for (const action of actions) {
+    if (!action || typeof action.id !== "string" || !/^[a-z][a-z0-9_]*$/.test(action.id) || ids.has(action.id) ||
+        typeof action.label !== "string" || !action.label.trim() || !["edit", "message"].includes(action.kind))
+      throw Error("插件操作的标识、名称或类型无效");
+    if (action.kind === "edit" && !capabilities.includes("edit")) throw Error("此插件操作需要编辑权限");
+    ids.add(action.id);
+  }
+  return actions;
+}
 export type Plugin = {
   manifest: Manifest;
   source: string;
@@ -153,10 +169,12 @@ export async function inspectPackage(file: File): Promise<Plugin> {
 }
 export function invoke(
   plugin: Plugin,
-  op: "open" | "serialize" | "check",
+  op: "open" | "serialize" | "check" | `action_${string}`,
   input: Uint8Array,
 ): Promise<Uint8Array> {
+  const actionExports = documentActions(plugin.manifest).map(action => `action_${action.id}`);
   if (
+    (op.startsWith("action_") && !actionExports.includes(op)) ||
     !plugin.wasm ||
     input.length > noteLimit ||
     (op === "serialize" && !plugin.manifest.capabilities.includes("serialize"))
@@ -188,9 +206,7 @@ export function invoke(
       end(data.error ? Error(data.error) : undefined, data.output);
     worker.postMessage({
       code: fromBase64(plugin.wasm!),
-      required: plugin.manifest.capabilities.includes("serialize")
-        ? ["open", "serialize"]
-        : ["open"],
+      required: ["open", ...(plugin.manifest.capabilities.includes("serialize") ? ["serialize"] : []), ...actionExports],
       op,
       input,
     });

@@ -1,6 +1,8 @@
 # WeNote 文件插件 SDK v1
 
-在 `apps/web` 运行 `npm ci` 和 `node plugin-sdk/pack.mjs plugin-sdk/example /tmp/prefixed-text.zip` 可生成示例插件。从「插件」选择 ZIP，核对来源文件名、SHA-256、扩展名和权限后授权安装。示例打开第一行为 `WN1` 的 TXT，编辑时隐藏标记，保存时写回标记。
+开发、打包及验收约定见[文件插件开发规范（草案）](../../../docs/插件开发规范.md)。
+
+在 `apps/web` 运行 `npm ci` 和 `node plugin-sdk/pack.mjs plugin-sdk/example /tmp/prefixed-text.zip` 可生成示例插件。从「插件」选择 ZIP，核对来源文件名、SHA-256、扩展名和权限后授权安装。示例打开第一行为 `WN1` 的 TXT，编辑时隐藏标记，保存时写回标记。「英文转大写」按钮通过可选清单字段 `actions` 调用 `action_uppercase`，只改变当前草稿。
 
 包根目录需要 `manifest.json` 和 `core.wasm`。清单示例见 `example/manifest.json`。`api_version` 为字符串 `1`，版本使用三段数字。扩展名使用小写，例如 `.csv`、`.log` 或专用导图后缀 `.mind.json`。本地安装的插件优先于同格式的内置编辑器，禁用或卸载后由匹配的内置专用插件或默认文本编辑器接手。相同 ID 的包经重新授权后替换旧版。包和启用状态保存在当前浏览器或客户端配置中。
 
@@ -12,6 +14,7 @@
 | --- | --- | --- |
 | `open(i32 ptr, i32 len) -> i64` | 当前文件的原始字节 | UTF-8 编辑文本 |
 | `serialize(i32 ptr, i32 len) -> i64` | 当前编辑文本的 UTF-8 字节 | 保存到原文件的字节 |
+| `action_<id>(i32 ptr, i32 len) -> i64` | 当前草稿（UTF-8、LF） | `edit` 返回替换草稿的文本，`message` 返回提示文本 |
 
 `parse` 是必需权限。声明 `edit` 和 `serialize` 后宿主允许修改、保存。`export` 启用编辑结果导出。只读插件可以只声明 `parse`。清单 API 和导入、导出接口在安装前校验。渲染由宿主文本控件完成。网络、凭据、其他文件以及原生桥接均无对应的 WASM 导入。
 

@@ -3,7 +3,6 @@ import { checkPicture, pictureTypes } from "./api";
 import { markdownWritingMode } from "./markdown/modes";
 import { PluginEditor } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
-import { isMindMap } from "./plugins/mindFile";
 import { handler, handlerKey, openTextDocument } from "./plugins/registry";
 import PersonalSettings, { SettingsButton, useAccountProfile, type ProfileRequest } from "./PersonalSettings";
 import { TextFile } from "./markdown/textFile";
@@ -149,6 +148,7 @@ function Workspace({
     path => path, notify,
   );
   const originalHandler = useRef("");
+  const [actionHost, setActionHost] = useState<HTMLDivElement | null>(null);
   const [saveHost, setSaveHost] = useState<HTMLSpanElement | null>(null);
   const [localHandler, setLocalHandler] = useState("");
   const [trash, setTrash] = useState<TrashedFile[]>([]);
@@ -170,8 +170,7 @@ function Workspace({
     await load();
   });
   const [view, setView] = useState("笔记"),
-    [newPath, setNewPath] = useState<string | null>(null),
-    [links, setLinks] = useState<Hit[]>([]);
+    [newPath, setNewPath] = useState<string | null>(null);
   const [pluginBytes, setPluginBytes] = useState<Uint8Array | null>(null),
     [pluginDirty, setPluginDirty] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences>(
@@ -183,8 +182,6 @@ function Workspace({
   const [panelOpen, setPanelOpen] = useState(false);
   const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
   const markdown = localHandler.startsWith("com.wenote.md:");
-  const showMindMap = !!pluginBytes && isMindMap(path);
-  const hasInfo = showMindMap || !pluginBytes;
   const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     editor = useRef<EditorView | null>(null),
@@ -312,7 +309,6 @@ function Workspace({
     setPanelOpen(false);
     panes.setPane("doc");
     setView("笔记");
-    setLinks([]);
     const md = plugin.manifest.id === "com.wenote.md";
     const settings = markdownPreferences(preferencesRef.current);
     const remembered = md && settings.rememberNoteMode
@@ -369,7 +365,6 @@ function Workspace({
           setPluginBytes(null);
           setText("");
           setSaved("");
-          setLinks([]);
         } else {
           await open(destination + path.slice(source.length), true);
           if (phone) panes.setPane("list");
@@ -513,11 +508,6 @@ function Workspace({
       changeMode(markdown ? "split" : "edit");
     }
   }
-  const backlinkList = links.length ? links.map((hit) => (
-    <button key={hit.file_id} onClick={() => {
-      run(() => open(hit.path));
-    }}>{hit.path}</button>
-  )) : <p>没有笔记链接到此处。</p>;
   const fileContent = pluginBytes ? (
     <PluginEditor
       key={path + localHandler}
@@ -527,6 +517,7 @@ function Workspace({
       output={output}
       dirty={setPluginDirty}
       notify={notify}
+      actionHost={actionHost}
       saveHost={saveHost}
     />
   ) : (
@@ -544,7 +535,7 @@ function Workspace({
       />
       <div className="document-body" inert={busy}>
         <Document
-          metadataHost={hasInfo ? (panelOpen ? metadataHost : null) : undefined}
+          metadataHost={panelOpen ? metadataHost : null}
           resolveNote={raw => resolvePath(path, raw, files)}
           writing={rich}
           upload={uploadFile}
@@ -788,7 +779,7 @@ function Workspace({
                       : undefined
                   }
                   path={path}
-                  endAction={<><StarButton stars={stars} path={path}/>{hasInfo && <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}</>}
+                  endAction={<><StarButton stars={stars} path={path}/><NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} /></>}
                   mode={mode}
                   change={pluginBytes ? undefined : changeMode}
                   markdown={markdown}
@@ -815,6 +806,7 @@ function Workspace({
                         }
                       : undefined
                   }
+                  fileActions={pluginBytes ? <div className="file-actions-slot" ref={setActionHost} /> : null}
                   save={
                     pluginBytes ? <span ref={setSaveHost} /> : (
                       <button
@@ -843,19 +835,10 @@ function Workspace({
                     </>
                   }
                 />
-                {hasInfo ? <div className="document-body note-workspace">
-                  <div className={showMindMap ? "note-aux-view" : "note-content"}>{fileContent}</div>
+                <div className="document-body note-workspace">
+                  <div className={pluginBytes ? "note-aux-view" : "note-content"}>{fileContent}</div>
                   {panelOpen && <NoteInfoPanel id={panelId} metadata={setMetadataHost} load={loadBacklinks} open={hit => run(() => open(hit.path))} />}
-                </div> : fileContent}
-                {!hasInfo && <details
-                  className="backlinks"
-                  onToggle={(e) => {
-                    if (e.currentTarget.open) run(async () => setLinks(await loadBacklinks()));
-                  }}
-                >
-                  <summary>反向链接</summary>
-                  {backlinkList}
-                </details>}
+                </div>
               </>
             )}
           </article>

@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { TextFile } from "../markdown/textFile";
 import { decodeText, utf8, type ExportFile } from "./archive";
-import { handler, invoke } from "./registry";
+import { Popup } from "../LibraryUI";
+import { handler, invoke, type DocumentAction } from "./registry";
 const MindCanvas = lazy(() => import("./MindCanvas"));
 
 export function PluginEditor({
@@ -10,6 +11,7 @@ export function PluginEditor({
   bytes,
   save,
   saveHost,
+  actionHost,
   output,
   dirty,
   notify,
@@ -18,6 +20,7 @@ export function PluginEditor({
   bytes: Uint8Array;
   save: (bytes: Uint8Array) => Promise<void>;
   saveHost: HTMLElement | null;
+  actionHost: HTMLElement | null;
   output: ExportFile;
   dirty: (v: boolean) => void;
   notify: (msg: string) => void;
@@ -101,6 +104,25 @@ export function PluginEditor({
   }
   const exportCurrent = () => run(async () => output(name, await encoded()));
   const name = path.split("/").at(-1)!;
+  const actions = ready ? plugin.manifest.actions ?? [] : [];
+  function execute(action: DocumentAction) {
+    void run(async () => {
+      const input = utf8.encode(file.current.text);
+      const result = decodeText(await invoke(plugin, `action_${action.id}`, input));
+      if (!live.current) return;
+      if (action.kind === "message") notify(result);
+      else edit(result.replace(/\r\n?/g, "\n"));
+    });
+  }
+  const buttons = actions.map(action => (
+    <button key={action.id} title={action.label} disabled={busy} onClick={() => execute(action)}>{action.label}</button>
+  ));
+  if (!isMind) {
+    const canExport = ready && caps.includes("export");
+    buttons.push(<button key="file-copy" disabled={busy} onClick={canExport ? exportCurrent : () => run(() => output(name, original.current))}>
+      {canExport ? "导出当前文件" : "下载原文件"}
+    </button>);
+  }
   return (
     <section
       className={isMind ? "plugin-document mind-plugin-document" : "plugin-document"}
@@ -119,21 +141,15 @@ export function PluginEditor({
           {modified ? "保存" : "已保存"}
         </button>, saveHost,
       )}
+      {actionHost && buttons.length > 0 && createPortal(<>
+        <span className="plugin-primary-action">{buttons[0]}</span>
+        <div className={buttons.length === 1 ? "plugin-overflow only-primary" : "plugin-overflow"}>
+          <Popup label="文件操作" icon="文件操作">
+            <span className="plugin-folded-action">{buttons[0]}</span>{buttons.slice(1)}
+          </Popup>
+        </div>
+      </>, actionHost)}
       <div inert={busy}>
-        {!isMind && <div className="toolbar">
-          {ready && caps.includes("export") && (
-            <button
-              onClick={exportCurrent}
-            >
-              导出当前文件
-            </button>
-          )}
-          {(!ready || !caps.includes("export")) && (
-            <button onClick={() => run(() => output(name, original.current))}>
-              下载原文件
-            </button>
-          )}
-        </div>}
         {error ? (
           <p role="alert">{error}</p>
         ) : ready ? (
@@ -141,15 +157,12 @@ export function PluginEditor({
             <Suspense fallback="正在载入导图…"><MindCanvas source={originalMindText.current} change={edit}
               exportFile={caps.includes("export") ? exportCurrent : undefined} /></Suspense>
           ) : (
-            <label>
-              {plugin.manifest.name}
-              <textarea
-                aria-label={plugin.wasm ? "插件文档" : plugin.manifest.name}
-                value={text}
-                readOnly={!caps.includes("edit")}
-                onChange={(e) => edit(e.target.value)}
-              />
-            </label>
+            <textarea
+              aria-label={plugin.wasm ? "插件文档" : plugin.manifest.name}
+              value={text}
+              readOnly={!caps.includes("edit")}
+              onChange={(e) => edit(e.target.value)}
+            />
           )
         ) : (
           <p>正在打开文件…</p>

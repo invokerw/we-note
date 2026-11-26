@@ -118,6 +118,7 @@ export default function Editor({
   const [plugin] = useState(() => handler(note.path));
   const markdown = plugin.manifest.id === "com.wenote.md";
   const plain = plugin.manifest.id === defaultEditorId;
+  const [actionHost, setActionHost] = useState<HTMLDivElement | null>(null);
   const [saveHost, setSaveHost] = useState<HTMLSpanElement | null>(null);
   const markdownSettings = markdownPreferences(preferences);
   const [text, setText] = useState(""),
@@ -379,6 +380,7 @@ export default function Editor({
           <><StarButton stars={stars} path={note.path}/><NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} /></>
         }
         share={{ label: "分享", run: openShare }}
+        fileActions={special && mode !== "history" ? <div className="file-actions-slot" ref={setActionHost} /> : null}
         save={
           special ? <span ref={setSaveHost} /> : (
             <button
@@ -456,6 +458,7 @@ export default function Editor({
               output={browserExport}
               dirty={value => { setPluginDirty(value); dirty(value); }}
               notify={notify}
+              actionHost={actionHost}
               saveHost={mode === "history" ? null : saveHost}
             />
           </div>

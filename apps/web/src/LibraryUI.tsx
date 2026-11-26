@@ -115,6 +115,7 @@ export function NoteHeading({
   change,
   markdown,
   save,
+  fileActions,
   share,
   more,
   busy,
@@ -133,6 +134,7 @@ export function NoteHeading({
   change?: (mode: MarkdownMode | "edit") => void;
   markdown: boolean;
   save?: ReactNode;
+  fileActions?: ReactNode;
   share?: { label: string; run: () => void };
   more: ReactNode;
   busy: boolean;
@@ -146,6 +148,7 @@ export function NoteHeading({
           <PhoneIcon name="back" />
         </button>
         <h1 title={path}>{entryName(path)}</h1>
+        {fileActions}
         {change && (
           <button
             className="phone-edit"
@@ -200,7 +203,7 @@ export function NoteHeading({
     <header className="document-head">
       <h1 title={path}>{path.split("/").at(-1)}</h1>
       <div className="head-actions">
-        {save}
+        {fileActions}
         {change && (
           <Popup
             label="编辑模式"
@@ -224,6 +227,8 @@ export function NoteHeading({
             ))}
           </Popup>
         )}
+        {save}
+        {endAction}
         {share && (
           <button
             className="share-action"
@@ -248,7 +253,6 @@ export function NoteHeading({
         <Popup label="更多操作" icon="•••">
           {more}
         </Popup>
-        {endAction}
       </div>
     </header>
   );
