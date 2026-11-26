@@ -102,6 +102,8 @@ try {
       content: Buffer.from("讨论记录").toString("base64"),
     });
   }
+  // CI emulators expose a hardware keyboard. Exercise the phone IME as well.
+  adb("shell", "settings", "put", "secure", "show_ime_with_hard_keyboard", "1");
   adb("reverse", port, port);
   let page = await launch();
   console.log("Android login page loaded");
@@ -257,14 +259,21 @@ try {
     await tap(button("更多操作"));
     await tap(button("编辑模式"));
     await tap(button("分屏编辑"));
-    await tap(page.getByLabel("笔记源码"));
+    await tap(page.getByLabel("笔记源码").locator(".cm-line").first());
   }
-  const readingHeight = await page.evaluate(() => innerHeight);
+  const readingHeight = await page.evaluate(() => visualViewport.height);
   await editMarkdownSource();
-  await page.waitForFunction((h) => innerHeight < h - 80, readingHeight);
+  try {
+    await page.waitForFunction((h) => visualViewport.height < h - 80, readingHeight);
+  } catch (error) {
+    console.error("Keyboard viewport", readingHeight, await page.evaluate(() => ({
+      visible: visualViewport.height, layout: innerHeight, focus: document.activeElement?.getAttribute("aria-label"),
+    })), adb("shell", "dumpsys", "input_method").match(/mInputShown=\w+/)?.[0]);
+    throw error;
+  }
   await page.getByLabel("笔记源码").fill("手机离线编辑");
   systemBack();
-  await page.waitForFunction((h) => innerHeight >= h - 4, readingHeight);
+  await page.waitForFunction((h) => visualViewport.height >= h - 4, readingHeight);
   await button("完成").waitFor();
   await tap(button("返回笔记列表"));
   await tap(button("原稿.md"));
@@ -290,7 +299,7 @@ try {
   await tap(button("完成"));
   await pickLocal("原稿.md");
   await pickLocal(logName);
-  await page.locator(".document-mode > pre").getByText("周五验收").waitFor();
+  await page.locator(".document-mode > pre").filter({ hasText: "周五验收" }).waitFor();
   await tap(button("更多操作"));
   await button("下载原文件").click();
   let picker = false;
