@@ -167,7 +167,7 @@ try {
   const sourceLines = () => sourceEditor.locator(".cm-line").allTextContents();
   await sourceEditor.press("ControlOrMeta+z");
   assert.deepEqual(await sourceLines(), messyMarkdown.split("\n"));
-  await sourceEditor.press("ControlOrMeta+Shift+z");
+  await sourceEditor.press(process.platform === "darwin" ? "Meta+Shift+z" : "Control+y");
   assert.deepEqual(await sourceLines(), formattedMarkdown.split("\n"));
   await click("设置验收.md");
   await page.locator('.document-mode.mode-split[data-markdown-theme="clean"]').waitFor();

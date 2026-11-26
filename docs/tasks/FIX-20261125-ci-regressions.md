@@ -49,3 +49,5 @@ macOS 的 `apps/web/tests/phase2.mjs` 在切换编辑模式后未观察到正文
 `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 在修改前退出 1。按现有三种 Markdown 模式重建操作步骤，保留分屏两空格缩进，并在已知光标位置验证 Crepe 的 Tab、中文输入法、标记、跨段选区及撤销重做。通过当前「笔记信息」和源码编辑入口验证标题定位与导出。
 
 新增断言复现了已完成任务按 Enter 后新项被勾选、异步图片上传及键盘保存后正文失焦、代码块光标对比度仅为 2.93 的问题。修复后从任务工作区运行同一条端到端命令退出 0。两个设备同步及全部五个浏览器脚本通过，验证了图片名称、图片预览、离线导出和断点续传后的原始字节。`npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`node --test apps/web/tests/*.test.mjs` 及 `git diff --check` 均退出 0，前端单元测试 10 项通过。自审覆盖了输入法组合输入、异步操作结束时的焦点归属、非待办列表按键和测试中的跨平台光标定位。
+
+远端运行 `45745802543` 在 `4bab7bf` 上通过 macOS 全部步骤。Windows 通过 Go、编辑器与文件菜单，阶段四 `phase4.mjs:171` 在源码编辑器重做时失败。已对照 CodeMirror 的 `historyKeymap` 修正测试按键，Windows 使用 Ctrl+Y，macOS 使用 Cmd+Shift+Z。断言仍逐行比较重做后的完整 Markdown。
