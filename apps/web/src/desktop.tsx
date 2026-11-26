@@ -779,7 +779,8 @@ function Workspace({
                       : undefined
                   }
                   path={path}
-                  endAction={<><StarButton stars={stars} path={path}/><NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} /></>}
+                  star={<StarButton stars={stars} path={path} />}
+                  backlinks={<NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}
                   mode={mode}
                   change={pluginBytes ? undefined : changeMode}
                   markdown={markdown}

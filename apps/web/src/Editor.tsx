@@ -376,9 +376,8 @@ export default function Editor({
         change={special ? undefined : changeMode}
         markdown={markdown}
         busy={busy}
-        endAction={
-          <><StarButton stars={stars} path={note.path}/><NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} /></>
-        }
+        star={<StarButton stars={stars} path={note.path} />}
+        backlinks={<NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}
         share={{ label: "分享", run: openShare }}
         fileActions={special && mode !== "history" ? <div className="file-actions-slot" ref={setActionHost} /> : null}
         save={

@@ -35,3 +35,14 @@
 验收服务 `http://localhost:19876`，PID 65202，由 `./scripts/local.py start --port 19876` 启动。日志为 `dist/local/server.log`，数据为 `services/api/data`，停止命令为 `./scripts/local.py stop`。普通账号 `plugin-review@example.invalid` 已有「插件界面验收」库和 `标题栏示例.txt`，本地验收密码随交付消息提供。
 
 产物为 `dist/acceptance/prefixed-text.zip` 和 macOS 可执行文件 `target/debug/wenote-desktop`。在个人设置里安装 ZIP，打开示例笔记，点击「英文转大写」，切换主题，再保存和重新打开。桌面端已构建，本轮实际交互验收使用 Chrome。本机默认 Android SDK 目录为空，未构建 APK 或验证设备。验收期间保留 worktree 和服务。受测提交可用 `git log -1 --format=%h -- apps/web/tests/plugin-actions.test.mjs` 查询。
+
+## 第二轮 · 标题栏固定顺序
+
+2026-11-26 用户要求“右上角的排序默认是 保存，加星，分享，反向连接，更多”。沿用方式 2。
+
+- [x] 宽屏与手机的宿主操作从左到右为保存、加星、分享、反向链接、更多。插件操作和模式切换置于固定组左侧。
+- [x] 平台或只读状态省略不可用项，其余项保持相对顺序。反向链接按钮打开现有笔记信息面板。
+
+新增 `phase4.mjs` 顺序断言首次运行退出 1，实际为「保存、加星、笔记信息、分享、更多」。Web、桌面和 Android 共用固定操作片段后，宽屏与手机顺序断言通过。自审扩测发现 320 像素宽度下「更多」溢出（退出 1），调整手机插件标题栏换行后，在 320 和 390 像素宽度均通过。
+
+使用原服务执行 `WENOTE_TEST_ORIGIN=http://localhost:19876 node apps/web/tests/phase4.mjs` 及同环境的 `phase2.mjs`，并执行 `node apps/web/tests/native-editors.mjs`，均退出 0。Web 与桌面前端构建、macOS 客户端构建和 `git diff --check` 均退出 0。已同步更新 Android 设备脚本，本机缺少 Android SDK，未实测设备。原服务和账号继续用于验收，刷新网页即加载本轮构建。第二轮提交可用 `git log -1 --format=%h -- apps/web/src/NoteInfo.tsx` 查询。

@@ -338,8 +338,14 @@ try {
   await click("关闭个人设置");
   await click("prefixed.txt");
   assert.equal(await page.getByLabel("插件文档").inputValue(), "磁盘字节");
+  async function checkHeadingOrder() {
+    const buttons = page.locator('.document-head:visible, .phone-document-head:visible').getByRole('button');
+    const labels = await buttons.evaluateAll(items => items.map(el => el.getAttribute('aria-label') || el.textContent.trim()));
+    assert.deepEqual(labels.slice(-5), ['保存', '加星', '分享', '反向链接', '更多操作']);
+  }
   const pluginText = page.getByLabel("插件文档");
   await pluginText.fill("修改abc");
+  await checkHeadingOrder();
   await page.locator('.document-head').getByRole('button', {name:'英文转大写'}).click();
   await page.waitForFunction(() => document.querySelector('textarea[aria-label="插件文档"]').value === '修改ABC');
   assert.equal((await content(marked)).toString(), 'WN1\n磁盘字节');
@@ -351,7 +357,14 @@ try {
   const area = await page.locator('.note-aux-view:visible').boundingBox();
   const field = await pluginText.boundingBox();
   assert.ok(Math.abs(area.width - field.width) < 2 && Math.abs(area.height - field.height) < 2);
-  await page.setViewportSize({width:390,height:844});
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const phoneHead = page.locator('.phone-document-head');
+    await phoneHead.waitFor();
+    await checkHeadingOrder();
+    const more = await phoneHead.getByRole('button', {name:'更多操作'}).boundingBox();
+    assert.ok(more.x + more.width <= width, `更多操作超出 ${width}px 标题栏`);
+  }
   await click('文件操作');
   await page.getByRole('button',{name:'英文转大写'}).waitFor();
   await page.keyboard.press('Escape');

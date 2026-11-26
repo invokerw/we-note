@@ -115,7 +115,7 @@ try {
   await button("编辑模式").click();
   await button("分屏编辑").click();
   const split = page.locator(".split-editor");
-  const panelToggle = button("笔记信息");
+  const panelToggle = button("反向链接");
   const metadata = page.getByRole("complementary", { name: "笔记信息" });
   assert.equal(await panelToggle.getAttribute("aria-expanded"), "false");
   await panelToggle.click();

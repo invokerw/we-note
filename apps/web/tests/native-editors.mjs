@@ -165,7 +165,7 @@ try {
   await button("预览").click();
   await page.locator(".reading h2").waitFor();
   await button("路线.mind.json").click();
-  const infoButton = button("笔记信息");
+  const infoButton = button("反向链接");
   const infoPanel = page.getByRole("complementary", {name: "笔记信息"});
   async function verifyDock(content, stacked = false) {
     await infoButton.click();

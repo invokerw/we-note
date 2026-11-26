@@ -120,9 +120,11 @@ export function NoteHeading({
   more,
   busy,
   handset,
-  endAction,
+  star,
+  backlinks,
 }: {
-  endAction?: ReactNode;
+  star: ReactNode;
+  backlinks: ReactNode;
   handset?: {
     back: () => void;
     edit: () => void;
@@ -141,6 +143,46 @@ export function NoteHeading({
 }) {
   const [sheet, setSheet] = useState<"modes" | "more" | null>(null);
   const modes = markdown ? markdownModes : textModes;
+  const fixedActions = (
+    <>
+      {handset && change ? (
+        <button
+          className="phone-edit"
+          disabled={busy}
+          onClick={() =>
+            mode === "read" && !handset.dirty
+              ? handset.edit()
+              : handset.finish()
+          }
+        >
+          {mode === "read" ? (handset.dirty ? "保存" : "编辑") : "完成"}
+        </button>
+      ) : save}
+      {star}
+      {share && (
+        <button
+          className="share-action"
+          aria-label={share.label}
+          title={share.label}
+          disabled={busy}
+          onClick={share.run}
+        >
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
+            <path d="M8 5H3v12h13v-5M9 11l8-8m-6 0h6v6" />
+          </svg>
+        </button>
+      )}
+      {backlinks}
+    </>
+  );
   if (handset)
     return (
       <header className="phone-head phone-document-head">
@@ -148,23 +190,11 @@ export function NoteHeading({
           <PhoneIcon name="back" />
         </button>
         <h1 title={path}>{entryName(path)}</h1>
-        {fileActions}
-        {change && (
-          <button
-            className="phone-edit"
-            disabled={busy}
-            onClick={() =>
-              mode === "read" && !handset.dirty
-                ? handset.edit()
-                : handset.finish()
-            }
-          >
-            {mode === "read" ? (handset.dirty ? "保存" : "编辑") : "完成"}
-          </button>
-        )}
-        {!change && save}
-        {endAction}
-        <button aria-label="更多操作" onClick={() => setSheet("more")}><PhoneIcon name="more" /></button>
+        <div className="phone-document-actions">
+          {fileActions}
+          {fixedActions}
+          <button aria-label="更多操作" onClick={() => setSheet("more")}><PhoneIcon name="more" /></button>
+        </div>
         {sheet && (
           <PhoneSheet
             title={sheet === "modes" ? "编辑模式" : "更多操作"}
@@ -189,7 +219,6 @@ export function NoteHeading({
                 <>
                   {change && <button onClick={() => setSheet("modes")}>编辑模式</button>}
                   <div onClick={() => setSheet(null)}>
-                    {share && <button onClick={share.run} disabled={busy}>{share.label}</button>}
                     {more}
                   </div>
                 </>
@@ -227,29 +256,7 @@ export function NoteHeading({
             ))}
           </Popup>
         )}
-        {save}
-        {endAction}
-        {share && (
-          <button
-            className="share-action"
-            aria-label={share.label}
-            title={share.label}
-            disabled={busy}
-            onClick={share.run}
-          >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 20 20"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M8 5H3v12h13v-5M9 11l8-8m-6 0h6v6" />
-            </svg>
-          </button>
-        )}
+        {fixedActions}
         <Popup label="更多操作" icon="•••">
           {more}
         </Popup>

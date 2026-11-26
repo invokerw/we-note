@@ -160,6 +160,14 @@ body:has(.android-phone) .entry-dialog :is(button, input, select) {
 .phone-document-head {
   border-bottom: 1px solid var(--line);
 }
+.phone-document-actions { display: flex; align-items: center; }
+@media (max-width: 400px) {
+  .phone-document-head:has(.file-actions-slot:not(:empty)) { flex-wrap: wrap; }
+  .phone-document-head:has(.file-actions-slot:not(:empty)) .phone-document-actions {
+    flex-basis: 100%; justify-content: flex-end;
+  }
+  .phone-document-actions button { min-width: 44px; padding-inline: 4px; }
+}
 .phone-document-head .phone-edit {
   color: #345ec4;
   font-weight: 650;
