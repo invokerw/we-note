@@ -250,7 +250,11 @@ fn two_devices_and_web_converge() -> Result<()> {
     let archive = fs::read(book.download(&dir, &token, "export", job_id)?)?;
     let upload = Uuid::new_v4();
     let half = archive.len() / 2;
-    book.import_chunk(&token, upload, 0, &STANDARD.encode(&archive[..half]), false)?;
+    book.import_chunk(&token, upload, 0, &STANDARD.encode(&archive[..half]), false)
+        .context("stage first portable ZIP chunk")?;
+    assert!(book.import_chunk(&token, upload, 0, "", false).is_err());
+    let wrong_offset = book.import_chunk(&token, upload, half as u64 + 1, "", false);
+    assert_eq!(wrong_offset.unwrap_err().to_string(), "导入分片位置不匹配");
     let preview = book.import_chunk(
         &token,
         upload,

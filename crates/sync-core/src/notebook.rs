@@ -819,7 +819,7 @@ impl Notebook {
         encoded: &str,
         last: bool,
     ) -> Result<Value> {
-        use std::io::Write;
+        use std::io::{Seek, SeekFrom, Write};
         let file = self.state_dir.join(format!("import-{upload}.tmp"));
         if encoded.len() > 3 * 1024 * 1024 {
             bail!("导入分片过大")
@@ -829,11 +829,12 @@ impl Notebook {
             bail!("ZIP 最大为 256 MiB")
         }
         let mut out = fs::OpenOptions::new()
-            .append(true)
+            .write(true)
             .create_new(offset == 0)
-            .open(&file)?;
-        out.lock_exclusive()?;
-        if out.metadata()?.len() != offset {
+            .open(&file)
+            .context("打开导入暂存文件失败")?;
+        out.lock_exclusive().context("锁定导入暂存文件失败")?;
+        if out.seek(SeekFrom::End(0))? != offset {
             bail!("导入分片位置不匹配")
         }
         out.write_all(&bytes)?;

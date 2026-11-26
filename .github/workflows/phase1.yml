@@ -28,4 +28,5 @@ jobs:
         working-directory: services/api
       - run: node tests/e2e/desktop.mjs --browser
         env:
+          RUST_BACKTRACE: "1"
           WENOTE_API: ./wenote-api.exe

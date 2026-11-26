@@ -247,12 +247,20 @@ try {
   await button("原稿.md").click();
   await tap(button("更多操作"));
   await tap(button("编辑模式"));
-  await dialog.getByRole("button", { name: "所见所得" }).waitFor();
+  await button("可视化编辑").waitFor();
+  await button("分屏编辑").waitFor();
   systemBack();
   await dialog.getByRole("button", { name: "编辑模式" }).waitFor();
   systemBack();
+  await dialog.waitFor({ state: "hidden" });
+  async function editMarkdownSource() {
+    await tap(button("更多操作"));
+    await tap(button("编辑模式"));
+    await tap(button("分屏编辑"));
+    await tap(page.getByLabel("笔记源码"));
+  }
   const readingHeight = await page.evaluate(() => innerHeight);
-  await tap(button("编辑"));
+  await editMarkdownSource();
   await page.waitForFunction((h) => innerHeight < h - 80, readingHeight);
   await page.getByLabel("笔记源码").fill("手机离线编辑");
   systemBack();
@@ -409,7 +417,7 @@ try {
   );
   await button("打开笔记").click();
   await button("原稿.md").click();
-  await tap(button("编辑"));
+  await editMarkdownSource();
   await page.getByLabel("笔记源码").evaluate((el) => {
     const data = new DataTransfer();
     data.items.add(
