@@ -353,7 +353,6 @@ try {
   console.log(
     "Android offline text, document picker and installed WASM codec passed",
   );
-  await button("更多操作").click();
   await button("系统分享").click();
   for (let i = 0; i < 20; i++) {
     if (

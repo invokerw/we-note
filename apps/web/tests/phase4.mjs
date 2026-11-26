@@ -308,18 +308,29 @@ try {
     zipSync({
       ...entries,
       "manifest.json": strToU8(
-        JSON.stringify({ ...manifest, capabilities: caps }),
+        JSON.stringify({ ...manifest, capabilities: caps, actions: undefined }),
       ),
     });
   await install(withCaps(["parse", "network"]));
   await page.getByRole("alert").filter({ hasText: "权限不受支持" }).waitFor();
   await install(withCaps(["parse"]));
   await click("授权并安装");
+  const readOnlyAction = { id: "uppercase", label: "查看转换结果", kind: "message" };
+  const readOnlyPackage = action => zipSync({ ...entries, "manifest.json": strToU8(JSON.stringify({
+    ...manifest, capabilities: ["parse"], actions: [action],
+  })) });
+  await install(readOnlyPackage({ ...readOnlyAction, id: "missing" }));
+  await page.getByRole("alert").filter({ hasText: "缺少 action_missing" }).waitFor();
+  await install(readOnlyPackage(readOnlyAction));
+  await click("授权并安装");
   await click("关闭个人设置");
   await click("prefixed.txt");
   await page.getByLabel("插件文档").waitFor();
   assert.equal(await page.getByLabel("插件文档").isEditable(), false);
   assert.equal(await button("保存").count(), 0);
+  await click("查看转换结果");
+  await page.getByRole("status").filter({hasText:"磁盘字节"}).waitFor();
+  assert.equal(await page.getByLabel("插件文档").inputValue(), "磁盘字节");
   await click("打开个人设置");
   await click("编辑与插件");
   await install(sample);
@@ -327,19 +338,50 @@ try {
   await click("关闭个人设置");
   await click("prefixed.txt");
   assert.equal(await page.getByLabel("插件文档").inputValue(), "磁盘字节");
-  await page.getByLabel("插件文档").fill("修改后");
+  async function checkHeadingOrder() {
+    const buttons = page.locator('.document-head:visible, .phone-document-head:visible').getByRole('button');
+    const labels = await buttons.evaluateAll(items => items.map(el => el.getAttribute('aria-label') || el.textContent.trim()));
+    assert.deepEqual(labels.slice(-5), ['保存', '加星', '分享', '反向链接', '更多操作']);
+  }
+  const pluginText = page.getByLabel("插件文档");
+  await pluginText.fill("修改abc");
+  await checkHeadingOrder();
+  await page.locator('.document-head').getByRole('button', {name:'英文转大写'}).click();
+  await page.waitForFunction(() => document.querySelector('textarea[aria-label="插件文档"]').value === '修改ABC');
+  assert.equal((await content(marked)).toString(), 'WN1\n磁盘字节');
+  const beforeTheme = await pluginText.evaluate(el => getComputedStyle(el).backgroundColor);
+  await page.emulateMedia({colorScheme:'dark'});
+  await page.waitForFunction(color => getComputedStyle(document.querySelector('textarea[aria-label="插件文档"]')).backgroundColor !== color, beforeTheme);
+  assert.equal(await pluginText.inputValue(), '修改ABC');
+  await page.emulateMedia({colorScheme:'light'});
+  const area = await page.locator('.note-aux-view:visible').boundingBox();
+  const field = await pluginText.boundingBox();
+  assert.ok(Math.abs(area.width - field.width) < 2 && Math.abs(area.height - field.height) < 2);
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const phoneHead = page.locator('.phone-document-head');
+    await phoneHead.waitFor();
+    await checkHeadingOrder();
+    const more = await phoneHead.getByRole('button', {name:'更多操作'}).boundingBox();
+    assert.ok(more.x + more.width <= width, `更多操作超出 ${width}px 标题栏`);
+  }
+  await click('文件操作');
+  await page.getByRole('button',{name:'英文转大写'}).waitFor();
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({width:1280,height:720});
   await click("保存");
   await page.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();
-  assert.equal((await content(marked)).toString(), "WN1\n修改后");
+  assert.equal((await content(marked)).toString(), "WN1\n修改ABC");
   await page.reload();
   await click("prefixed.txt");
-  assert.equal(await page.getByLabel("插件文档").inputValue(), "修改后");
+  assert.equal(await page.getByLabel("插件文档").inputValue(), "修改ABC");
   await click("打开个人设置");
   await click("编辑与插件");
   await click("禁用 带标记的文本");
   await click("关闭个人设置");
   await click("prefixed.txt");
-  assert.equal(await plainValue(), "WN1\n修改后");
+  assert.equal(await plainValue(), "WN1\n修改ABC");
+  assert.equal(await button("英文转大写").count(), 0);
   await click("打开个人设置");
   await click("编辑与插件");
   await click("禁用 Markdown");

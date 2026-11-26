@@ -13,10 +13,10 @@ export function NoteInfoToggle({
   return (
     <button
       className="metadata-toggle"
-      aria-label="笔记信息"
+      aria-label="反向链接"
       aria-controls={id}
       aria-expanded={expanded}
-      title={expanded ? "收起笔记信息" : "展开笔记信息"}
+      title={expanded ? "收起反向链接" : "展开反向链接"}
       onClick={toggle}
     >
       <svg
