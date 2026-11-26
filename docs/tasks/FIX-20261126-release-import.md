@@ -26,3 +26,10 @@
 - [Android 复测](https://github.com/invokerw/we-note/actions/runs/45813271349) 已通过模式选择和返回，等待软键盘时超时。模拟器验收启用带硬件键盘时显示软键盘，点按源码行并检查可视视口缩小与复原。
 - `aca351c` 的 [Android 模拟器](https://github.com/invokerw/we-note/actions/runs/45814787835) 已通过软键盘、草稿和本地保存，随后系统选择器导出 `.log` 后未找到原名文件。验收要求核对实际保存文件的原名与完整内容，并在成功后提供可安装的模拟器 APK。
 - [Android 原文件导出复测](https://github.com/invokerw/we-note/actions/runs/45816544946) 核对 `.log` 原名与完整内容通过，插件编辑和后台冲突恢复也通过。旧用例随后向仅接收图片的编辑器粘贴 `.bin`，等待 90 秒超时。分片验收改用超过 4 MiB 的 PNG，并核对图片链接、服务端大小与 SHA-256。
+
+## 任务分支交付
+
+- 状态 `DELIVERED`。受测代码 `cdc7a63143f0da6b814c143cf30d6dc62692a114`，在同一提交通过 [Windows、macOS 与 Web 验收](https://github.com/invokerw/we-note/actions/runs/45818495413)和 [Android 模拟器验收](https://github.com/invokerw/we-note/actions/runs/45818497923)。
+- 验收服务 `http://localhost:19461`。在 Apple Silicon Mac 上从工作区运行 `./target/debug/wenote-desktop`。在 Android x86_64 模拟器上解压并用 `adb install -r <APK 路径>` 安装[调试 APK](https://github.com/invokerw/we-note/actions/runs/45818497923/artifacts/15116629439)，执行 `adb reverse tcp:19461 tcp:19461` 后可连接同一地址。
+- 在「个人设置 → 导出/导入」创建离线便携 ZIP，再选择该 ZIP 预览并确认导入。检查目标文件夹中的笔记及引用图片。在 Android 上，可关闭网络后分屏编辑 Markdown，返回再打开检查草稿，然后保存并恢复同步。
+- Android 签名包、Windows/macOS/Linux 安装包以及 AMD64/ARM64 服务端镜像的正式构建和发布由版本标签触发。按方式 2 等待用户验收通过后合入 `main`。
