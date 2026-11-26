@@ -81,7 +81,7 @@ try {
   const secret = randomBytes(32).toString("base64url");
   const {id} = await (await api(a.token, "/api/v1/share-links", "POST", {
     vault_id: a.vault, paths: ["项目/记录.md"], token_hash: createHash("sha256").update(secret).digest("hex"),
-    password: "phase5-link", max_downloads: 1, expires: Math.floor(Date.now()/1000) + 3600,
+    password: "phase5-link", expires: Math.floor(Date.now()/1000) + 3600,
     allow_import: true, allow_download: true,
   })).json();
   const link = `${origin}/#share=${id}.${secret}`;
@@ -104,18 +104,38 @@ try {
   await button(b.page, "确认保存").click();
   await b.page.getByText("已保存到我的笔记").waitFor();
   await b.page.reload();
-  await b.page.getByText("分享链接已失效").waitFor();
+  await b.page.getByText(body, { exact: true }).waitFor();
   const copyAssets = await (
     await api(b.token, `/api/v1/vaults/${b.vault}/assets`)
   ).json();
   assert.equal(copyAssets.length, 1);
+  // The same document name in two notebooks must remain distinguishable.
+  for (const [vault, days] of [[b.vault, 0], [otherVault.id, 1]]) {
+    await api(b.token, `/api/v1/vaults/${vault}/files`, "POST", {path: "共享.md", content: bytes("正文")});
+    await api(b.token, "/api/v1/share-links", "POST", {
+      vault_id: vault, paths: ["共享.md"], duration_days: days,
+      token_hash: createHash("sha256").update(randomBytes(32)).digest("hex"),
+    });
+  }
+  await b.page.clock.install();
+  await b.page.goto(origin);
+  await button(b.page, "打开个人设置").click();
+  await button(b.page, "我的分享").click();
+  const groups = b.page.locator(".share-list section");
+  const permanent = groups.filter({has: b.page.getByRole("heading", {name: "接收库", exact: true})});
+  const temporary = groups.filter({has: b.page.getByRole("heading", {name: "备用库", exact: true})});
+  await permanent.getByText("共享.md", {exact: true}).waitFor();
+  await temporary.getByText("共享.md", {exact: true}).waitFor();
+  await b.page.clock.fastForward(86_401_000);
+  await temporary.waitFor({state: "detached"});
+  await permanent.getByText("永久有效", {exact: true}).waitFor();
   const p = a.page;
   await button(p,"打开个人设置").click();
   await p.getByText("账户活动",{exact:true}).click();
   await p.getByRole("heading",{name:"账户审计日志"}).waitFor();
   await button(p,"关闭个人设置").click();
   for (const name of ["笔记库菜单", "加密笔记库", "批量分享"]) assert.equal(await p.getByLabel(name).count(), 0);
-  console.log("通过单篇分享、密码、附件复制、次数限制及账户活动验收。");
+  console.log("通过单篇分享、密码、附件复制、重复访问及账户活动验收。");
 } finally {
   await browser.close();
 }

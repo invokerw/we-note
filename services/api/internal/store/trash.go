@@ -39,7 +39,7 @@ func (r *Repository) trashItems(ctx context.Context, vault string, expired bool)
 }
 
 // Snapshot records pin their source bytes and version identities until the corresponding share or export releases them.
-const snapshots = `SELECT vault_id AS vault,snapshot FROM shares WHERE status IN ('pending','accepted') UNION ALL SELECT s.vault_id,p.snapshot FROM share_publications p JOIN shares s ON s.id=p.share_id UNION ALL SELECT vault,snapshot FROM share_links WHERE revoked=0 AND expires>unixepoch() UNION ALL SELECT vault_id,snapshot FROM export_jobs WHERE status='pending'`
+const snapshots = `SELECT vault_id AS vault,snapshot FROM shares WHERE status IN ('pending','accepted') UNION ALL SELECT s.vault_id,p.snapshot FROM share_publications p JOIN shares s ON s.id=p.share_id UNION ALL SELECT vault,snapshot FROM share_links WHERE ` + unexpiredLink + ` UNION ALL SELECT vault_id,snapshot FROM export_jobs WHERE status='pending'`
 
 func (r *Repository) noteUsesAsset(ctx context.Context, q interface {
 	queryer

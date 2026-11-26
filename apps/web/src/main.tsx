@@ -1,3 +1,4 @@
+import { useNoteStars } from "./StarredNotes";
 import { lazy, Suspense, useCallback, useMemo } from "react";
 import {
   Sharing,
@@ -155,7 +156,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     [trashBusy,setTrashBusy] = useState(false),
     [trashError,setTrashError] = useState(''),
     [settingsOpen, setSettingsOpen] = useState(false),
-    [shareVault, setShareVault] = useState(""),
     [message, msg] = useState(""),
     [origin, setOrigin] = useState(location.origin),
     [preferences, setPreferences] =
@@ -165,7 +165,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   const originalHandler = useRef("");
   function openSettings() {
     originalHandler.current = note ? handlerKey(note.path) : "";
-    setShareVault(vault);
     setSettingsOpen(true);
   }
   function closeSettings() {
@@ -397,6 +396,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     return hits.map(hit => hit.path);
   },[base,token,vault,files]);
   const byPath = new Map(files.map((f) => [f.path, f]));
+  const stars = useNoteStars(profile.email && vault ? JSON.stringify([profile.email, vault]) : undefined,
+    path => byPath.get(path)?.file_id, msg);
   const openPath = (path: string) => {
     const file = byPath.get(path);
     if (file) select(file);
@@ -457,6 +458,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         key={vault}
         phone={phone}
         panes={panes}
+        stars={stars}
         paths={paths}
         entries={vault ? entries : undefined}
         sizes={new Map(files.map((f) => [f.path, f.current_content_size]))}
@@ -514,7 +516,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={() => !dirty.current || confirm("放弃尚未保存的编辑？")} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
         exportPanel={vault ? <><p>当前笔记库 · {vaults.find(v => v.id === vault)?.name}</p><LibraryResources base={base} token={token}/></> : <p>暂无笔记库可导出。</p>}
         audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
-        shares={vaults.length ? <><label>笔记库<select value={shareVault} onChange={e=>setShareVault(e.target.value)}>{vaults.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label><Sharing key={shareVault} token={token} vault={shareVault}/></> : <p>暂无笔记库</p>}/>}
+        shares={<Sharing token={token} vaults={vaults}/>}/>}
       <AppShell.Main className="workspace">
         {phone && (view !== "files" || !note) && (
           <header className="phone-head">
@@ -552,6 +554,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
               key={JSON.stringify([note.file_id, note.path, editorRevision])}
               {...{
                 note,
+                stars,
                 phoneBack: phone ? () => panes.setPane("list") : undefined,
                 toggleFocus: panes.toggleFocus,
                 focused: panes.columns === 1,

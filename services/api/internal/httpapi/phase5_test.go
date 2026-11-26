@@ -46,7 +46,7 @@ func TestLinkLifetimeScopeAndDownloadLimit(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	q := store.LinkOptions{Vault: v.ID, Paths: []string{"shared/note.txt"}, Password: "link-only password", Expires: time.Now().Unix() + 60, MaxDownloads: 1, Download: true}
+	q := store.LinkOptions{Vault: v.ID, Paths: []string{"shared/note.txt"}, Password: "link-only password", Expires: time.Now().Unix() + 60, Download: true}
 	secret := "test-link-capability"
 	q.TokenHash = strings.TrimPrefix(digest([]byte(secret)), "sha256:")
 	for _, paths := range [][]string{{"shared/"}, {"shared"}, {"shared/note.txt", "other.txt"}} {
@@ -63,6 +63,10 @@ func TestLinkLifetimeScopeAndDownloadLimit(t *testing.T) {
 	replay, e := repo.CreateLink(ctx, user.ID, "one", q)
 	if e != nil || replay.ID != link.ID {
 		t.Fatal("link replay", e)
+	}
+	// Simulate a link that was issued before download limits were retired.
+	if _, e = db.Exec(`UPDATE share_links SET max_downloads=1 WHERE id=?`, link.ID); e != nil {
+		t.Fatal(e)
 	}
 	path := "/s/" + link.ID + "/"
 	exchange := func(p string) *httptest.ResponseRecorder {
@@ -124,7 +128,6 @@ func TestLinkLifetimeScopeAndDownloadLimit(t *testing.T) {
 		t.Fatal(codes)
 	}
 	for _, kind := range []string{"revoke", "expire", "session"} {
-		q.MaxDownloads = 0
 		q.Download = false
 		q.Password = ""
 		token := kind + secret
@@ -188,7 +191,7 @@ func TestSharedSourceDownload(t *testing.T) {
 	}
 	for _, allow := range []bool{false, true} {
 		secret := "source-token-" + strconv.FormatBool(allow)
-		l, err := repo.CreateLink(ctx, u.ID, "", store.LinkOptions{Vault: v.ID, Paths: []string{"目录/" + name}, Expires: time.Now().Add(time.Hour).Unix(), TokenHash: strings.TrimPrefix(digest([]byte(secret)), "sha256:"), Download: allow, MaxDownloads: 1})
+		l, err := repo.CreateLink(ctx, u.ID, "", store.LinkOptions{Vault: v.ID, Paths: []string{"目录/" + name}, Expires: time.Now().Add(time.Hour).Unix(), TokenHash: strings.TrimPrefix(digest([]byte(secret)), "sha256:"), Download: allow})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -217,8 +220,12 @@ func TestSharedSourceDownload(t *testing.T) {
 		if err != nil || w.Code != 200 || disposition != "attachment" || params["filename"] != name || !bytes.Equal(w.Body.Bytes(), raw) {
 			t.Fatalf("source: %d %v %v", w.Code, params, err)
 		}
-		if w = download(file.Version); w.Code != 404 {
-			t.Fatalf("quota: %d", w.Code)
+		if w = download(file.Version); w.Code != 200 {
+			t.Fatalf("repeat download: %d", w.Code)
+		}
+		var downloads, events int
+		if err := db.QueryRow(`SELECT downloads, (SELECT count(*) FROM audit_events WHERE object_id=? AND action='link.download') FROM share_links WHERE id=?`, l.ID, l.ID).Scan(&downloads, &events); err != nil || downloads != 0 || events != 2 {
+			t.Fatalf("counter %d, download events %d: %v", downloads, events, err)
 		}
 	}
 }
@@ -230,5 +237,106 @@ func TestEncryptedVaultRoutesRetired(t *testing.T) {
 		if r := requestJSON(t, m, route.method, route.path, token, nil); r.Code != 404 {
 			t.Errorf("%s %s: %d", route.method, route.path, r.Code)
 		}
+	}
+}
+
+func TestShareDurationsAndActiveList(t *testing.T) {
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	enableOpenRegistration(t, db)
+	blobs, err := blob.NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := store.NewRepository(db, blobs)
+	mux := NewMux(repo)
+	owner := registerUser(t, mux, "duration@test.invalid", "link password")
+	token := loginUser(t, mux, owner.Email, "link password")
+	vault, err := repo.CreateVault(ctx, owner.ID, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.WriteFile(ctx, owner.ID, vault.ID, "", "create_file", "write", store.FileWrite{Path: "note.md", Content: []byte("saved")}); err != nil {
+		t.Fatal(err)
+	}
+	const endpoint = "/api/v1/share-links"
+	capped := requestJSON(t, mux, "POST", endpoint, token, map[string]any{"vault_id": vault.ID, "paths": []string{"note.md"}, "token_hash": strings.TrimPrefix(digest([]byte("limited")), "sha256:"), "duration_days": 3, "max_downloads": 1})
+	if capped.Code != 400 {
+		t.Errorf("new capped link: %d", capped.Code)
+	}
+	ids := map[int]string{}
+	for _, days := range []int{1, 3, 7, 0, 2} {
+		secret := strconv.Itoa(days)
+		before := time.Now().Unix()
+		r := requestJSON(t, mux, "POST", endpoint, token, map[string]any{"vault_id": vault.ID, "paths": []string{"note.md"}, "token_hash": strings.TrimPrefix(digest([]byte(secret)), "sha256:"), "duration_days": days})
+		if days == 2 {
+			if r.Code != 400 {
+				t.Fatal("unsupported duration", r.Code)
+			}
+			continue
+		}
+		if r.Code != 201 {
+			t.Fatalf("%d days: %d %s", days, r.Code, r.Body.String())
+		}
+		if strings.Contains(r.Body.String(), `"downloads"`) || strings.Contains(r.Body.String(), `"max_downloads"`) {
+			t.Error("create returned quota fields")
+		}
+		var link store.ShareLink
+		decodeResponse(t, r, &link)
+		ids[days] = link.ID
+		if days == 0 {
+			if link.Expires != 0 {
+				t.Fatal(link.Expires)
+			}
+		} else if offset := link.Expires - int64(days)*86400; offset < before || offset > time.Now().Unix() {
+			t.Fatal("wrong expiration", days, link.Expires)
+		}
+		session, err := repo.ExchangeLink(ctx, link.ID, secret, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.LinkSnapshot(ctx, link.ID, session, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.RevokeLink(ctx, owner.ID, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE share_links SET expires=unixepoch() WHERE id=?`, ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	for _, days := range []int{0, 1} {
+		if _, err := repo.ExchangeLink(ctx, ids[days], strconv.Itoa(days), ""); err == nil {
+			t.Fatal("inactive link opened", days)
+		}
+	}
+	for _, query := range []string{"", "?vault_id=" + vault.ID} {
+		r := requestJSON(t, mux, "GET", endpoint+query, token, nil)
+		if strings.Contains(r.Body.String(), `"downloads"`) || strings.Contains(r.Body.String(), `"max_downloads"`) {
+			t.Error("list returned quota fields")
+		}
+		var links []struct {
+			ID    string
+			Vault string `json:"vault_id"`
+		}
+		decodeResponse(t, r, &links)
+		if len(links) != 2 || links[0].ID != ids[7] || links[1].ID != ids[3] || links[0].Vault != vault.ID {
+			t.Fatalf("unexpected active list: %+v", links)
+		}
+	}
+	other := registerUser(t, mux, "other-duration@test.invalid", "other password")
+	otherToken := loginUser(t, mux, other.Email, "other password")
+	r := requestJSON(t, mux, "GET", endpoint, otherToken, nil)
+	var others []store.ShareLink
+	decodeResponse(t, r, &others)
+	if len(others) != 0 {
+		t.Fatal(others)
 	}
 }

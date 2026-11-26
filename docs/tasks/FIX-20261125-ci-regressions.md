@@ -1,6 +1,6 @@
 # 修复桌面与网页验收的四个失败项
 
-- 任务 ID `FIX-20261125-ci-regressions`，类型 `bugfix`，影响端 web / server，状态 `DELIVERED`。
+- 任务 ID `FIX-20261125-ci-regressions`，类型 `bugfix`，影响端 web / server，状态 `ACCEPTED`。
 - 用户要求「修复一下这几个失败吧」。来源为 GitHub Actions `Desktop and web acceptance` 运行 `45619965525`，提交 `ee81873`。
 - 基线为本地 `main@67f30911fc3d5e1fdaf459f9327ec7a8b17b2be8`，工作区 `.worktrees/ci-regressions-20261125`，分支 `codex/bugfix-ci-regressions-20261125`。用户已选择方式 2，在任务分支验收，通过后合入本地 main。
 
@@ -55,3 +55,5 @@ macOS 的 `apps/web/tests/phase2.mjs` 在切换编辑模式后未观察到正文
 运行 `45748045350` 在 Windows 捕获到间歇性的 `Applying a mismatched transaction`。本机对阶段二启用 2–4 倍 CPU 降速并行重复 9 次，从异常栈定位到 Crepe 表格在下一帧提交过期选区，同时复现上传后早于取消 `inert` 尝试恢复焦点。过滤仅变更选区且基于过期文档的事务，在 `inert` 实际移除后恢复键盘焦点。修改前 9 次有 7 次失败，修复后 9 次全部通过。
 
 最终受测提交 `f170647` 已推送到任务分支。在同一次 GitHub Actions 运行中，macOS 用时 4 分 15 秒，Windows 用时 9 分 34 秒，前端及桌面构建、Go 测试、双设备同步和全部浏览器验收均通过。方式 2 交付，保留任务分支和本地验收入口 `http://127.0.0.1:18642`。[双平台验收结果](https://github.com/invokerw/we-note/actions/runs/45750257102)
+
+用户确认「验收完毕」。验收提交 `3e78696` 在 macOS、Windows 完整通过。[验收提交 CI](https://github.com/invokerw/we-note/actions/runs/45751394764)

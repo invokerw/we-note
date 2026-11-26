@@ -1,3 +1,4 @@
+import type { NoteStars } from "./StarredNotes";
 import { PhoneSheet } from "./PhoneUI";
 import {
   useEffect,
@@ -68,12 +69,14 @@ function MenuPanel({
 }
 export function EntryMenus({
   io,
+  stars,
   phone = false,
   paths,
   children,
   onChange,
 }: {
   io?: EntryIO;
+  stars: NoteStars;
   phone?: boolean;
   paths: string[];
   children: ReactNode;
@@ -230,6 +233,12 @@ export function EntryMenus({
       </button>
     );
   }
+  const starItem = menu && (
+    <button role="menuitem" disabled={!stars.ready} onPointerEnter={() => setSub(null)}
+      onClick={() => { stars.toggle(menu.path); close(true); }}>
+      {stars.has(menu.path) ? "取消加星" : "加星"}
+    </button>
+  );
   const subItems =
     sub?.label === "新建"
       ? [...creationItems]
@@ -327,6 +336,7 @@ export function EntryMenus({
                     {item("复制")}
                     {!isFolder(menu.path) && (
                       <>
+                        {starItem}
                         {item("下载")}
                         {item("导出为PDF")}
                       </>
@@ -356,6 +366,7 @@ export function EntryMenus({
                   {!isFolder(menu.path) && (
                     <>
                       <hr />
+                      {starItem}
                       {item("下载")}
                       {item("导出为PDF")}
                     </>
