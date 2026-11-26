@@ -180,41 +180,30 @@ try {
   assert.equal(stored.plugins["com.wenote.md"].syncScroll, false);
   await click("编辑模式");
   await click("可视化编辑");
-  // Sample painted pixels: the caret is in a separate blinking layer above the text.
-  await page.addStyleTag({ content: ".cm-cursorLayer { animation: none !important }" });
-  async function caretContrast() {
-    await page.keyboard.press("End");
-    await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
-    const cursor = await page.locator(".mode-live .cm-focused .cm-cursor-primary").boundingBox();
-    assert.ok(cursor && cursor.height > 0);
-    const strip = await page.screenshot({ clip: {
-      x: Math.floor(cursor.x), y: Math.floor(cursor.y + cursor.height / 2), width: 6, height: 1,
-    }, scale: "css", caret: "initial" });
-    return page.evaluate(async (png) => {
-      const img = new Image();
-      img.src = "data:image/png;base64," + png;
-      await img.decode();
-      const ctx = document.createElement("canvas").getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      const { data } = ctx.getImageData(0, 0, 6, 1);
-      function luminance(x) {
-        const [r, g, b] = Array.from(data.slice(x * 4, x * 4 + 3), v => v / 255)
-          .map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      }
-      const bg = luminance(5);
-      return Math.max(...[0, 1, 2].map(x => {
-        const ink = luminance(x);
-        return (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05);
-      }));
-    }, strip.toString("base64"));
+  const visual = page.getByLabel("可视化编辑器");
+  const heading = visual.getByRole("heading", { name: "设置验收" });
+  const code = visual.locator(".milkdown-code-block .cm-content");
+  for (const target of [heading, code]) {
+    await target.click();
+    const contrast = await target.evaluate((el) => {
+      const luminance = (color) => {
+        const [r, g, b] = color.match(/\d+/g).slice(0, 3).map(Number)
+          .map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
+        return .2126 * r + .7152 * g + .0722 * b;
+      };
+      let surface = el;
+      while (surface.parentElement && getComputedStyle(surface).backgroundColor === "rgba(0, 0, 0, 0)")
+        surface = surface.parentElement;
+      const style = getComputedStyle(el);
+      const drawnCursor = el.closest(".cm-editor")?.querySelector(".cm-cursor-primary");
+      const color = drawnCursor ? getComputedStyle(drawnCursor).borderLeftColor : style.caretColor;
+      if (color === "transparent" || color === "rgba(0, 0, 0, 0)") return 0;
+      const ink = luminance(color === "auto" ? style.color : color);
+      const bg = luminance(getComputedStyle(surface).backgroundColor);
+      return (Math.max(ink, bg) + .05) / (Math.min(ink, bg) + .05);
+    });
+    assert.ok(contrast >= 4.5, `caret contrast ${contrast}`);
   }
-  const live = page.locator('.mode-live[data-markdown-theme="clean"]');
-  await live.locator(".cm-line.live-h1").click();
-  assert.ok(await caretContrast() >= 4.5);
-  await live.locator('.live-preview [data-language="python"] .md-keyword').first().click();
-  await live.locator('.live-fence .md-string').first().click();
-  assert.ok(await caretContrast() >= 4.5);
   assert.equal(await button("Markdown 设置").count(), 0);
   await click("打开个人设置");
   await click("编辑与插件");
@@ -350,12 +339,8 @@ try {
     "周五验收",
   );
   await click("编辑模式");
-  await click("思维导图");
-  await page.getByText("编辑标题树", { exact: true }).click();
-  await page.getByLabel("目标标题").selectOption("2");
-  await page.getByLabel("标题文本").fill("复核");
-  await click("更新标题");
-  await click("上移整个章节");
+  await click("分屏编辑");
+  await page.getByLabel("笔记源码").fill("# 实施\n\n## 复核\n\n## 交付\n\n周五验收\n");
   await click("保存");
   const editedMap = JSON.parse(
     strFromU8(unzipSync(await exportBytes("导出 XMind"))["content.json"]),

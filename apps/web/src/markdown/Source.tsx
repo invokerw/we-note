@@ -27,8 +27,8 @@ import { changedRange } from "./textFile";
 // Saving and uploading temporarily make the document inert. Restore its caret
 // after React unlocks it, unless the user has focused something else.
 export function resumeWriting(
-  view: EditorView,
-  trigger: Element | null = view.contentDOM,
+  view: Pick<EditorView, "dom" | "root" | "focus">,
+  trigger: Element | null,
 ) {
   requestAnimationFrame(() => {
     const active = view.root.activeElement;

@@ -60,6 +60,7 @@
 .mode-crepe .milkdown .ProseMirror blockquote::before { content: none; }
 .mode-crepe .milkdown .ProseMirror :not(pre) > code { padding-inline: .32em; }
 .mode-crepe .milkdown .milkdown-code-block { margin-block: .9em; border-radius: .5rem; }
+.mode-crepe .milkdown .milkdown-code-block .cm-cursor { border-left-color: var(--md-cursor); }
 
 .mode-crepe .milkdown .milkdown-block-handle { flex-direction: column; }
 

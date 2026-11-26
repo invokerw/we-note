@@ -180,7 +180,8 @@ export default function Editor({
     updatePluginSetting("com.wenote.md", { ...markdownSettings, ...patch });
   }
   async function run(f: () => Promise<void>) {
-    const writing = editor.current?.hasFocus ? editor.current : null;
+    const writing = editor.current?.hasFocus ? editor.current : rich.current?.focusedView();
+    const trigger = document.activeElement;
     setBusy(true);
     try {
       await f();
@@ -188,7 +189,7 @@ export default function Editor({
       notify(String(e));
     } finally {
       setBusy(false);
-      if (writing) resumeWriting(writing);
+      if (writing) resumeWriting(writing, trigger);
     }
   }
   function formatBeforeSave() {

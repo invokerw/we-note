@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Crepe } from "@milkdown/crepe";
-import { editorViewCtx, parserCtx, remarkStringifyOptionsCtx, serializerCtx } from "@milkdown/kit/core";
+import { editorViewCtx, editorViewOptionsCtx, parserCtx, remarkStringifyOptionsCtx, serializerCtx } from "@milkdown/kit/core";
 import { Plugin, type SelectionBookmark } from "@milkdown/kit/prose/state";
 import { Slice, type Node as PMNode } from "@milkdown/kit/prose/model";
+import { splitListItem } from "@milkdown/kit/prose/schema-list";
 import { $prose } from "@milkdown/kit/utils";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/frame.css";
@@ -103,6 +104,20 @@ export default function CrepeEditor(props: Props) {
       },
     });
     editor.editor.config((ctx) => {
+      ctx.update(editorViewOptionsCtx, options => ({
+        ...options,
+        handleKeyDown(view, event) {
+          if (options.handleKeyDown?.call(this, view, event)) return true;
+          if (event.key !== "Enter" || event.isComposing || view.composing ||
+              event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+          const { $from } = view.state.selection;
+          const item = $from.node(-1);
+          if (!item || item.type.name !== "list_item" || item.attrs.checked !== true || !$from.parent.content.size)
+            return false;
+          // Enter creates a new task. Keep the completed state on the original item.
+          return splitListItem(item.type, { ...item.attrs, checked: false })(view.state, view.dispatch);
+        },
+      }));
       ctx.update(remarkStringifyOptionsCtx, options => {
         const text = options.handlers?.text;
         if (!text) return options;
@@ -233,6 +248,7 @@ export default function CrepeEditor(props: Props) {
           focusFrom.current = null;
           if (props.writing)
             props.writing.current = {
+              focusedView: () => view.root.activeElement === view.dom ? view : undefined,
               async compositionEnd() {
                 if (view.composing)
                   await new Promise<void>((resolve) => {
@@ -252,12 +268,21 @@ export default function CrepeEditor(props: Props) {
                 return (markdown) => {
                   if (!active || !bookmarks.delete(bookmark)) return false;
                   const doc = ctx.get(parserCtx)(markdown);
+                  // Crepe represents block image alt text as a numeric width. Keep the
+                  // uploaded Markdown for untouched blocks so exports retain the filename.
+                  const blocks = parseMarkdown(markdown).children;
+                  if (blocks.length === doc.childCount) {
+                    doc.forEach((node, _offset, index) => {
+                      const span = blocks[index].position;
+                      if (node.type.name === "image-block" && span)
+                        originals.set(node, markdown.slice(span.start.offset, span.end.offset));
+                    });
+                  }
                   const selection = bookmark.position.resolve(view.state.doc);
                   const tr = view.state.tr
                     .setSelection(selection)
                     .replaceSelection(Slice.maxOpen(doc.content));
                   view.dispatch(tr);
-                  view.focus();
                   return true;
                 };
               },

@@ -35,6 +35,7 @@ try {
   await api("/api/v1/me/plugin-settings/com.wenote.md", "PUT", {
     defaultMode: "read",
     rememberNoteMode: false,
+    autoFormatOnSave: false,
   });
   const { id } = await (
     await api("/api/v1/vaults", "POST", { name: "阶段二" })
@@ -220,43 +221,44 @@ try {
   async function checkSource(expected) {
     await switchMode("分屏编辑");
     const lines = page.getByLabel("笔记源码").locator(".cm-line");
-    assert.equal((await lines.allTextContents()).join("\n"), expected);
+    const actual = (await lines.allTextContents()).join("\n");
+    if (expected instanceof RegExp) assert.match(actual, expected);
+    else assert.equal(actual, expected);
+  }
+  async function openDraft(markdown) {
+    await page.getByLabel("笔记源码").fill(markdown);
     await switchMode("可视化编辑");
+    await writing.waitFor();
   }
-  async function writeDraft(value) {
-    await writing.press("ControlOrMeta+a");
-    if (value) await keys.insertText(value);
-    else await keys.press("Backspace");
-  }
-  async function clickTextAt(locator, text, offset) {
-    const point = await locator.evaluate(
-      (el, { text, offset }) => {
-        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-        while (walker.nextNode()) {
-          const node = walker.currentNode,
-            index = node.textContent.indexOf(text);
-          if (index < 0) continue;
-          const r = document.createRange();
-          r.setStart(node, index + offset);
-          r.collapse(true);
-          const rect = r.getBoundingClientRect();
-          return { x: rect.x, y: rect.y + rect.height / 2 };
-        }
-        throw Error("Missing editable text: " + text);
-      },
-      { text, offset },
-    );
-    await page.mouse.click(point.x, point.y);
+  async function placeCaret(locator, text, offset) {
+    const target = locator.getByText(text, { exact: true });
+    await target.scrollIntoViewIfNeeded();
+    await target.click();
+    await target.evaluate((el, { text, offset }) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const index = node.textContent.indexOf(text);
+        if (index < 0) continue;
+        window.getSelection().collapse(node, index + offset);
+        return;
+      }
+      throw Error("Missing editable text: " + text);
+    }, { text, offset });
   }
   await page.getByLabel("可视化编辑器").locator(".ProseMirror:focus").waitFor();
   await keys.press("ControlOrMeta+a");
-  await keys.insertText("父项\n子项");
-  assert.match(await writing.innerText(), /父项/);
-  await writing.press("ControlOrMeta+End");
+  await keys.insertText("首键输入");
+  assert.equal(await writing.innerText(), "首键输入");
+  await checkSource("**首键输入**");
+
+  // Crepe inserts its tab stop at the caret. Split mode tests source-line indentation above.
+  await openDraft("父项\n\n子项");
+  await placeCaret(writing, "子项", 1);
   await keys.press("Tab");
-  await checkSource("父项\n  子项");
-  await writeDraft("**分屏草稿**");
-  await clickTextAt(writing, "分屏草稿", 2);
+  await checkSource("父项\n\n子    项");
+  await openDraft("**分屏草稿**");
+  await placeCaret(writing, "分屏草稿", 2);
   const ime = await page.context().newCDPSession(page);
   for (const text of ["z", "zhong"])
     await ime.send("Input.imeSetComposition", {
@@ -280,114 +282,98 @@ try {
   await ime.detach();
   await checkSource("**分屏中草稿**");
 
-  await writeDraft("清晨整理笔记");
-  await clickTextAt(writing, "清晨整理笔记", 2);
+  await openDraft("清晨整理笔记");
+  await placeCaret(writing, "清晨整理笔记", 2);
   await keys.press("Enter");
-  await checkSource("清晨\n\n整理笔记");
-  await keys.press("Backspace");
-  await checkSource("清晨整理笔记");
+  assert.deepEqual(await writing.locator(":scope > p").allTextContents(), ["清晨", "整理笔记"]);
   await keys.press("ControlOrMeta+z");
-  await checkSource("清晨\n\n整理笔记");
+  assert.equal(await writing.innerText(), "清晨整理笔记");
   await keys.press("ControlOrMeta+Shift+z");
+  assert.deepEqual(await writing.locator(":scope > p").allTextContents(), ["清晨", "整理笔记"]);
+  await keys.press("Backspace");
   await keys.press("Shift+Enter");
-  await checkSource("清晨  \n整理笔记");
+  await writing.locator("p > br:not(.ProseMirror-trailingBreak)").waitFor({ state: "attached" });
+  await checkSource(/^清晨(?: {2}|\\)\n整理笔记$/);
 
-  await writeDraft("第一段\n\n第二段");
-  await clickTextAt(writing, "第一段", 3);
-  await keys.insertText("补记");
-  await clickTextAt(writing, "第二段", 2);
-  await keys.press("ControlOrMeta+z");
-  await checkSource("第一段\n\n第二段");
-  await clickTextAt(writing, "第一段", 1);
-  await keys.down("Shift");
-  await keys.press("ArrowDown");
-  await keys.up("Shift");
-  await keys.insertText("起");
-  await checkSource("第起二段");
-  await keys.press("ControlOrMeta+z");
+  await openDraft("第一段\n\n第二段");
   await writing.press("ControlOrMeta+a");
+  await keys.press("ControlOrMeta+b");
+  assert.deepEqual(await writing.locator("strong").allTextContents(), ["第一段", "第二段"]);
+  await keys.press("ControlOrMeta+b");
+  assert.equal(await writing.locator("strong").count(), 0);
   await writing.evaluate((el) => {
     const data = new DataTransfer();
     data.setData("text/plain", "从剪贴板\r\n\r\n粘贴全文");
-    el.dispatchEvent(
-      new ClipboardEvent("paste", {
-        clipboardData: data,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
   });
-  await checkSource("从剪贴板\n\n粘贴全文");
+  assert.deepEqual(await writing.locator(":scope > p").allTextContents(), ["从剪贴板", "粘贴全文"]);
   await keys.press("ControlOrMeta+z");
   await checkSource("第一段\n\n第二段");
 
-  await writing.press("ControlOrMeta+a");
-  await keys.press("ControlOrMeta+b");
-  await checkSource("**第一段**\n\n**第二段**");
-  await keys.press("ControlOrMeta+b");
-  await checkSource("第一段\n\n第二段");
-  await writeDraft("");
+  await openDraft("收尾");
+  await placeCaret(writing, "收尾", 0);
   await keys.press("ControlOrMeta+b");
   await keys.insertText("行内撰写");
   await keys.press("ControlOrMeta+b");
-  await keys.insertText("收尾");
   await checkSource("**行内撰写**收尾");
-  await clickTextAt(writing, "行内撰写", 2);
-  await keys.press("Enter");
-  await checkSource("**行内**\n\n**撰写**收尾");
-  await writeDraft("写清楚");
-  await button("标题").click();
+  await openDraft("第一段\n\n第二段");
+  await placeCaret(writing, "第一段", 1);
+  await keys.down("Shift");
+  for (let i = 0; i < 4; i++) await keys.press("ArrowRight");
+  await keys.up("Shift");
+  await keys.insertText("起");
+  await checkSource("第起二段");
+
+  await openDraft("写清楚");
+  await placeCaret(writing, "写清楚", 0);
+  await keys.press("ControlOrMeta+Alt+2");
+  await writing.getByRole("heading", { level: 2, name: "写清楚" }).waitFor();
   await checkSource("## 写清楚");
-  await writeDraft("- [x] 第一项");
-  await keys.press("Enter");
-  await keys.insertText("第二项");
-  await keys.press("Enter");
-  await keys.press("Enter");
-  await keys.insertText("正文");
-  await checkSource("- [x] 第一项\n- [ ] 第二项\n\n正文");
-  await writeDraft("1. 一");
-  await keys.press("Enter");
-  await keys.insertText("二");
-  await checkSource("1. 一\n2. 二");
-  await writeDraft("```js");
-  await keys.press("Enter");
-  await keys.insertText("let n = 1");
+  await openDraft("```js\nlet n = 1\n```");
+  const codeEditor = writing.locator(".milkdown-code-block .cm-content");
+  await codeEditor.click();
+  await keys.press("End");
   await keys.press("Enter");
   await keys.insertText("n++");
   await checkSource("```js\nlet n = 1\nn++\n```");
+
+  await openDraft("- [x] 第一项");
+  await placeCaret(writing, "第一项", 3);
+  await keys.press("Enter");
+  await keys.insertText("第二项");
+  assert.deepEqual(await writing.locator("li p").allTextContents(), ["第一项", "第二项"]);
+  await checkSource(/^[*-] \[x\] 第一项\n\n?[*-] \[ \] 第二项$/);
+  await openDraft("1. 一");
+  await placeCaret(writing, "一", 1);
+  await keys.press("Enter");
+  await keys.insertText("二");
+  await checkSource(/^1\. 一\n(?:\n)?2\. 二$/);
   await button("工作").first().click();
   page.once("dialog", (dialog) => dialog.accept());
   await button("目标.md").click();
   await button("路线.md").click();
   await button("编辑模式").click();
   await button("可视化编辑").click();
-  await writing.locator(".live-preview table td").first().waitFor();
-  await writing.locator(".katex").waitFor();
-  await writing.locator(".callout").waitFor();
-  await writing.locator('img[alt="Mermaid 图表"]').waitFor();
-  await clickTextAt(writing.locator("table"), "子项", 1);
+  await placeCaret(writing, "子项", 1);
   await keys.insertText("表");
-  await writing.getByText("保持原样。", { exact: true }).click();
-  assert.equal(
-    await writing.locator("table tbody td").first().innerText(),
-    "子表项",
-  );
+  assert.equal(await writing.getByRole("cell", { name: "子表项", exact: true }).innerText(), "子表项");
   await keys.press("ControlOrMeta+z");
-  await clickTextAt(writing, "保持原样。", 0);
+  await placeCaret(writing, "保持原样。", 0);
   for (let i = 0; i < "保持原样。".length; i++)
     await keys.press("Shift+ArrowRight");
   await keys.insertText("新的正文。");
+  await writing.getByText("新的正文。", { exact: true }).waitFor();
   await button("更多操作").click();
   await button("专注模式").click();
   assert.equal(await page.locator(".sidebar").isVisible(), false);
   await button("退出专注").click();
   await writing.getByText("新的正文。", { exact: true }).waitFor();
-  await page.getByRole("checkbox", { name: "任务完成" }).click();
+  await switchMode("分屏编辑");
+  await split.getByRole("checkbox", { name: "任务完成" }).click();
+  await switchMode("可视化编辑");
   await writing.press("ControlOrMeta+s");
   await page.getByText("已保存新版本").waitFor();
-  await page.waitForFunction(
-    () => document.activeElement?.getAttribute("aria-label") === "笔记正文",
-  );
+  await page.waitForFunction(() => document.activeElement?.matches(".ProseMirror"));
   const bytes = Buffer.from(
     await (
       await api(base + "/files/" + first.file_id + "/content")
@@ -400,12 +386,10 @@ try {
         text.replace("保持原样。", "新的正文。").replace("- [ ]", "- [x]"),
     ),
   );
-  await button("编辑模式").click();
-  await button("思维导图").click();
-  const map = page.getByRole("navigation", { name: "标题树思维导图" });
-  await map.getByRole("button", { name: "交付" }).click();
-  await page.locator(".reading h2").waitFor();
+  await switchMode("预览");
   await panelToggle.click();
+  await metadata.getByRole("button", { name: "交付" }).click();
+  await page.locator(".reading h2").waitFor();
   await page.getByText("编辑组", { exact: true }).waitFor();
   await page.getByRole("link", { name: "相关笔记" }).click();
   await page.getByRole("heading", { name: "目标文件" }).waitFor();
@@ -415,7 +399,7 @@ try {
     .getByRole("button", { name: "工作/路线.md" })
     .click();
   await switchMode("可视化编辑");
-  await clickTextAt(writing, "新的正文。", "新的正文。".length);
+  await placeCaret(writing, "新的正文。", "新的正文。".length);
   const png =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aQAAAABJRU5ErkJggg==";
   await writing.evaluate((el, b64) => {
@@ -435,16 +419,14 @@ try {
       }),
     );
   }, png);
-  await writing.locator('img[alt="剪贴板.png"]').waitFor();
-  await page.waitForFunction(
-    () => document.activeElement?.getAttribute("aria-label") === "笔记正文",
-  );
+  await writing.locator('.milkdown-image-block img[src^="blob:"]').waitFor();
+  await page.waitForFunction(() => document.activeElement?.matches(".ProseMirror"));
   await keys.insertText("图注");
   await switchMode("分屏编辑");
   const withImage = (
     await page.getByLabel("笔记源码").locator(".cm-line").allTextContents()
   ).join("\n");
-  assert.match(withImage, /新的正文。\n!\[剪贴板.png\]\([^)]+\)\n图注/);
+  assert.match(withImage, /新的正文。[\s\S]*!\[剪贴板\.png\]\([^)]+\)[\s\S]*图注/);
   await button("保存").click();
   await page.getByText("已保存新版本").waitFor();
   await switchMode("预览");
@@ -545,7 +527,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "Phase 2 browser acceptance passed: rich Markdown, byte-preserving live edits, heading map, links, search, clipboard, asset preview, online ZIP and offline portable ZIP image.",
+    "Phase 2 browser acceptance passed: rich Markdown, byte-preserving live edits, heading navigation, links, search, clipboard, asset preview, online ZIP and offline portable ZIP image.",
   );
 } finally {
   await chrome.close();

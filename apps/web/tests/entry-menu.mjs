@@ -58,7 +58,7 @@ try {
   await button("登录").click();
   await button("当前.md").click();
   await button("编辑模式").click();
-  await button("源码").click();
+  await button("分屏编辑").click();
   await page.getByLabel("笔记源码").fill("待保存草稿");
   const context = async (path, pane = "list") => {
     await page
@@ -154,7 +154,7 @@ try {
   await page.getByText("已保存新版本").waitFor();
   await button("旧白板.md").click();
   await button("编辑模式").click();
-  await button("预览模式").click();
+  await button("预览").click();
   await button("编辑白板").click();
   const board = await page.getByLabel("白板画布").boundingBox();
   await page.mouse.move(board.x + 20, board.y + 20);

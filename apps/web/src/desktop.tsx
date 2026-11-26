@@ -270,7 +270,8 @@ function Workspace({
   }, [dirty]);
   async function run(fn: () => Promise<void>) {
     if (busy) return;
-    const writing = editor.current?.hasFocus ? editor.current : null;
+    const writing = editor.current?.hasFocus ? editor.current : rich.current?.focusedView();
+    const trigger = document.activeElement;
     setBusy(true);
     try {
       await fn();
@@ -278,7 +279,7 @@ function Workspace({
       notify(String(e));
     } finally {
       setBusy(false);
-      if (writing) resumeWriting(writing);
+      if (writing) resumeWriting(writing, trigger);
     }
   }
   async function open(p: string, discardConfirmed = false, writing = false) {

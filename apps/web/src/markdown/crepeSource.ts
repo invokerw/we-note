@@ -1,3 +1,5 @@
+import type { EditorView } from "@milkdown/kit/prose/view";
+
 export type Span = [number, number];
 
 // Use the surrounding source as-is, including blank lines and trailing whitespace.
@@ -14,6 +16,7 @@ export function patchBlocks(
 }
 
 export type RichWriting = {
+  focusedView(): EditorView | undefined;
   compositionEnd(): Promise<void>;
   insertion(): (markdown: string) => boolean;
 };
