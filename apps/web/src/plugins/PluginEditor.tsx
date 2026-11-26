@@ -2,46 +2,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { TextFile } from "../markdown/textFile";
 import { decodeText, utf8, type ExportFile } from "./archive";
 import { handler, invoke } from "./registry";
-import { JsonEditor, jsonTree } from "./JsonEditor";
-import { MapEditor } from "./MapEditor";
-import type { XMindTheme } from "./xmindThemes";
-import {
-  asMarkdown,
-  fromMarkdown,
-  openMap,
-  writeMap,
-  type Workbook,
-} from "./xmind";
-
 const MindCanvas = lazy(() => import("./MindCanvas"));
 
-export function MarkdownExport({
-  path,
-  source,
-  output,
-  notify,
-}: {
-  path: string;
-  source: () => string;
-  output: ExportFile;
-  notify: (msg: string) => void;
-}) {
-  if (handler("export.xmind")?.manifest.id !== "com.wenote.xmind") return null;
-  return (
-    <button
-      onClick={async () => {
-        try {
-          const name = path.split("/").at(-1)!.replace(/\.md$/i, "");
-          await output(name + ".xmind", writeMap(fromMarkdown(source(), name)));
-        } catch (e) {
-          notify(String(e));
-        }
-      }}
-    >
-      导出 XMind
-    </button>
-  );
-}
 export function PluginEditor({
   path,
   bytes,
@@ -49,7 +11,6 @@ export function PluginEditor({
   output,
   dirty,
   notify,
-  xmindTheme = "classic",
 }: {
   path: string;
   bytes: Uint8Array;
@@ -57,17 +18,13 @@ export function PluginEditor({
   output: ExportFile;
   dirty: (v: boolean) => void;
   notify: (msg: string) => void;
-  xmindTheme?: XMindTheme;
 }) {
   const [plugin] = useState(() => handler(path));
-  const caps = plugin?.manifest.capabilities || [],
-    id = plugin?.manifest.id;
+  const { capabilities: caps, id } = plugin.manifest;
   const [ready, setReady] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [text, setText] = useState(""),
-    [book, setBook] = useState<Workbook | null>(null),
-    [index, switchSheet] = useState(0),
     [modified, setModified] = useState(false);
   const originalMindText = useRef("");
   const file = useRef(new TextFile("")),
@@ -79,21 +36,15 @@ export function PluginEditor({
     let active = true;
     live.current = true;
     async function open() {
-      if (!plugin) return;
-      if (id === "com.wenote.xmind") {
-        const map = openMap(bytes);
-        if (active) setBook(map);
-      } else {
-        const data = plugin.wasm ? await invoke(plugin, "open", bytes) : bytes;
-        const doc = new TextFile(decodeText(data));
-        if (active) {
-          file.current = doc;
-          originalMindText.current = doc.text;
-          savedText.current = doc.text;
-          setText(doc.text);
-        }
+      const data = plugin.wasm ? await invoke(plugin, "open", bytes) : bytes;
+      const doc = new TextFile(decodeText(data));
+      if (active) {
+        file.current = doc;
+        originalMindText.current = doc.text;
+        savedText.current = doc.text;
+        setText(doc.text);
+        setReady(true);
       }
-      if (active) setReady(true);
     }
     open().catch((e) => {
       if (active) setError(String(e));
@@ -102,7 +53,7 @@ export function PluginEditor({
       active = false;
       live.current = false;
     };
-  }, [bytes, plugin, id]);
+  }, [bytes, plugin]);
   function mark(v: boolean) {
     setModified(v);
     dirty(v);
@@ -113,12 +64,9 @@ export function PluginEditor({
     mark(value !== savedText.current);
   }
   async function encoded() {
-    if (id === "com.wenote.mind.json") return file.current.text === savedText.current ? original.current : utf8.encode(file.current.serialize());
-    if (!modified) return original.current;
-    if (book) return writeMap(book);
-    if (id === "com.wenote.json") jsonTree(text);
+    if (file.current.text === savedText.current) return original.current;
     const data = utf8.encode(file.current.serialize());
-    return plugin?.wasm ? invoke(plugin, "serialize", data) : data;
+    return plugin.wasm ? invoke(plugin, "serialize", data) : data;
   }
   async function run(fn: () => Promise<void>) {
     if (locked.current) return;
@@ -152,7 +100,7 @@ export function PluginEditor({
   const name = path.split("/").at(-1)!;
   return (
     <section
-      className={id === "com.wenote.xmind" ? "plugin-document xmind-plugin-document" : isMind ? "plugin-document mind-plugin-document" : "plugin-document"}
+      className={isMind ? "plugin-document mind-plugin-document" : "plugin-document"}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
           e.preventDefault();
@@ -181,52 +129,23 @@ export function PluginEditor({
               导出当前文件
             </button>
           )}
-          {book && (
-            <button
-              onClick={() =>
-                run(async () =>
-                  output(
-                    name.replace(/\.xmind$/i, ".md"),
-                    utf8.encode(asMarkdown(book.sheets[index])),
-                  ),
-                )
-              }
-            >
-              导出 Markdown
-            </button>
-          )}
           {(!ready || !caps.includes("export")) && (
             <button onClick={() => run(() => output(name, original.current))}>
               下载原文件
             </button>
           )}
         </div>}
-        {!plugin ? (
-          <p>此格式的插件已禁用，可在「插件」中启用。</p>
-        ) : error ? (
+        {error ? (
           <p role="alert">{error}</p>
         ) : ready ? (
-          book ? (
-            <MapEditor
-              book={book}
-              index={index}
-              switchSheet={switchSheet}
-              edit={(b) => {
-                setBook(b);
-                mark(true);
-              }}
-              theme={xmindTheme}
-            />
-          ) : id === "com.wenote.mind.json" ? (
+          isMind ? (
             <Suspense fallback="正在载入导图…"><MindCanvas source={originalMindText.current} change={edit}
               save={caps.includes("serialize") ? saveChanges : undefined} exportFile={caps.includes("export") ? exportCurrent : undefined} /></Suspense>
-          ) : id === "com.wenote.json" ? (
-            <JsonEditor text={text} edit={edit} />
           ) : (
             <label>
               {plugin.manifest.name}
               <textarea
-                aria-label="插件文档"
+                aria-label={plugin.wasm ? "插件文档" : plugin.manifest.name}
                 value={text}
                 readOnly={!caps.includes("edit")}
                 onChange={(e) => edit(e.target.value)}

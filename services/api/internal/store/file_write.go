@@ -62,11 +62,31 @@ func PortablePath(p string) bool {
 	return true
 }
 func fileFormat(p string) (string, error) {
-	ext := strings.ToLower(strings.TrimPrefix(path.Ext(p), "."))
-	if !PortablePath(p) || (ext != "md" && ext != "txt" && ext != "json" && ext != "xmind") {
-		return "", fileError(400, "INVALID_PATH", "expected a portable relative Markdown, TXT, JSON or XMind path")
+	if !PortablePath(p) {
+		return "", fileError(400, "INVALID_PATH", "expected a portable relative note path")
 	}
-	return ext, nil
+	switch ext := strings.ToLower(strings.TrimPrefix(path.Ext(p), ".")); ext {
+	case "md", "json", "xmind":
+		return ext, nil
+	default:
+		return "txt", nil
+	}
+}
+
+// New text formats share the existing txt metadata and retain their full display path.
+func needsTextContent(p string) bool {
+	switch strings.ToLower(path.Ext(p)) {
+	case ".md", ".txt", ".json", ".xmind":
+		return false
+	default:
+		return true
+	}
+}
+func validateTextContent(data []byte) error {
+	if !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
+		return fileError(400, "INVALID_TEXT", "此格式仅支持 UTF-8 文本")
+	}
+	return nil
 }
 func checkAvailablePath(ctx context.Context, tx *sql.Tx, vault, id, p string) error {
 	rows, err := tx.QueryContext(ctx, `SELECT path FROM files WHERE vault_id=? AND id<>? AND is_deleted=0`, vault, id)
@@ -173,10 +193,15 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 	var replaced map[string]string
 	if input.Content != nil && (operation == "create_file" || operation == "update_file_content") {
 		notePath := input.Path
-		if notePath == "" && bytes.Contains(input.Content, []byte("/assets/")) {
+		if operation == "update_file_content" {
 			if err = tx.QueryRowContext(ctx, `SELECT path FROM files WHERE id=? AND vault_id=?`, id, vault).Scan(&notePath); errors.Is(err, sql.ErrNoRows) {
 				return result, ErrNotFound
 			} else if err != nil {
+				return result, err
+			}
+		}
+		if needsTextContent(notePath) {
+			if err = validateTextContent(input.Content); err != nil {
 				return result, err
 			}
 		}
@@ -267,6 +292,22 @@ func (r *Repository) writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op,
 			return result, err
 		}
 		if err = checkAvailablePath(ctx, tx, vault, id, p); err != nil {
+			return result, err
+		}
+	}
+	if (op == "create_file" || op == "move_file" || op == "restore_file") && needsTextContent(p) && input.Content == nil {
+		// Copies, moves and restores can reuse a blob without resubmitting its bytes.
+		var data []byte
+		var err error
+		if ref.Key != "" {
+			data, err = r.readNoteBlobAt(ctx, vault, ref.Hash, ref.Size, ref.Key)
+		} else {
+			data, err = r.readNoteBlobWithQuery(ctx, tx, vault, ref.Hash, ref.Size)
+		}
+		if err != nil {
+			return result, err
+		}
+		if err = validateTextContent(data); err != nil {
 			return result, err
 		}
 	}

@@ -1,8 +1,8 @@
 import { useRef, useState, type ReactNode } from "react";
 import MarkdownSettings from "../markdown/Settings";
-import MapSettings from "./MapSettings";
-import { markdownPreferences, xmindPreferences, type UserPreferences } from "../preferences";
+import { markdownPreferences, type UserPreferences } from "../preferences";
 import {
+  defaultEditorId,
   inspectPackage,
   install,
   permissionNames,
@@ -23,18 +23,11 @@ export default function Manager({
     [expanded, setExpanded] = useState<string | null>(null),
     [error, notify] = useState("");
   const markdown = markdownPreferences(preferences);
-  const xmind = xmindPreferences(preferences);
   const panels: Partial<Record<string, ReactNode>> = {
     "com.wenote.md": (
       <MarkdownSettings
         value={markdown}
         onChange={(patch) => updatePluginSetting("com.wenote.md", { ...markdown, ...patch })}
-      />
-    ),
-    "com.wenote.xmind": (
-      <MapSettings
-        value={xmind}
-        onChange={(patch) => updatePluginSetting("com.wenote.xmind", { ...xmind, ...patch })}
       />
     ),
   };
@@ -103,21 +96,21 @@ export default function Manager({
             {p.manifest.name} <small>{p.manifest.version}</small>
           </h2>
           <p>
-            {p.manifest.file_extensions.join("、")} · API{" "}
+            {p.manifest.file_extensions.join("、") || "其他文本文件"} · API{" "}
             {p.manifest.api_version} · {p.source} ·{" "}
             {p.enabled ? "已启用" : "已禁用"}
           </p>
           <p>{permissions(p)}</p>
           {p.hash && <code>SHA-256 {p.hash}</code>}
           <div className="plugin-actions">
-            <button
+            {p.manifest.id !== defaultEditorId && <button
               aria-label={(p.enabled ? "禁用 " : "启用 ") + p.manifest.name}
               onClick={() =>
                 change(() => setEnabled(p.manifest.id, !p.enabled))
               }
             >
               {p.enabled ? "禁用" : "启用"}
-            </button>
+            </button>}
             {panels[p.manifest.id] && (
               <button
                 aria-label={`${p.manifest.name} 设置`}

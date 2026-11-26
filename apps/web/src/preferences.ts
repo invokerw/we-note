@@ -1,4 +1,3 @@
-import { normalizeXMindTheme, type XMindTheme } from "./plugins/xmindThemes";
 export type MarkdownTheme = "clean" | "paper" | "developer";
 import { normalizeMarkdownMode, type MarkdownMode } from "./markdown/modes";
 export type MarkdownFontSize = "small" | "medium" | "large";
@@ -16,10 +15,6 @@ export type MarkdownPreferences = {
   latinDigitSpacing: boolean;
   trimTrailingWhitespace: boolean;
   normalizeBlankLines: boolean;
-};
-
-export type XMindPreferences = {
-  theme: XMindTheme;
 };
 
 export type UserPreferences = {
@@ -42,15 +37,10 @@ export const defaultMarkdownPreferences: MarkdownPreferences = {
   normalizeBlankLines: true,
 };
 
-export const defaultXMindPreferences: XMindPreferences = {
-  theme: "classic",
-};
-
 export const defaultUserPreferences: UserPreferences = {
   version: 1,
   plugins: {
     "com.wenote.md": defaultMarkdownPreferences,
-    "com.wenote.xmind": defaultXMindPreferences,
   },
 };
 
@@ -88,12 +78,6 @@ function markdown(value: unknown): MarkdownPreferences {
   };
 }
 
-function xmind(value: unknown): XMindPreferences {
-  return {
-    theme: normalizeXMindTheme(object(value).theme),
-  };
-}
-
 export function normalizePreferences(value: unknown): UserPreferences {
   const input = object(value),
     plugins = object(input.plugins);
@@ -102,7 +86,6 @@ export function normalizePreferences(value: unknown): UserPreferences {
     plugins: {
       ...plugins,
       "com.wenote.md": markdown(plugins["com.wenote.md"]),
-      "com.wenote.xmind": xmind(plugins["com.wenote.xmind"]),
     },
   };
 }
@@ -111,10 +94,6 @@ export function markdownPreferences(
   value: UserPreferences,
 ): MarkdownPreferences {
   return markdown(value.plugins["com.wenote.md"]);
-}
-
-export function xmindPreferences(value: UserPreferences): XMindPreferences {
-  return xmind(value.plugins["com.wenote.xmind"]);
 }
 
 export function updatePluginPreferences(

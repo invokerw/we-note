@@ -229,7 +229,7 @@ export function PublicShare({
   const file =
     snap?.files.find((f) => f.version_id === selected) || snap?.files[0];
   const version = file?.version_id;
-  const canPreview = file && /\.(md|txt|json)$/i.test(file.path);
+  const canPreview = file && !/\.xmind$/i.test(file.path);
 
   function report(error: unknown) {
     const code = (error as { code?: string }).code;

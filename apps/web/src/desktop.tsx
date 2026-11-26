@@ -1,7 +1,7 @@
 import { StarButton, useNoteStars } from "./StarredNotes";
 import { checkPicture, pictureTypes } from "./api";
 import { markdownWritingMode } from "./markdown/modes";
-import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
+import { PluginEditor } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
 import { isMindMap } from "./plugins/mindFile";
 import { handlerKey, usesPluginEditor } from "./plugins/registry";
@@ -35,7 +35,6 @@ import {
   loadLocalPreferences,
   loadNoteMode,
   markdownPreferences,
-  xmindPreferences,
   saveLocalPreferences,
   saveNoteMode,
   updatePluginPreferences,
@@ -528,7 +527,7 @@ function Workspace({
       output={output}
       dirty={setPluginDirty}
       notify={notify}
-      xmindTheme={xmindPreferences(preferences).theme}
+
     />
   ) : (
     <>
@@ -680,7 +679,6 @@ function Workspace({
               导入笔记
               <input
                 type="file"
-                accept=".md,.txt,.json,.xmind"
                 disabled={busy}
                 onChange={(e) => {
                   const f = e.currentTarget.files?.[0];
@@ -838,14 +836,6 @@ function Workspace({
                         >
                           {panes.columns === 1 ? "退出专注" : "专注模式"}
                         </button>
-                      )}
-                      {!pluginBytes && /\.md$/i.test(path) && (
-                        <MarkdownExport
-                          path={path}
-                          source={() => source.current.serialize()}
-                          output={output}
-                          notify={notify}
-                        />
                       )}
                     </>
                   }

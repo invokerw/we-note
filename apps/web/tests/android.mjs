@@ -1,5 +1,4 @@
 // Run against a disposable emulator with the debug APK installed.
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { pack } from "../plugin-sdk/pack.mjs";
 import assert from "node:assert/strict";
@@ -88,13 +87,10 @@ try {
       content: Buffer.from("第一版").toString("base64"),
     })
   ).json();
-  const mapName = `mobile-${randomUUID().slice(0, 8)}.xmind`;
-  const mapBytes = await readFile(
-    new URL("./fixtures/sdk-workbook.xmind", import.meta.url),
-  );
+  const logName = `mobile-${randomUUID().slice(0, 8)}.log`;
   await api(base + "/files", "POST", {
-    path: mapName,
-    content: mapBytes.toString("base64"),
+    path: logName,
+    content: Buffer.from("离线日志").toString("base64"),
   });
   await api(base + "/files", "POST", {
     path: "插件.txt",
@@ -279,16 +275,14 @@ try {
     await button("打开个人设置").click();
     await button(section).click();
   }
-  await pickLocal(mapName);
-  const rootTopic = page.locator(".mindmap-node").first();
-  await rootTopic.dblclick();
-  await page.getByLabel("主题标题").fill("手机离线导图");
-  await page.getByLabel("主题标题").press("Enter");
+  await pickLocal(logName);
+  const plain = page.getByRole("textbox", { name: "默认文本编辑器" });
+  await plain.fill("周五验收");
   await button("保存").click();
   await pickLocal("原稿.md");
-  await pickLocal(mapName);
-  await rootTopic.getByText("手机离线导图", { exact: true }).waitFor();
-  await button("导出 Markdown").click();
+  await pickLocal(logName);
+  assert.equal(await plain.inputValue(), "周五验收");
+  await button("导出当前文件").click();
   let picker = false;
   for (let i = 0; i < 30; i++) {
     picker = /mCurrentFocus=Window\{[^\n]*documentsui/i.test(
@@ -315,7 +309,6 @@ try {
     String(Math.floor((left + right) / 2)),
     String(Math.floor((top + bottom) / 2)),
   );
-  const out = mapName.replace(/\.xmind$/, ".md");
   let exported = "";
   for (let i = 0; i < 25; i++) {
     const file = adb(
@@ -323,7 +316,7 @@ try {
       "find",
       "/storage/emulated/0/Download",
       "-name",
-      out,
+      logName,
     ).trim();
     if (file) {
       exported = adb("shell", "cat", file);
@@ -331,7 +324,7 @@ try {
     }
     await delay(200);
   }
-  assert.match(exported, /# 手机离线导图/);
+  assert.match(exported, /周五验收/);
   await openSettings("编辑与插件");
   const sample = await pack(
     fileURLToPath(new URL("../plugin-sdk/example", import.meta.url)),
@@ -356,7 +349,7 @@ try {
   await button("保存").click();
   await pickLocal("原稿.md");
   console.log(
-    "Android offline XMind, document picker and installed WASM codec passed",
+    "Android offline text, document picker and installed WASM codec passed",
   );
   await button("更多操作").click();
   await button("系统分享").click();

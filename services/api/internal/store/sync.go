@@ -562,6 +562,15 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 	if storageKey == "" {
 		storageKey = storageKeyForHash(request.VaultID, request.ContentHash, upload.CreatedAt)
 	}
+	if needsTextContent(file.Path) {
+		data, err := r.readNoteBlobAt(ctx, request.VaultID, request.ContentHash, request.ContentSize, storageKey)
+		if err != nil {
+			return SyncSubmitResult{}, err
+		}
+		if err := validateTextContent(data); err != nil {
+			return SyncSubmitResult{}, err
+		}
+	}
 	if err := ensureBlobTx(ctx, tx, request.VaultID, blobID, request.ContentHash, request.ContentSize, storageKey, time.Now().UTC()); err != nil {
 		return SyncSubmitResult{}, err
 	}

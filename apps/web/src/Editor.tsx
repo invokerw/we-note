@@ -2,9 +2,9 @@ import { StarButton, type NoteStars } from "./StarredNotes";
 import { markdownWritingMode } from "./markdown/modes";
 import { NoteInfoToggle, NoteInfoPanel } from "./NoteInfo";
 import { NoteHeading } from "./LibraryUI";
-import { PluginEditor, MarkdownExport } from "./plugins/PluginEditor";
+import { PluginEditor } from "./plugins/PluginEditor";
 import { browserExport } from "./plugins/archive";
-import { usesPluginEditor } from "./plugins/registry";
+import { handler, usesPluginEditor } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { RichWriting } from "./markdown/crepeSource";
@@ -18,7 +18,6 @@ import { base64, Note, pictureTypes, request, uploadAsset, Version } from "./api
 import {
   loadNoteMode,
   markdownPreferences,
-  xmindPreferences,
   saveNoteMode,
   type UserPreferences,
 } from "./preferences";
@@ -419,14 +418,6 @@ export default function Editor({
             >
               历史版本
             </button>
-            {!special && note.format === "md" && base && (
-              <MarkdownExport
-                path={note.path}
-                source={() => source.current.serialize()}
-                output={browserExport}
-                notify={notify}
-              />
-            )}
             <button
               disabled={busy || !base}
               onClick={() =>
@@ -466,7 +457,7 @@ export default function Editor({
               output={browserExport}
               dirty={value => { setPluginDirty(value); dirty(value); }}
               notify={notify}
-              xmindTheme={xmindPreferences(preferences).theme}
+
             />
           </div>
         )}
@@ -480,7 +471,7 @@ export default function Editor({
                       run(async () => {
                         if (
                           note.format === "xmind" ||
-                          (special && note.format !== "json")
+                          (special && handler(note.path).wasm)
                         ) {
                           await download(
                             token,

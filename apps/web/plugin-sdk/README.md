@@ -2,7 +2,7 @@
 
 在 `apps/web` 运行 `npm ci` 和 `node plugin-sdk/pack.mjs plugin-sdk/example /tmp/prefixed-text.zip` 可生成示例插件。从「插件」选择 ZIP，核对来源文件名、SHA-256、扩展名和权限后授权安装。示例打开第一行为 `WN1` 的 TXT，编辑时隐藏标记，保存时写回标记。
 
-包根目录需要 `manifest.json` 和 `core.wasm`。清单示例见 `example/manifest.json`。`api_version` 为字符串 `1`，版本使用三段数字。此版宿主接受 `.md`、`.txt`、`.json` 和 `.xmind`。本地安装的插件优先于同格式的内置编辑器，禁用或卸载后恢复内置处理。相同 ID 的包经重新授权后替换旧版。包和启用状态保存在当前浏览器或客户端配置中。
+包根目录需要 `manifest.json` 和 `core.wasm`。清单示例见 `example/manifest.json`。`api_version` 为字符串 `1`，版本使用三段数字。扩展名使用小写，例如 `.csv`、`.log` 或专用导图后缀 `.mind.json`。本地安装的插件优先于同格式的内置编辑器，禁用或卸载后由匹配的内置专用插件或默认文本编辑器接手。相同 ID 的包经重新授权后替换旧版。包和启用状态保存在当前浏览器或客户端配置中。
 
 ## WASM 接口
 
@@ -15,10 +15,6 @@
 
 `parse` 是必需权限。声明 `edit` 和 `serialize` 后宿主允许修改、保存。`export` 启用编辑结果导出。只读插件可以只声明 `parse`。清单 API 和导入、导出接口在安装前校验。渲染由宿主文本控件完成。网络、凭据、其他文件以及原生桥接均无对应的 WASM 导入。
 
-## 内置格式
+## 内置编辑器
 
-JSON 编辑器按源文本区间格式化和替换节点，保留数字字面量精度。JSON Pointer 空字符串表示根节点，`~0` 和 `~1` 分别表示键中的 `~` 和 `/`。
-
-XMind 编辑器支持以 `content.json` 存储工作表的 ZIP 文件，并提供纯画布编辑。节点保持紧凑，节点不支持拖动，位置由自动布局固定，标题和备注变化时会按内容自适应调整。自动布局固定父子节点间距和同级分支间距。双击主题或按 F2 可直接在节点内编辑标题，备注通过右键菜单的小弹窗编辑，有内容时会以小字显示在节点标题下方。右键菜单支持删除主题、插入下级、同级和上级主题以及上下移动节点。Enter、Tab、Delete 快捷键可完成常用编辑，使用 Ctrl+S 保存。保存时复制其余包条目并保留未识别的 JSON 字段。`content.json` 可以是工作表数组，也可以由 `sheets` 或 `workbook.sheets` 包裹。旧版仅含 `content.xml` 的文件可下载原件，在 XMind 中转换为新版后编辑。Markdown 导出采用当前工作表的主题标题、子主题和纯文本备注。样式、标签、标记、关系线、概要、嵌入资源和其他工作表保存在 `.xmind` 中。超过六层的主题树导出 Markdown 时会提示层级限制。Markdown 转换按文档级标题分段，正文放入主题备注。
-
-兼容性验收使用 `tests/fixtures/sdk-workbook.xmind`。该样本由 XMind 的 `xmind-sdk` 1.2.71 生成，包含两个工作表、主题标记、富文本备注和 PNG 资源。
+Markdown 与 Mind Elixir 分别处理 `.md` 与 `.mind.json`。默认文本编辑器读取 UTF-8 文本并保留 BOM 和换行。无法解码的文件可下载原件。

@@ -25,14 +25,16 @@ export type Plugin = {
   wasm?: string;
   enabled: boolean;
 };
-const formats = ["md", "txt", "json", "xmind", "mind.json"];
-const builtin: Plugin[] = formats.map((format, i) => ({
+export const defaultEditorId = "com.wenote.txt";
+const builtin: Plugin[] = [
+  { id: "com.wenote.md", name: "Markdown", file_extensions: [".md"] },
+  { id: "com.wenote.mind.json", name: "Mind Elixir", file_extensions: [mindSuffix] },
+  { id: defaultEditorId, name: "默认文本编辑器", file_extensions: [] },
+].map(format => ({
   manifest: {
-    id: "com.wenote." + format,
-    name: ["Markdown", "纯文本", "JSON", "XMind", "Mind Elixir"][i],
+    ...format,
     version: "1.0.0",
     api_version: "1",
-    file_extensions: ["." + format],
     capabilities: ["parse", "edit", "serialize", "export"],
   },
   source: "随应用安装",
@@ -48,26 +50,23 @@ export function plugins() {
   const s = settings();
   return [...s.packages, ...builtin].map((p) => ({
     ...p,
-    enabled: !s.disabled.includes(p.manifest.id),
+    enabled: p.manifest.id === defaultEditorId || !s.disabled.includes(p.manifest.id),
   }));
 }
 export function handler(path: string) {
-  const ext = isMindMap(path) ? mindSuffix : "." + path.split(".").at(-1)!.toLowerCase();
-  return plugins().find(
-    (p) => p.enabled && p.manifest.file_extensions.includes(ext),
-  );
+  const name = path.split("/").at(-1)!.toLowerCase();
+  const dot = name.lastIndexOf(".");
+  const ext = isMindMap(name) ? mindSuffix : dot < 0 ? "" : name.slice(dot);
+  const items = plugins();
+  return items.find(p => p.enabled && p.manifest.file_extensions.includes(ext))
+    ?? items.find(p => p.manifest.id === defaultEditorId)!;
 }
 export function handlerKey(path: string) {
   const plugin = handler(path);
-  return plugin ? `${plugin.manifest.id}:${plugin.hash || plugin.manifest.version}` : "disabled";
+  return `${plugin.manifest.id}:${plugin.hash || plugin.manifest.version}`;
 }
 export function usesPluginEditor(path: string) {
-  const p = handler(path);
-  return (
-    !p ||
-    !!p.wasm ||
-    !["com.wenote.md", "com.wenote.txt"].includes(p.manifest.id)
-  );
+  return handler(path).manifest.id !== "com.wenote.md";
 }
 export function setEnabled(id: string, enabled: boolean) {
   const s = settings();
@@ -121,7 +120,7 @@ export async function inspectPackage(file: File): Promise<Plugin> {
   if (
     !Array.isArray(m.file_extensions) ||
     !m.file_extensions.length ||
-    m.file_extensions.some((ext) => !formats.map((v) => "." + v).includes(ext))
+    m.file_extensions.some(ext => typeof ext !== "string" || (ext !== mindSuffix && !/^\.[a-z0-9][a-z0-9_-]*$/.test(ext)))
   )
     throw Error("此宿主不支持清单中的文件扩展名");
   if (

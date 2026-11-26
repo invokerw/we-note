@@ -2,7 +2,7 @@ import { isMindMap, mindSuffix } from "./plugins/mindFile";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MarkdownView } from "./markdown/Markdown";
-import { noteLimit } from "./plugins/archive";
+import { decodeText, noteLimit } from "./plugins/archive";
 import {
   containsEntry,
   entryName,
@@ -10,7 +10,6 @@ import {
   isFolder,
   newContent,
   parentFolder,
-  printableText,
   type EntryIO,
   type Format,
 } from "./libraryEntries";
@@ -81,7 +80,7 @@ export function EntryDialog({
     let live = true;
     io.read(source)
       .then((bytes) => {
-        if (live) setPreview(printableText(source, bytes));
+        if (live) setPreview(decodeText(bytes));
       })
       .catch((e) => {
         if (live) setError(String(e));
@@ -141,8 +140,6 @@ export function EntryDialog({
           const relative = file.webkitRelativePath || file.name;
           const path = container + relative;
           if (file.size > noteLimit) throw Error(file.name + " 超过 16 MiB");
-          if (!/\.(md|txt|json|xmind)$/i.test(path))
-            throw Error("不支持的文件格式：" + file.name);
           checkFree(path);
           return { file, path };
         });
@@ -271,7 +268,6 @@ export function EntryDialog({
                   el.setAttribute("webkitdirectory", "");
               }}
               multiple
-              accept=".md,.txt,.json,.xmind"
               onChange={(e) =>
                 setFiles(Array.from(e.currentTarget.files || []))
               }
@@ -283,7 +279,7 @@ export function EntryDialog({
           <section className="print-sheet">
             <h1>{entryName(source)}</h1>
             {preview !== null ? (
-              isMindMap(source) ? <Suspense fallback="正在载入导图…"><MindCanvas source={preview} /></Suspense> : /\.(md|xmind)$/i.test(source) ? (
+              isMindMap(source) ? <Suspense fallback="正在载入导图…"><MindCanvas source={preview} /></Suspense> : /\.md$/i.test(source) ? (
                 <MarkdownView text={preview} io={{ image: io.image }} />
               ) : (
                 <pre>{preview}</pre>

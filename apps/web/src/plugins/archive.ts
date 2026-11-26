@@ -3,9 +3,12 @@ import { unzipSync, type Unzipped } from "fflate";
 export const noteLimit = 16 << 20;
 export const utf8 = new TextEncoder();
 export function decodeText(data: Uint8Array) {
-  return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
-    data,
-  );
+  try {
+    if (!data.includes(0)) return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(data);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+  }
+  throw Error("此文件含二进制数据或使用其他字符编码，无法按 UTF-8 文本打开。");
 }
 export function unpack(
   data: Uint8Array,

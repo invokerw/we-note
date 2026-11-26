@@ -67,6 +67,19 @@ pub fn local_path(root: &Path, p: &str) -> Result<PathBuf> {
     }
     Ok(dest)
 }
+pub fn legacy_note(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
+        "md" | "txt" | "json" | "xmind"
+    )
+}
+pub fn text_bytes(bytes: &[u8]) -> bool {
+    !bytes.contains(&0) && std::str::from_utf8(bytes).is_ok()
+}
 pub fn scan(root: &Path) -> Result<BTreeMap<String, String>> {
     let mut files = BTreeMap::new();
     let mut keys = BTreeMap::new();
@@ -80,12 +93,12 @@ pub fn scan(root: &Path) -> Result<BTreeMap<String, String>> {
             continue;
         }
         let path = entry.path();
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if !matches!(ext.as_str(), "md" | "txt" | "json" | "xmind") {
+        let legacy = legacy_note(path);
+        if !legacy && entry.metadata()?.len() > 16 << 20 {
+            continue;
+        }
+        let bytes = fs::read(path)?;
+        if !legacy && !text_bytes(&bytes) {
             continue;
         }
         let p = path
@@ -98,7 +111,7 @@ pub fn scan(root: &Path) -> Result<BTreeMap<String, String>> {
         if let Some(old) = keys.insert(key, p.clone()) {
             bail!("路径冲突 {old} / {p}")
         };
-        files.insert(p.nfc().collect(), super::digest(&fs::read(path)?));
+        files.insert(p.nfc().collect(), super::digest(&bytes));
     }
     Ok(files)
 }
@@ -128,7 +141,10 @@ pub fn replace(root: &Path, p: &str, expected: Option<&str>, bytes: &[u8]) -> Re
 pub fn conflict(root: &Path, p: &str, bytes: &[u8]) -> Result<String> {
     let path = Path::new(p);
     let name = path.file_stem().context("name")?.to_string_lossy();
-    let ext = path.extension().context("extension")?.to_string_lossy();
+    let ext = path
+        .extension()
+        .map(|value| format!(".{}", value.to_string_lossy()))
+        .unwrap_or_default();
     let hash = super::digest(bytes);
     for n in 1..=1000 {
         let suffix = if n == 1 {
@@ -137,7 +153,7 @@ pub fn conflict(root: &Path, p: &str, bytes: &[u8]) -> Result<String> {
             format!("-{n}")
         };
         let candidate =
-            path.with_file_name(format!("{name} (conflict {}{suffix}).{ext}", &hash[7..15]));
+            path.with_file_name(format!("{name} (conflict {}{suffix}){ext}", &hash[7..15]));
         let relative = candidate
             .to_str()
             .context("path")?
@@ -153,4 +169,22 @@ pub fn conflict(root: &Path, p: &str, bytes: &[u8]) -> Result<String> {
         }
     }
     bail!("too many conflict copies")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scan_other_text_and_handle_extensionless_conflicts() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        for name in ["a.csv", "README", "log.txt", "run.LOG"] {
+            fs::write(dir.path().join(name), "你好\r\n")?;
+        }
+        fs::write(dir.path().join("image.bin"), b"\x00\x80")?;
+        assert_eq!(scan(dir.path())?.len(), 4);
+        let copy = conflict(dir.path(), "README", b"changes")?;
+        assert!(scan(dir.path())?.contains_key(&copy));
+        Ok(())
+    }
 }

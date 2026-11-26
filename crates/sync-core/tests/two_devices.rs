@@ -42,8 +42,16 @@ fn two_devices_and_web_converge() -> Result<()> {
     let original = b"# title\r\n\r\none\r\ntwo\r\nthree\r\nfour\r\nfive\r\n";
     fs::write(a.join(path), original)?;
     fs::write(a.join("empty.txt"), b"")?;
+    fs::write(a.join("data.csv"), b"a,b\r\n1,2\r\n")?;
+    fs::write(a.join("README"), b"plain text")?;
     sync_a()?;
     sync_b()?;
+    assert_eq!(fs::read(b.join("data.csv"))?, b"a,b\r\n1,2\r\n");
+    assert_eq!(fs::read(b.join("README"))?, b"plain text");
+    fs::write(b.join("data.csv"), b"updated")?;
+    sync_b()?;
+    sync_a()?;
+    assert_eq!(fs::read(a.join("data.csv"))?, b"updated");
     assert_eq!(fs::read(b.join(path))?, original);
     assert_eq!(fs::metadata(b.join("empty.txt"))?.len(), 0);
     fs::write(

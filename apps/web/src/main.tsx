@@ -527,7 +527,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           ref={picker}
           hidden
           type="file"
-          accept=".md,.txt,.json,.xmind"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f)

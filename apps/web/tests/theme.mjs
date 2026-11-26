@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { chromium } from "playwright-core";
 
 const origin = process.env.WENOTE_TEST_ORIGIN;
@@ -40,9 +39,6 @@ try {
       content: Buffer.from(content).toString("base64"),
     });
   }
-  const xmind = await readFile(
-    new URL("./fixtures/sdk-workbook.xmind", import.meta.url),
-  );
   await create(
     "主题.md",
     "# 深浅色验收\n\n正文内容。\n\n`inline`\n\n```js\nconst value = 1;\n```\n",
@@ -51,14 +47,7 @@ try {
     theme: "clean",
     defaultMode: "read",
   });
-  await api("/api/v1/me/plugin-settings/com.wenote.xmind", "PUT", {
-    theme: "classic",
-  });
   await create("计划.mind.json", JSON.stringify({ nodeData: { id: "root", topic: "本周计划" } }));
-  await api(route, "POST", {
-    path: "路线.xmind",
-    content: xmind.toString("base64"),
-  });
 
   const page = await browser.newPage({ viewport: { width: 1900, height: 1046 }, timezoneId: "Asia/Shanghai", colorScheme: "light" });
   await page.addInitScript(() => localStorage.setItem("wenote-color-scheme-v1", "dark"));
@@ -161,9 +150,9 @@ try {
   await radio("深色").check();
   await button("关闭个人设置").click();
   await button("笔记").click();
-  await button("路线.xmind").click();
-  await page.locator('.mindmap-stage[data-xmind-theme="classic"]').waitFor();
-  assert.equal(await style('.mindmap-stage', 'backgroundColor'), 'rgb(20, 27, 38)');
+  await button("计划.mind.json").click();
+  await map.waitFor();
+  assert.equal(await style('.native-mind .map-container', 'backgroundColor'), 'rgb(17, 23, 32)');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   console.log("Appearance settings, automatic changes, draft selection, persistence and responsive layout passed.");
 } finally {

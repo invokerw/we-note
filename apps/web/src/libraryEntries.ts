@@ -1,7 +1,6 @@
 import { isMindMap, mindSuffix } from "./plugins/mindFile";
 import type { MarkdownIO } from "./markdown/Markdown";
-import { initialBytes, asMarkdown, openMap } from "./plugins/xmind";
-import { decodeText, type ExportFile } from "./plugins/archive";
+import { type ExportFile } from "./plugins/archive";
 
 export const marker = ".wenote-folder.json";
 // Match both name and content so existing user-authored JSON remains visible.
@@ -52,10 +51,5 @@ export async function newContent(path: string) {
     const { default: MindElixir } = await import("mind-elixir");
     return new TextEncoder().encode(JSON.stringify(MindElixir.new(entryName(path).slice(0, -mindSuffix.length) || "中心主题")));
   }
-  return initialBytes(path);
-}
-export function printableText(path: string, bytes: Uint8Array) {
-  return /\.xmind$/i.test(path)
-    ? openMap(bytes).sheets.map(asMarkdown).join("\n\n")
-    : decodeText(bytes);
+  return new Uint8Array();
 }

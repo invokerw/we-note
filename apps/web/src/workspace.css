@@ -76,7 +76,6 @@
 .android-phone .phone-head h1 { font-size: 14px; }
 .android-phone .list-search input[type="search"] { font-size: 13px; }
 
-.layout:not(.android-phone) .xmind-plugin-document .toolbar { display: none; }
 
 .native-mind { width: 100%; min-width: 0; }
 .native-mind .mind-host { position: relative; height: clamp(20rem, 65dvh, 56rem); overflow: hidden; isolation: isolate; }

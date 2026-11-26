@@ -184,7 +184,6 @@ impl Notebook {
                 bail!("无效的回收站目录")
             }
         } else {
-            Self::validate_note_extension(name)?;
             if !source.is_file() {
                 bail!("回收站笔记不存在")
             }
@@ -318,11 +317,10 @@ impl Notebook {
                 {
                     bail!("无效的目标路径")
                 }
-                let path = if folder {
-                    disk::local_path(&self.root, dest)?
-                } else {
-                    self.path(dest)?
-                };
+                let path = disk::local_path(&self.root, dest)?;
+                if !folder && !disk::legacy_note(&path) && !disk::text_bytes(&fs::read(&from)?) {
+                    bail!("此格式仅支持 UTF-8 文本")
+                }
                 let key = dest.to_lowercase();
                 if path.try_exists()?
                     || files.keys().any(|p| {
@@ -398,22 +396,7 @@ impl Notebook {
         fs::rename(&staged, &to)?;
         Ok(())
     }
-    fn validate_note_extension(path: &str) -> Result<()> {
-        if !matches!(
-            Path::new(path)
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .unwrap_or("")
-                .to_ascii_lowercase()
-                .as_str(),
-            "md" | "txt" | "json" | "xmind"
-        ) {
-            bail!("请选择 Markdown、TXT、JSON 或 XMind 笔记")
-        };
-        Ok(())
-    }
     fn path(&self, path: &str) -> Result<PathBuf> {
-        Self::validate_note_extension(path)?;
         disk::local_path(&self.root, path)
     }
     pub fn search_notes(&self, query: &str, paths: &[String]) -> Result<Vec<String>> {
@@ -472,6 +455,9 @@ impl Notebook {
         if bytes.len() > 16 << 20 {
             bail!("笔记超过 16 MiB")
         };
+        if !disk::legacy_note(Path::new(path)) && !disk::text_bytes(bytes) {
+            bail!("此格式仅支持 UTF-8 文本")
+        }
         self.path(path)?;
         let lock = fs::OpenOptions::new()
             .write(true)

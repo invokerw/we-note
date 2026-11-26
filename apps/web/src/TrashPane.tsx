@@ -1,3 +1,4 @@
+import { decodeText } from "./plugins/archive";
 import {
   lazy,
   Suspense,
@@ -7,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { entryName, printableText } from "./libraryEntries";
+import { entryName } from "./libraryEntries";
 import { MarkdownView, type MarkdownIO } from "./markdown/MarkdownView";
 
 import { isMindMap } from "./plugins/mindFile";
@@ -174,7 +175,7 @@ export function TrashDocument({
   useEffect(() => {
     let current = true;
     read(entry)
-      .then((bytes) => printableText(entry.path, bytes))
+      .then((bytes) => decodeText(bytes))
       .then((text) => {
         if (current) setContent({ text });
       })
@@ -207,7 +208,7 @@ export function TrashDocument({
           <Suspense fallback="正在载入导图…">
             <MindCanvas source={content.text} />
           </Suspense>
-        ) : /\.(md|xmind)$/i.test(entry.path) ? (
+        ) : /\.md$/i.test(entry.path) ? (
           <MarkdownView text={content.text} io={io} />
         ) : (
           <pre>{content.text}</pre>
