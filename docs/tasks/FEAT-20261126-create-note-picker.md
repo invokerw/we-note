@@ -42,3 +42,4 @@
 - Web 宽屏复用应用内命名表单，由原有创建函数保存并打开笔记。支持完整相对路径、格式后缀补全、重名检查及取消。
 - 自审核对路径与单一文件名两种输入方式，确认手机及目录右键仍走原流程。历史版本测试原先写死了库版本号，新增导图后改为选择笔记的上一个版本。
 - 绿阶段，`apps/web` 下禁用 `window.prompt` 的 `WENOTE_TEST_ORIGIN=http://localhost:18276 node tests/phase1.mjs` 退出 0，实际保存 Markdown 并打开导图中心节点。相同环境的 `node tests/entry-menu.mjs` 退出 0。`node --test tests/*.test.mjs` 退出 0（11/11，从仓库根运行时 Vite 解析路径失败，已在套件工作目录复测）。Web、桌面前端及 macOS 客户端构建退出 0，`git diff --check` 通过。刷新原验收地址即可加载本轮版本。
+- 2026-11-26 `DELIVERED`，方式 2 再次交付受测提交 `5b30a36`，验收地址 `http://localhost:18276`。
