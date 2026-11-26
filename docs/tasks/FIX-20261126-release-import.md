@@ -33,3 +33,9 @@
 - 验收服务 `http://localhost:19461`。在 Apple Silicon Mac 上从工作区运行 `./target/debug/wenote-desktop`。在 Android x86_64 模拟器上解压并用 `adb install -r <APK 路径>` 安装[调试 APK](https://github.com/invokerw/we-note/actions/runs/45818497923/artifacts/15116629439)，执行 `adb reverse tcp:19461 tcp:19461` 后可连接同一地址。
 - 在「个人设置 → 导出/导入」创建离线便携 ZIP，再选择该 ZIP 预览并确认导入。检查目标文件夹中的笔记及引用图片。在 Android 上，可关闭网络后分屏编辑 Markdown，返回再打开检查草稿，然后保存并恢复同步。
 - Android 签名包、Windows/macOS/Linux 安装包以及 AMD64/ARM64 服务端镜像的正式构建和发布由版本标签触发。按方式 2 等待用户验收通过后合入 `main`。
+
+## 验收与合并
+
+2026-11-26 用户确认验收通过（`ACCEPTED`）。本地 `main` 从 `73f863c` 快进到已验收提交 `8a8f292`，任务状态为 `MERGED`。该提交通过了 [Windows、macOS 与 Web 验收](https://github.com/invokerw/we-note/actions/runs/45820062631)和 [Android 模拟器验收](https://github.com/invokerw/we-note/actions/runs/45820063541)。
+
+端口 19461 的验收服务已停止，任务 worktree 和本地任务分支已清理。macOS 客户端、Android 模拟器 APK、验收日志和数据保存在主工作区的 `dist/acceptance/FIX-20261126-release-import/`。
