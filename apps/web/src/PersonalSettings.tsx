@@ -8,8 +8,7 @@ import {
 import { checkPicture, pictureTypes } from "./api";
 import AppearanceSettings from "./AppearanceSettings";
 import Manager from "./plugins/Manager";
-import { BasicMarkdownSettings } from "./markdown/Settings";
-import { markdownPreferences, type UserPreferences } from "./preferences";
+import type { UserPreferences } from "./preferences";
 
 export type ProfileRequest = (
   action: "me" | "avatar" | "saveAvatar" | "password",
@@ -135,7 +134,6 @@ export default function PersonalSettings(props: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [password, showPassword] = useState(false);
-  const md = markdownPreferences(props.preferences);
   useLayoutEffect(() => {
     const el = dialog.current!;
     el.showModal();
@@ -358,21 +356,10 @@ export default function PersonalSettings(props: {
             )}
             {section === "外观" && <AppearanceSettings />}
             {section === "编辑与插件" && (
-              <>
-                <BasicMarkdownSettings
-                  value={md}
-                  onChange={(patch) =>
-                    props.updatePluginSetting("com.wenote.md", {
-                      ...md,
-                      ...patch,
-                    })
-                  }
-                />
-                <Manager
-                  preferences={props.preferences}
-                  updatePluginSetting={props.updatePluginSetting}
-                />
-              </>
+              <Manager
+                preferences={props.preferences}
+                updatePluginSetting={props.updatePluginSetting}
+              />
             )}
             {section === "导出" && props.exportPanel}
             {section === "我的分享" && props.shares}

@@ -13,7 +13,7 @@ const sample = [
   "```",
 ].join("\n");
 
-export function BasicMarkdownSettings({
+export default function MarkdownSettings({
   value,
   onChange,
 }: {
@@ -25,7 +25,7 @@ export function BasicMarkdownSettings({
     next: MarkdownPreferences[K],
   ) => onChange({ [key]: next } as Partial<MarkdownPreferences>);
   return (
-    <>
+    <div className="settings-panel">
       <label>
         默认打开模式
         <select
@@ -62,23 +62,6 @@ export function BasicMarkdownSettings({
         />
         记住每篇笔记上次打开的模式
       </label>
-    </>
-  );
-}
-
-export default function MarkdownSettings({
-  value,
-  onChange,
-}: {
-  value: MarkdownPreferences;
-  onChange: (patch: Partial<MarkdownPreferences>) => void;
-}) {
-  const update = <K extends keyof MarkdownPreferences>(
-    key: K,
-    next: MarkdownPreferences[K],
-  ) => onChange({ [key]: next } as Partial<MarkdownPreferences>);
-  return (
-    <div className="settings-panel">
       <figure
         className="document-mode theme-preview"
         data-markdown-theme="clean"

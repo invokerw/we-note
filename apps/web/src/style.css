@@ -1710,15 +1710,26 @@ pre {
   flex-wrap: wrap;
   gap: 8px;
 }
-.plugin-entry .settings-panel {
+.plugin-settings-dialog {
+  width: min(32rem, 94vw);
+  max-height: 88dvh;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper);
+}
+.plugin-settings-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.plugin-settings-dialog::backdrop { background: #1a253c55; }
+.plugin-settings-dialog .settings-panel {
   display: grid;
   gap: 12px;
-  max-width: 28rem;
-  margin-top: 12px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ink);
+  overflow-y: auto;
+  padding: 16px 22px;
   font-size: 14px;
 }
 .settings-panel label {
@@ -2111,7 +2122,6 @@ pre {
   background: #141c27;
   color: #c5d8ff;
 }
-[data-color-scheme="dark"] .plugin-entry .settings-panel,
 [data-color-scheme="dark"] .plugin-document fieldset {
   background: #151e2a;
   border-color: var(--line);

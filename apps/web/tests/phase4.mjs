@@ -73,8 +73,13 @@ try {
   const formatId = await create("自动格式化.md", "占位");
   await click("打开个人设置");
   await click("编辑与插件");
+  assert.equal(await page.getByRole("combobox", { name: "默认打开模式" }).count(), 0);
+  assert.equal(await page.locator('.plugin-entry button[aria-haspopup="dialog"]').count(), 1);
   await click("禁用 Markdown");
   await click("Markdown 设置");
+  const pluginSettings = page.getByRole("dialog", {name:"Markdown 设置", exact:true});
+  assert.ok(await pluginSettings.evaluate(el => el.matches(":modal")));
+  assert.ok(await pluginSettings.getByLabel("记住每篇笔记上次打开的模式").isChecked());
   for (const label of [
     "启用保存时自动格式化",
     "中日韩文字与英文之间加空格",
@@ -113,6 +118,9 @@ try {
     assert.ok(contrast.every(ratio => ratio >= 4.5), String(contrast));
   }
   await setRule("默认打开模式", "split");
+  await page.keyboard.press("Escape");
+  await pluginSettings.waitFor({state:"hidden"});
+  assert.ok(await button("Markdown 设置").evaluate(el => el === document.activeElement));
   assert.equal(await button("XMind 设置").count(), 0);
   assert.equal(await button("禁用 JSON").count(), 0);
   await click("启用 Markdown");
@@ -206,6 +214,8 @@ try {
   await click("Markdown 设置");
   assert.equal(await page.getByRole("combobox", { name: "主题" }).count(), 0);
   assert.equal(await page.getByLabel("分屏编辑同步滚动").isChecked(), false);
+  assert.equal(await pluginSettings.getByLabel("默认打开模式").inputValue(), "split");
+  await click("关闭 Markdown 设置");
   await click("关闭个人设置");
   await click("values.json");
   assert.equal(await page.locator(".document .plugin-document .toolbar").count(), 0, "纯文本正文不显示插件工具栏");

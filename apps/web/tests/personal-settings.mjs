@@ -79,9 +79,11 @@ try {
   await button(desktop, "保存头像").click();
   await desktop.getByText("头像已保存").waitFor();
   await button(desktop, "编辑与插件").click();
-  await desktop
+  await button(desktop, "Markdown 设置").click();
+  await desktop.getByRole("dialog", {name:"Markdown 设置"})
     .getByRole("combobox", { name: "正文字号", exact: true })
     .selectOption("large");
+  await button(desktop, "关闭 Markdown 设置").click();
   await desktop.keyboard.press("Escape");
   assert.equal(
     await desktop.getByLabel("笔记源码").innerText(),
@@ -95,7 +97,7 @@ try {
     "large",
   );
   await button(desktop, "分享").click();
-  await desktop.getByText("将分享上次保存的版本。").waitFor();
+  await desktop.getByText("有尚未保存的修改。").waitFor();
   await button(desktop, "取消").click();
   const mobile = await browser.newPage({
     viewport: { width: 390, height: 844 },
@@ -107,6 +109,15 @@ try {
   await mobile.getByRole("heading", {name:"回收站"}).waitFor();
   await button(mobile, "笔记").click();
   await button(mobile, "打开个人设置").click();
+  await button(mobile, "编辑与插件").click();
+  await button(mobile, "Markdown 设置").click();
+  const plugin = mobile.getByRole("dialog", {name:"Markdown 设置", exact:true});
+  assert.equal(await plugin.getByRole("combobox", {name:"正文字号", exact:true}).inputValue(), "large");
+  await plugin.getByLabel("整理连续空行").scrollIntoViewIfNeeded();
+  const box = await plugin.boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 390 && box.y >= 0 && box.y + box.height <= 844);
+  await button(plugin, "关闭 Markdown 设置").click();
+  await button(mobile, "返回设置分类").click();
   await button(mobile, "导出").click();
   await button(mobile, "下载 ZIP").waitFor();
   await button(mobile, "返回设置分类").click();

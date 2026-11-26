@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import MarkdownSettings from "../markdown/Settings";
 import { markdownPreferences, type UserPreferences } from "../preferences";
 import {
@@ -11,6 +11,33 @@ import {
   uninstall,
   type Plugin,
 } from "./registry";
+function PluginSettingsDialog({ name, children, close }: {
+  name: string;
+  children: ReactNode;
+  close: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => {
+    const element = dialog.current!;
+    element.showModal();
+    return () => element.close();
+  }, []);
+  return (
+    <dialog ref={dialog} className="plugin-settings-dialog" aria-labelledby="plugin-settings-title"
+      onCancel={event => {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }}>
+      <header>
+        <h2 id="plugin-settings-title">{name} 设置</h2>
+        <button aria-label={`关闭 ${name} 设置`} onClick={close}>×</button>
+      </header>
+      {children}
+    </dialog>
+  );
+}
+
 export default function Manager({
   preferences,
   updatePluginSetting,
@@ -20,7 +47,7 @@ export default function Manager({
 }) {
   const [items, list] = useState(plugins),
     [pending, setPending] = useState<Plugin | null>(null),
-    [expanded, setExpanded] = useState<string | null>(null),
+    [settingsId, setSettingsId] = useState<string | null>(null),
     [error, notify] = useState("");
   const markdown = markdownPreferences(preferences);
   const panels: Partial<Record<string, ReactNode>> = {
@@ -45,7 +72,6 @@ export default function Manager({
     p.manifest.capabilities.map((c) => permissionNames[c]).join("、");
   return (
     <article>
-      <h1>插件</h1>
       <label>
         安装本地插件包{" "}
         <input
@@ -114,9 +140,8 @@ export default function Manager({
             {panels[p.manifest.id] && (
               <button
                 aria-label={`${p.manifest.name} 设置`}
-                aria-expanded={expanded === p.manifest.id}
-                aria-controls={`settings-${p.manifest.id}`}
-                onClick={() => setExpanded(expanded === p.manifest.id ? null : p.manifest.id)}
+                aria-haspopup="dialog"
+                onClick={() => setSettingsId(p.manifest.id)}
               >
                 设置
               </button>
@@ -127,10 +152,10 @@ export default function Manager({
               </button>
             )}
           </div>
-          {panels[p.manifest.id] && (
-            <div id={`settings-${p.manifest.id}`} hidden={expanded !== p.manifest.id}>
+          {settingsId === p.manifest.id && (
+            <PluginSettingsDialog name={p.manifest.name} close={() => setSettingsId(null)}>
               {panels[p.manifest.id]}
-            </div>
+            </PluginSettingsDialog>
           )}
         </section>
       ))}
