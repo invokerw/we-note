@@ -295,3 +295,10 @@ CREATE TABLE IF NOT EXISTS history_change_receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_changes_version ON changes(version_id);
 CREATE INDEX IF NOT EXISTS idx_history_parents ON file_versions(parent_version_id);
+
+CREATE TABLE IF NOT EXISTS portable_imports (
+ id TEXT PRIMARY KEY, vault TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+ user TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, digest TEXT NOT NULL,
+ summary TEXT NOT NULL, staged TEXT NOT NULL, created INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS portable_import_owner ON portable_imports(vault,user,created);

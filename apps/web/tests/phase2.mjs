@@ -435,7 +435,7 @@ try {
   await button("路线.md").click();
   await page.locator(".reading").getByText("新的正文。").waitFor();
   await button("打开个人设置").click();
-  await button("导出").click();
+  await button("导出/导入").click();
   await button("创建导出").click();
   const wait = page.waitForEvent("download");
   await button("下载 ZIP").click();

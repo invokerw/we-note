@@ -21,7 +21,7 @@ func (r *Repository) CleanupInBackground() {
 }
 func (r *Repository) RunCleanup(ctx context.Context) error {
 	var due bool
-	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_cleanup UNION ALL SELECT 1 FROM garbage_objects UNION ALL SELECT 1 FROM retired_object_keys WHERE storage_key LIKE '%/assets/%' UNION ALL SELECT 1 FROM image_lifetimes UNION ALL SELECT 1 FROM trash_items t JOIN vaults v ON t.vault_id=v.id JOIN users u ON u.id=v.owner_user_id WHERE u.status IN ('active','disabled') AND t.deleted<=unixepoch()-86400*`+retentionDays+`)`).Scan(&due)
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM portable_imports WHERE staged<>'' AND created<unixepoch()-86400 UNION ALL SELECT 1 FROM account_cleanup UNION ALL SELECT 1 FROM garbage_objects UNION ALL SELECT 1 FROM retired_object_keys WHERE storage_key LIKE '%/assets/%' UNION ALL SELECT 1 FROM image_lifetimes UNION ALL SELECT 1 FROM trash_items t JOIN vaults v ON t.vault_id=v.id JOIN users u ON u.id=v.owner_user_id WHERE u.status IN ('active','disabled') AND t.deleted<=unixepoch()-86400*`+retentionDays+`)`).Scan(&due)
 	if err != nil || !due {
 		return err
 	}
@@ -40,7 +40,7 @@ func (r *Repository) RunCleanup(ctx context.Context) error {
 			failures = append(failures, err, writeErr)
 		}
 	}
-	failures = append(failures, r.expireTrash(ctx), r.collectImages(ctx), r.drainGarbage(ctx), r.removeRetiredImageKeys(ctx))
+	failures = append(failures, r.expireImports(ctx), r.expireTrash(ctx), r.collectImages(ctx), r.drainGarbage(ctx), r.removeRetiredImageKeys(ctx))
 	return errors.Join(failures...)
 }
 

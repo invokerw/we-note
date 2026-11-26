@@ -130,6 +130,17 @@ impl Api {
         }
         Ok(checked(req.send()?)?.json()?)
     }
+    pub fn preview_import(&self, vault: &str, file: std::fs::File) -> Result<Value> {
+        let response = self
+            .client
+            .post(format!("{}/api/v1/vaults/{vault}/imports", self.origin))
+            .bearer_auth(&self.token)
+            .header("Content-Type", "application/zip")
+            .timeout(Duration::from_secs(600))
+            .body(file)
+            .send()?;
+        Ok(checked(response)?.json()?)
+    }
     pub fn profile(&self, action: &str, body: Option<Value>) -> Result<Value> {
         let (method, path) = match action {
             "me" => (Method::GET, "/api/v1/me"),

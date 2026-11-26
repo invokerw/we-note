@@ -440,7 +440,7 @@ try {
   );
   await tap(button("完成"));
   await page.getByText("已保存到本地目录").waitFor();
-  await openSettings("导出");
+  await openSettings("导出/导入");
   await page.getByLabel("图片链接").selectOption("portable");
   await button("创建导出").click();
   const portableRow = page.locator(".row").filter({ hasText: "离线便携" });

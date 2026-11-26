@@ -51,6 +51,8 @@ type Binding = {
   android?: boolean;
   vault: string;
   account?: string;
+  name?: string;
+  synchronize?: () => Promise<boolean | undefined>;
   access: () => Promise<string>;
 };
 declare global {
@@ -245,6 +247,25 @@ function Workspace({
           token: await binding.access(),
           route,
         }),
+      previewImport: async file => {
+        const token = await binding.access();
+        const upload = crypto.randomUUID();
+        const chunkSize = 2 * 1024 * 1024;
+        try {
+          for (let offset = 0; offset < file.size; offset += chunkSize) {
+            const data = base64(new Uint8Array(await file.slice(offset, offset + chunkSize).arrayBuffer()));
+            const last = offset + chunkSize >= file.size;
+            const result = await local<import("./PortableImport").ImportJob>(vault, "import_chunk", {token, upload, offset, data, last});
+            if (last) return result;
+          }
+          throw Error("请选择有效的 ZIP 文件");
+        } catch (error) {
+          await local(vault, "discard_import_chunk", {upload}).catch(() => {});
+          throw error;
+        }
+      },
+      confirmImport: async (id, folder) => local(vault, "import_action", {token: await binding.access(), id, folder}),
+      cancelImport: async id => local(vault, "import_action", {token: await binding.access(), id}),
       createExport: async (scope, portable) => {
         await local(vault, "create_export", {
           token: await binding.access(),
@@ -691,7 +712,11 @@ function Workspace({
         paths={files} io={entries} close={() => setCreateAnchor(null)}
         create={format => { setNewPath((panes.folder || "") + formats[format]); panes.setPane("doc"); }}
         browse={folder => { setView("笔记"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources client={client}/>} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
+      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<><p>当前笔记库 · {binding.name || vault}</p><Resources client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
+        if (!leave()) return;
+        if (!await binding.synchronize?.()) throw Error("请完成同步后查看导入的笔记");
+        await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); setNewPath(null); panes.browse(folder ? folder + "/" : null);
+      }}/></>} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
       <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (
           <header className="phone-head">

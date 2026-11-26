@@ -79,6 +79,10 @@ The staging lease lasts 24 hours from the most recent accepted part. After expir
 
 ### Vault exports
 
-`POST /api/v1/vaults/{vault_id}/exports` takes a `scope` of `notes`, `assets` or `all` and returns a job with HTTP 202. The optional `mode` defaults to `online`. Use `{"scope":"all","mode":"portable"}` to rewrite Markdown attachment links for offline reading. Reuse an `Idempotency-Key` with the same scope and mode to retrieve the same job. A portable export containing attachments supports Markdown files up to 16 MiB each.
+`POST /api/v1/vaults/{vault_id}/exports` takes a `scope` of `notes` or `all` and returns a job with HTTP 202. The optional `mode` defaults to `online`. Use `{"scope":"all","mode":"portable"}` to rewrite Markdown attachment links for offline reading. Reuse an `Idempotency-Key` with the same scope and mode to retrieve the same job. A portable export containing attachments supports Markdown files up to 16 MiB each.
 
 Poll `GET /api/v1/vaults/{vault_id}/exports/{job_id}` until `status` is `completed`, then download the ZIP from the same path with `/download` appended. `manifest.json` describes the frozen files and attachments. Its `content_hash` fields describe the archived bytes, and rewritten notes include their original `source_content_hash`. `checksums.sha256` covers the archive contents, including both manifests when present.
+
+### Portable ZIP imports
+
+With write access to the destination vault, POST a raw ZIP to `/api/v1/vaults/{vault_id}/imports` to validate and preview it. The limits are 256 MiB compressed, 512 MiB uncompressed and 10,000 ZIP entries. The preview includes the job ID, file paths, resource count, conflicts and proposed folder. POST `{"folder":"<preview folder>"}` to `/imports/{id}/confirm` under the same vault. A `preview` response requires confirmation of the updated destination. A `completed` response records a successful import. Repeating confirmation returns that result. GET the vault's `/imports` for recent jobs, or DELETE `/imports/{id}` to discard a preview. Staged previews expire after 24 hours.

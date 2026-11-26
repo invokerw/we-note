@@ -160,7 +160,7 @@ export default function PersonalSettings(props: {
     "账户与安全",
     "外观",
     "编辑与插件",
-    "导出",
+    "导出/导入",
     ...(props.shares ? ["我的分享"] : []),
     ...(props.sync ? ["设备与同步"] : []),
   ];
@@ -361,7 +361,7 @@ export default function PersonalSettings(props: {
                 updatePluginSetting={props.updatePluginSetting}
               />
             )}
-            {section === "导出" && props.exportPanel}
+            {section === "导出/导入" && props.exportPanel}
             {section === "我的分享" && props.shares}
             {section === "设备与同步" && (
               <button

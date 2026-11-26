@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 
@@ -57,12 +58,27 @@ try {
     await desktop.getByText("服务端管理", { exact: true }).count(),
     0,
   );
-  await button(desktop, "导出").click();
+  await button(desktop, "导出/导入").click();
   const settings = desktop.getByRole("dialog", {name:"个人设置"});
   await button(settings, "创建导出").click();
   const download = desktop.waitForEvent("download");
   await button(settings, "下载 ZIP").click();
   assert.equal((await download).suggestedFilename(), "wenote-all.zip");
+  await settings.getByLabel("图片链接").selectOption("portable");
+  await button(settings, "创建导出").click();
+  const portableDownload = desktop.waitForEvent("download");
+  await button(settings.locator(".row").filter({ hasText: "离线便携" }), "下载 ZIP").click();
+  const archive = { name: "portable.zip", mimeType: "application/zip", buffer: await readFile(await (await portableDownload).path()) };
+  await settings.getByLabel("选择 ZIP").setInputFiles(archive);
+  await button(settings, "取消导入").click();
+  await settings.getByRole("heading", {name:"导入预览"}).waitFor({state:"detached"});
+  await settings.getByLabel("选择 ZIP").setInputFiles(archive);
+  await settings.getByText(/同名路径/).waitFor();
+  await button(settings, "确认导入").click();
+  await settings.getByRole("heading", {name:"导入完成"}).waitFor();
+  const imported = await (await api(`vaults/${id}/files`, undefined, token)).json();
+  assert.equal(imported.files.length, 2);
+  assert.ok(imported.files.some(file => file.path.startsWith("导入 ")));
   await button(desktop, "账户与安全").click();
   const png = await desktop.evaluate(
     () => document.createElement("canvas").toDataURL().split(",")[1],
@@ -118,8 +134,9 @@ try {
   assert.ok(box.x >= 0 && box.x + box.width <= 390 && box.y >= 0 && box.y + box.height <= 844);
   await button(plugin, "关闭 Markdown 设置").click();
   await button(mobile, "返回设置分类").click();
-  await button(mobile, "导出").click();
-  await button(mobile, "下载 ZIP").waitFor();
+  await button(mobile, "导出/导入").click();
+  await button(mobile, "下载 ZIP").first().waitFor();
+  await button(mobile, "查看笔记").waitFor();
   await button(mobile, "返回设置分类").click();
   await button(mobile, "账户与安全").click();
   await mobile.locator(".profile-heading img").waitFor();

@@ -545,7 +545,7 @@ impl Notebook {
         let name = route.split('?').next().unwrap_or("");
         if !matches!(
             name,
-            "/assets" | "/search" | "/tags" | "/exports" | "/links/backlinks"
+            "/assets" | "/search" | "/tags" | "/imports" | "/exports" | "/links/backlinks"
         ) || (scope.is_some() && route != "/exports")
         {
             bail!("未知的笔记库操作")
@@ -806,5 +806,66 @@ mod entry_tests {
         book.purge_trash(&book.trash_files()?.pop().unwrap())?;
         assert!(book.trash_files()?.is_empty());
         Ok(())
+    }
+}
+
+impl Notebook {
+    /// Stream the file chooser's bounded chunks to disk before sending the ZIP as a binary body.
+    pub fn import_chunk(
+        &self,
+        token: &str,
+        upload: uuid::Uuid,
+        offset: u64,
+        encoded: &str,
+        last: bool,
+    ) -> Result<Value> {
+        use std::io::Write;
+        let file = self.state_dir.join(format!("import-{upload}.tmp"));
+        if encoded.len() > 3 * 1024 * 1024 {
+            bail!("导入分片过大")
+        }
+        let bytes = STANDARD.decode(encoded)?;
+        if offset > 256 << 20 || bytes.len() as u64 > (256 << 20) - offset {
+            bail!("ZIP 最大为 256 MiB")
+        }
+        let mut out = fs::OpenOptions::new()
+            .append(true)
+            .create_new(offset == 0)
+            .open(&file)?;
+        out.lock_exclusive()?;
+        if out.metadata()?.len() != offset {
+            bail!("导入分片位置不匹配")
+        }
+        out.write_all(&bytes)?;
+        drop(out);
+        if !last {
+            return Ok(Value::Null);
+        }
+        let result =
+            Api::new(&self.origin, token)?.preview_import(&self.vault, fs::File::open(&file)?);
+        let _ = fs::remove_file(file);
+        result
+    }
+    pub fn discard_import_chunk(&self, upload: uuid::Uuid) -> Result<Value> {
+        let file = self.state_dir.join(format!("import-{upload}.tmp"));
+        if file.exists() {
+            fs::remove_file(file)?;
+        }
+        Ok(Value::Null)
+    }
+    pub fn import_action(&self, token: &str, id: &str, folder: Option<String>) -> Result<Value> {
+        identifier(id)?;
+        let route = format!("/api/v1/vaults/{}/imports/{id}", self.vault);
+        let api = Api::new(&self.origin, token)?;
+        if let Some(folder) = folder {
+            api.json(
+                reqwest::Method::POST,
+                &format!("{route}/confirm"),
+                Some(json!({"folder":folder})),
+                None,
+            )
+        } else {
+            api.json(reqwest::Method::DELETE, &route, None, None)
+        }
     }
 }

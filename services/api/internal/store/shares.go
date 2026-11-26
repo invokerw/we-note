@@ -182,6 +182,21 @@ func (r *Repository) CloseShare(ctx context.Context, user, id string, revoke boo
 	return err
 }
 func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a Asset) (string, error) {
+	storageKey := a.StorageKey
+	if storageKey == "" {
+		if err := tx.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, a.Vault, a.Hash).Scan(&storageKey); err != nil {
+			return "", err
+		}
+	}
+	body, err := r.blobStore.OpenContext(ctx, a.Vault, a.Hash, storageKey)
+	if err != nil {
+		return "", err
+	}
+	defer body.Close()
+	return r.storeCopiedAsset(ctx, tx, target, a, body)
+}
+
+func (r *Repository) storeCopiedAsset(ctx context.Context, tx *sql.Tx, target string, a Asset, body io.Reader) (string, error) {
 	now := time.Now().UTC()
 	if err := reserveAssetURLKey(ctx, tx, target, now, a.Hash); err != nil {
 		return "", err
@@ -195,17 +210,6 @@ func (r *Repository) copyAsset(ctx context.Context, tx *sql.Tx, target string, a
 			return "", err
 		}
 	}
-	storageKey := a.StorageKey
-	if storageKey == "" {
-		if err := tx.QueryRowContext(ctx, `SELECT storage_key FROM blobs WHERE vault_id=? AND content_hash=?`, a.Vault, a.Hash).Scan(&storageKey); err != nil {
-			return "", err
-		}
-	}
-	body, err := r.blobStore.OpenContext(ctx, a.Vault, a.Hash, storageKey)
-	if err != nil {
-		return "", err
-	}
-	defer body.Close()
 	key, err := putResource(ctx, r.blobStore, target, a.Hash, a.Size, now, body)
 	if err != nil {
 		return "", err

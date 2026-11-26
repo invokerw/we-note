@@ -135,6 +135,7 @@ async function sync() {
       vault,
       root,
     });
+    localStorage.setItem("vault-name:" + vault, byId("vault").selectedOptions[0].text);
     localStorage.setItem("folder:" + vault, root);
     localStorage.setItem("last-notebook", vault);
     byId("open-editor").hidden = false;
@@ -148,6 +149,7 @@ async function sync() {
     localStorage.setItem(reportKey(), report);
     localStorage.setItem(reportKey() + ":device", result.device_id);
     byId("diagnostic").textContent = report;
+    return true;
   } catch (error) {
     status(String(error));
     byId("diagnostic").textContent = String(error) + "\n" + lastReport();
@@ -226,6 +228,8 @@ byId("open-editor").onclick = () => {
     new CustomEvent("open-notebook", {
       detail: {
         vault,
+        name: byId("vault").selectedOptions[0]?.text || localStorage.getItem("vault-name:" + vault) || vault,
+        synchronize: sync,
         account: token ? accountEmail : "local",
         android,
         access: async () => {

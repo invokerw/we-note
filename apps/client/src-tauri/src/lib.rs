@@ -99,6 +99,21 @@ enum LocalAction {
         token: String,
         request: wenote_sync::AssetTransfer,
     },
+    ImportChunk {
+        token: String,
+        upload: String,
+        offset: u64,
+        data: String,
+        last: bool,
+    },
+    DiscardImportChunk {
+        upload: String,
+    },
+    ImportAction {
+        token: String,
+        id: String,
+        folder: Option<String>,
+    },
     CreateExport {
         token: String,
         scope: String,
@@ -209,6 +224,21 @@ async fn notebook(
             Transfer { token, request } => {
                 Api::new(book.origin(), &token).and_then(|api| api.transfer(&vault, request))
             }
+            ImportChunk {
+                token,
+                upload,
+                offset,
+                data,
+                last,
+            } => upload
+                .parse()
+                .map_err(anyhow::Error::from)
+                .and_then(|id| book.import_chunk(&token, id, offset, &data, last)),
+            DiscardImportChunk { upload } => upload
+                .parse()
+                .map_err(anyhow::Error::from)
+                .and_then(|id| book.discard_import_chunk(id)),
+            ImportAction { token, id, folder } => book.import_action(&token, &id, folder),
             CreateExport { token, scope, mode } => {
                 book.create_export(&token, &scope, mode.as_deref())
             }

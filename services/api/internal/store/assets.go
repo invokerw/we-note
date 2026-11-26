@@ -1,9 +1,12 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 	"io"
 	"mime"
 	"net/url"
@@ -310,7 +313,37 @@ func (r *Repository) assetReferences(content []byte) []string {
 	pattern := regexp.MustCompile(regexp.QuoteMeta(r.publicBase+"/assets/") + paths)
 	seen := map[string]bool{}
 	refs := []string{}
-	for _, match := range pattern.FindAllSubmatch(content, -1) {
+	if !bytes.Contains(content, []byte(r.publicBase+"/assets/")) {
+		return refs
+	}
+	// Example URLs inside Markdown code can refer to a vault that no longer exists.
+	// Ignore those ranges when registering dependencies, leaving the stored bytes intact.
+	body := bytes.TrimPrefix(content, []byte("\uFEFF"))
+	if h := yamlHeader.FindIndex(body); h != nil {
+		body = body[h[1]:]
+	}
+	if bytes.ContainsAny(body, "`~") || bytes.Contains(body, []byte("    ")) || bytes.ContainsRune(body, '\t') {
+		body = bytes.Clone(body)
+		doc := exportMarkdown.Parser().Parse(text.NewReader(body))
+		ast.Walk(doc, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
+			if enter {
+				switch n.Kind() {
+				case ast.KindCodeBlock, ast.KindFencedCodeBlock:
+					for i := 0; i < n.Lines().Len(); i++ {
+						seg := n.Lines().At(i)
+						clear(body[seg.Start:seg.Stop])
+					}
+				case ast.KindText:
+					if n.Parent().Kind() == ast.KindCodeSpan {
+						seg := n.(*ast.Text).Segment
+						clear(body[seg.Start:seg.Stop])
+					}
+				}
+			}
+			return ast.WalkContinue, nil
+		})
+	}
+	for _, match := range pattern.FindAllSubmatch(body, -1) {
 		ref := r.publicBase + "/assets/" + string(match[1])
 		if !seen[ref] {
 			refs = append(refs, ref)

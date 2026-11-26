@@ -233,5 +233,39 @@ fn two_devices_and_web_converge() -> Result<()> {
     assert!(ready);
     let zip = book.download(&dir, &token, "export", job_id)?;
     assert!(fs::read(zip)?.starts_with(b"PK"));
+    let export = book.create_export(&token, "all", Some("portable"))?;
+    let job_id = export["job_id"].as_str().context("portable export id")?;
+    for _ in 0..100 {
+        let jobs = book.catalog(&token, "/exports", None)?;
+        if jobs
+            .as_array()
+            .context("jobs")?
+            .iter()
+            .any(|j| j["job_id"] == job_id && j["status"] == "completed")
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let archive = fs::read(book.download(&dir, &token, "export", job_id)?)?;
+    let upload = Uuid::new_v4();
+    let half = archive.len() / 2;
+    book.import_chunk(&token, upload, 0, &STANDARD.encode(&archive[..half]), false)?;
+    let preview = book.import_chunk(
+        &token,
+        upload,
+        half as u64,
+        &STANDARD.encode(&archive[half..]),
+        true,
+    )?;
+    let id = preview["id"].as_str().context("import id")?;
+    let folder = preview["folder"].as_str().context("conflict folder")?;
+    assert!(!folder.is_empty());
+    assert_eq!(
+        book.import_action(&token, id, Some(folder.into()))?["status"],
+        "completed"
+    );
+    sync_b()?;
+    assert_eq!(fs::read(b.join(folder).join("README"))?, b"plain text");
     Ok(())
 }
