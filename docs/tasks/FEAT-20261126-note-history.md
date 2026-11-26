@@ -28,3 +28,5 @@
 从任务 worktree 执行 `./scripts/local.py start --port 18946`。地址 `http://localhost:18946`，PID 71270，健康检查 `curl -fsS http://localhost:18946/healthz` 返回 `{"status":"ok"}`。日志 `dist/local/server.log`，数据库及存储目录 `services/api/data`，Web 产物 `apps/web/dist`。验收结束后在同一工作区运行 `./scripts/local.py stop`。
 
 使用 `dist/local/preview-login.txt` 内的试用账号登录，打开「历史版本验收 → 阅读清单.md → 更多操作 → 历史版本」。示例有三版，可选择第二版并点击「恢复此版本」，再打开历史查看恢复前的内容。方式 2，在独立分支等待用户验收。
+
+2026-11-26 `DELIVERED`。受测功能提交 `44bfced`，`git diff --cached --check` 退出 0。保留分支、工作区和验收实例，待用户确认后合入本地 `main`。
