@@ -1,6 +1,6 @@
 # 修复桌面与网页验收的四个失败项
 
-- 任务 ID `FIX-20261125-ci-regressions`，类型 `bugfix`，影响端 web / server，状态 `ACCEPTED`。
+- 任务 ID `FIX-20261125-ci-regressions`，类型 `bugfix`，影响端 web / server，状态 `MERGED`。
 - 用户要求「修复一下这几个失败吧」。来源为 GitHub Actions `Desktop and web acceptance` 运行 `45619965525`，提交 `ee81873`。
 - 基线为本地 `main@67f30911fc3d5e1fdaf459f9327ec7a8b17b2be8`，工作区 `.worktrees/ci-regressions-20261125`，分支 `codex/bugfix-ci-regressions-20261125`。用户已选择方式 2，在任务分支验收，通过后合入本地 main。
 
@@ -57,3 +57,5 @@ macOS 的 `apps/web/tests/phase2.mjs` 在切换编辑模式后未观察到正文
 最终受测提交 `f170647` 已推送到任务分支。在同一次 GitHub Actions 运行中，macOS 用时 4 分 15 秒，Windows 用时 9 分 34 秒，前端及桌面构建、Go 测试、双设备同步和全部浏览器验收均通过。方式 2 交付，保留任务分支和本地验收入口 `http://127.0.0.1:18642`。[双平台验收结果](https://github.com/invokerw/we-note/actions/runs/45750257102)
 
 用户确认「验收完毕」。验收提交 `3e78696` 在 macOS、Windows 完整通过。[验收提交 CI](https://github.com/invokerw/we-note/actions/runs/45751394764)
+
+2026-11-26 以 `a36a58f` 合入本地 `main`，已核实包含验收提交 `3e78696`。合并时保留开发账本双方条目。整合后网页构建、桌面前端构建、Go 全量测试、前端单测与 `WENOTE_API=dist/local/wenote-api-integrated node tests/e2e/desktop.mjs --browser` 均退出 0。已停止 18642 端口验收服务。验收数据、产物和日志已归档在 `dist/acceptance/FIX-20261125-ci-regressions-3e78696/`，逐文件比对通过后已移除任务 worktree 和本地分支。
