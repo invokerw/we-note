@@ -29,9 +29,15 @@ macOS 的 `apps/web/tests/phase2.mjs` 在切换编辑模式后未观察到正文
 | 使用同一份修订 42 的清单运行 `scripts/recover_vault.py` | UTF-8 和严格 cp1252 均成功恢复并显示修订号，损坏清单返回非零 |
 | `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`node --test apps/web/tests/*.test.mjs` | 均退出 0，10 个前端单测通过 |
 | 真实 Chrome 的聚焦输入、延迟加载后移到搜索框两个场景 | 均退出 0，直接键入的正文正确，主动离开后焦点保留在搜索框 |
-| `GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go test -c -o ../../dist/windows-regression/ ./internal/blob ./internal/httpapi ./internal/store` | 退出 0，已编译三个 Windows 测试程序，原生执行待 CI |
+| `GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go test -c -o ../../dist/windows-regression/ ./internal/blob ./internal/httpapi ./internal/store` | 退出 0，已编译三个 Windows 测试程序，原生执行结果见下方 GitHub Actions 记录 |
 | `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` | 退出 1。双设备同步、浏览器第一阶段、可视化编辑器焦点和首键输入均通过，后续 Tab 缩进断言失败。在 `67f3091` 的独立页面上仅主动聚焦后运行原步骤，实际 Markdown 与本轮相同 |
 
 自审核对异步编辑器加载、切换焦点、输出编码及磁盘路径与存储键用途。两个存储测试仍检查完整内容读回。`git diff --check` 通过。
 
 验收服务由 `./scripts/local.py start --port 18642` 从任务工作区启动。打开 `http://127.0.0.1:18642` 后注册测试账号。新建或打开 Markdown 笔记，从分屏切到可视化编辑，直接输入并保存。PID 41053，日志 `dist/local/server.log`，数据 `services/api/data/`。验收后可在任务工作区运行 `./scripts/local.py stop` 停止服务。
+
+## GitHub Actions 复测
+
+任务分支提交 `7c6df47` 于 2026-11-26 在 macOS 和 Windows 上完成验收运行。两端的 `go test ./...` 均通过，其中包括 Windows 原先失败的本地存储键、重启后分片续传和 cp1252 恢复三项测试。两端的浏览器也都通过了切换到可视化编辑器后的焦点和首键输入检查。[运行记录](https://github.com/invokerw/we-note/actions/runs/45730164307)
+
+两个浏览器任务随后都停在 `apps/web/tests/phase2.mjs:257`。按 Tab 后，断言期待两行纯文本，第二行以两个空格缩进。实际 Markdown 在两端都保留了粗体和段间空行。macOS 将四个空格插在“子”和“项”之间，Windows 将其追加在第二行末尾。此次运行总体失败，该断言之后的浏览器用例尚未执行。[macOS 日志](https://github.com/invokerw/we-note/actions/runs/45730164307/job/139609897235) · [Windows 日志](https://github.com/invokerw/we-note/actions/runs/45730164307/job/139609897722)
