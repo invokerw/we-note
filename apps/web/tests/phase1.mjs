@@ -29,8 +29,26 @@ async function register(name) {
 try {
   const { page: a } = await register("Alice"),
     { page: b, email } = await register("Bob");
-  a.once("dialog", (d) => d.accept("daily/验收.md"));
+  const picker = a.getByRole("dialog", { name: "新建笔记", exact: true });
   await button(a, "新建笔记").click();
+  await picker.getByRole("heading", { name: "更多方式" }).waitFor();
+  await a.keyboard.press("Escape");
+  assert(await button(a, "新建笔记").evaluate(el => el === document.activeElement));
+  await button(a, "写一篇笔记").click();
+  const mindPrompt = a.waitForEvent("dialog");
+  const chooseMind = button(picker, "思维导图").click();
+  const prompt = await mindPrompt;
+  assert.equal(prompt.defaultValue(), "未命名.mind.json");
+  await prompt.dismiss();
+  await chooseMind;
+  await button(a, "新建笔记").click();
+  await button(picker, "上传文件夹").click();
+  const upload = a.getByRole("dialog", {name: "上传文件夹"});
+  assert(await upload.getByLabel("选择文件夹").evaluate(el => el.webkitdirectory));
+  await button(upload, "取消").click();
+  await button(a, "新建笔记").click();
+  a.once("dialog", (d) => d.accept("daily/验收.md"));
+  await button(picker, "Markdown").click();
   await button(a, "编辑模式").click();
   await button(a, "分屏编辑").click();
   await a.getByLabel("笔记源码").fill("# 浏览器快照");

@@ -173,10 +173,10 @@ try {
     .getByRole("heading", { name: "我的文件夹", exact: true })
     .waitFor();
   await tap(button("新建"));
-  await item("Markdown").waitFor();
-  await item("思维导图").waitFor();
-  await item("上传文件").waitFor();
-  await item("上传文件夹").waitFor();
+  await button("Markdown").waitFor();
+  await button("思维导图").waitFor();
+  await button("上传文件").waitFor();
+  await button("上传文件夹").waitFor();
   systemBack();
   await tap(button("资料 6 篇笔记"));
   await tap(button("上一级目录"));

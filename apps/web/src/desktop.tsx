@@ -1,3 +1,4 @@
+import { CreateNoteWindow } from "./CreateNoteWindow";
 import { StarButton, useNoteStars } from "./StarredNotes";
 import { checkPicture, pictureTypes } from "./api";
 import { markdownWritingMode } from "./markdown/modes";
@@ -19,6 +20,7 @@ import { Resources, type ResourceClient, type Hit } from "./Resources";
 import { multipart, multipartThreshold } from "./multipart";
 import { base64 } from "./api";
 import {
+  formats,
   newContent,
   containsEntry,
   entryPath,
@@ -138,6 +140,7 @@ function Workspace({
     () => Object.entries(revisions).map(([p, h]) => entryPath(p, h)),
     [revisions],
   );
+  const [createAnchor, setCreateAnchor] = useState<HTMLButtonElement | null>(null);
   const panes = usePanes();
   const phone = useAndroidPhone(!!binding.android);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -647,19 +650,7 @@ function Workspace({
         open={(p) => run(() => open(p))}
         libraryTitle="本地笔记库"
         vault={<strong className="local-vault">本地笔记库</strong>}
-        create={
-          <button
-            className="primary create-button"
-            aria-label="新建笔记"
-            disabled={busy}
-            onClick={() => {
-              setNewPath((panes.folder || "") + "未命名.md");
-              panes.setPane("doc");
-            }}
-          >
-            ＋　新建笔记
-          </button>
-        }
+        create={setCreateAnchor}
         avatar={<SettingsButton avatar={profile.avatar} open={() => {originalHandler.current = handlerKey(path);setSettingsOpen(true);}}/>}
         allNotes={() => {if (!leave()) return false; setView("笔记");choose("");setPluginBytes(null);setPluginDirty(false);setSaved(text);return true;}}
         searchContent={searchContent}
@@ -705,6 +696,10 @@ function Workspace({
           </>
         }
       />
+      {createAnchor && <CreateNoteWindow anchor={createAnchor} phone={phone} folder={panes.folder || ""}
+        paths={files} io={entries} close={() => setCreateAnchor(null)}
+        create={format => { setNewPath((panes.folder || "") + formats[format]); panes.setPane("doc"); }}
+        browse={folder => { setView("笔记"); panes.browse(folder); }} />}
       {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources client={client}/>} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
       <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (

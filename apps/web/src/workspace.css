@@ -197,3 +197,27 @@
 
 .note-star span { font-size: 20px; line-height: 1; }
 .note-star[aria-pressed="true"] { color: var(--accent); }
+
+.create-note-window {
+  position: fixed; inset: auto; margin: 0; width: min(252px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px); overflow: auto; padding: 18px;
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 8px 32px #192d501f;
+}
+.create-note-window::backdrop { background: transparent; }
+.create-note-window h2 { margin: 0 0 6px; font-weight: 600; font-family: inherit; font-size: 14px; line-height: 1.5; }
+.create-note-window section + section { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 12px; }
+.create-note-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.create-note-choices button {
+  display: grid; justify-items: center; gap: 7px; padding: 8px 4px;
+  background: transparent; color: inherit; border: 0; border-radius: 8px; font-size: 13px;
+}
+.create-note-choices button:is(:hover, :focus-visible) { background: var(--tint); }
+.create-note-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: white; font-size: 18px; }
+.create-note-icon.blue { background: #5083e9; }
+.create-note-icon.purple { background: #8570d7; }
+.create-note-icon.amber { background: #cc8338; }
+.create-note-icon.green { background: #399f83; }
+.create-note-close { position: absolute; right: 9px; top: 8px; padding: 0; width: 32px; height: 32px; border: 0; background: transparent; color: var(--muted); font-size: 20px; }
+.create-note-window.handset { inset: auto 0 0; margin: 0 auto; width: min(100%, 480px); max-width: 100%; border-radius: 18px 18px 0 0; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+.create-note-window.handset::backdrop { background: #15223755; }

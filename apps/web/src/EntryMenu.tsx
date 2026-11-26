@@ -111,11 +111,7 @@ export function EntryMenus({
         ? row
         : row.querySelector<HTMLElement>(".folder-name,.entry")!;
     returnTo.current = trigger;
-    setSub(
-      row.hasAttribute("data-phone-create")
-        ? { label: "新建", x: 0, y: 0, left: 0 }
-        : null,
-    );
+    setSub(null);
     setMenu({ path: row.dataset.libraryPath!, trigger, x, y, background });
   }
   function rowOf(target: EventTarget | null) {
@@ -298,7 +294,7 @@ export function EntryMenus({
         }
         const el = e.target as Element;
         const row = rowOf(el);
-        if (row && el.closest(".entry-more,[data-phone-create]")) {
+        if (row && el.closest(".entry-more")) {
           e.stopPropagation();
           fromButton(row, el.closest("button")!);
         }
@@ -310,7 +306,7 @@ export function EntryMenus({
           title={sub?.label || entryName(menu.path)}
           close={() => close(true)}
           back={
-            sub && !menu.trigger.hasAttribute("data-phone-create")
+            sub
               ? () => setSub(null)
               : undefined
           }

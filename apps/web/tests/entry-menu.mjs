@@ -213,6 +213,20 @@ try {
     rect.x >= 0 && rect.x + rect.width <= 360 && rect.y + rect.height <= 640,
   );
   await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await row.locator(".entry").click();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await button("新建").click();
+  const picker = page.getByRole("dialog", { name: "新建笔记", exact: true });
+  const bounds = await picker.boundingBox();
+  assert(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 360 && bounds.y + bounds.height <= 640);
+  assert.equal(await picker.evaluate(el => getComputedStyle(el).backgroundColor), "rgb(17, 23, 32)");
+  await picker.getByRole("button", { name: "思维导图", exact: true }).click();
+  assert.equal(await dialog.getByLabel("名称").inputValue(), "未命名.mind.json");
+  await dialog.getByLabel("名称").fill("移动端导图");
+  await done("创建");
+  await page.locator(".me-tpc").filter({ hasText: "移动端导图" }).waitFor();
+  assert((await api(base + "/files")).files.some(f => f.path === "参考/移动端导图.mind.json"));
   console.log(
     "Entry menu acceptance passed: both panes, nested actions, empty folders, independent drafts, move/copy/delete, download, print layout and touch.",
   );

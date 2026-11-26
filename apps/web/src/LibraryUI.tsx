@@ -403,7 +403,7 @@ export function LibraryPanes({
   open: (path: string) => void;
   panes: Panes;
   vault?: ReactNode;
-  create: ReactNode;
+  create: (anchor: HTMLButtonElement) => void;
   trash: { active: boolean; open: () => void; disabled?: boolean; list: ReactNode };
   avatar: ReactNode;
   searchContent: (query: string) => Promise<string[]>;
@@ -512,7 +512,8 @@ export function LibraryPanes({
         </header>
       ) : avatar}
       {vault}
-      {!phone && create}
+      {!phone && <button className="primary create-button" aria-label="新建笔记" aria-haspopup="dialog"
+        disabled={busy || !entries} onClick={e => create(e.currentTarget)}>＋　新建笔记</button>}
       <div className="side-files">
         <button aria-label="全部笔记" className={"all-notes" + (!trash.active && !starredOnly && folder === null ? " current" : "")}
           onClick={() => { if (!allNotes || allNotes()) pickFolder(null); }}>
@@ -596,8 +597,8 @@ export function LibraryPanes({
           <button
             className="phone-new"
             aria-label="新建"
-            data-phone-create
-            data-library-path={folder || ""}
+            aria-haspopup="dialog"
+            onClick={e => create(e.currentTarget)}
             disabled={busy || !entries}
           >
             <i>
