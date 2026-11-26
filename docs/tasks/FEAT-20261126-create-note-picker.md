@@ -31,3 +31,5 @@
 - 在任务 worktree 运行 `./scripts/local.py start --port 18276`。访问 `http://localhost:18276`，试用账号和密码保存在 `dist/local/preview-login.txt`。已为该帐号创建「我的笔记库」。点击「新建笔记」，选择 Markdown 或思维导图，确认路径并打开笔记；也可在更多方式中上传文件或文件夹。
 - 独立实例 PID 63371，日志 `dist/local/server.log`，数据 `services/api/data`，健康检查 `curl -fsS http://localhost:18276/healthz` 返回 `ok`。验收结束后从本 worktree 运行 `./scripts/local.py stop`。
 - Web 产物 `apps/web/dist`，实拍 `dist/local/create-note-window.png`。桌面客户端 `target/debug/wenote-desktop`，运行 `./target/debug/wenote-desktop` 后可连接同一服务。
+
+- 2026-11-26 `DELIVERED`，方式 2 交付受测提交 `1e71f9b`。任务分支、工作区和独立实例保留至用户验收。
