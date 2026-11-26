@@ -1,6 +1,6 @@
 # FEAT-20261125-share-duration · 文档分享有效期与分组
 
-- `feature`，server / web，`ACCEPTED`。用户选择方式 2，在任务分支验收，通过后合入本地 main。
+- `feature`，server / web，`MERGED`。用户选择方式 2，在任务分支验收，通过后合入本地 main。
 - 基线 `main` 的 `20f8979`。分支 `codex/feature-share-duration-20261125`，worktree 为 `/Users/weifei/code/we-note/.worktrees/share-duration-20261125`。
 - 原始需求为「文档的分享弹出界面，添加分享天数选择的功能吧，选择1天3天7天永久这样。 在用户设置的地方，分享的文档按笔记本查看，停止分享或者过期后删除显示」。
 - 验收时从笔记弹窗选择 1 天、3 天、7 天或永久，默认 7 天。个人设置显示本账号各笔记本的有效分享。停止或到期时移除条目并收回访客访问权限，源笔记和已保存的副本保留。
@@ -38,3 +38,7 @@
 ## 验收与合入 · 2026-11-26
 
 用户确认 `8c3b95b` 验收完毕。按方式 2 整合本地 `main` 的笔记加星功能，保留两项任务的账本条目。
+
+`npm run build --prefix apps/web` 及 `phase1.mjs`、`phase5.mjs`、`starred-notes.mjs` 浏览器回归均退出 0。集成提交 `4650781` 已快进合入本地 `main`，`git merge-base --is-ancestor 8c3b95b main` 退出 0。
+
+2026-11-26 已停止 19526 端口的验收实例。验收数据、构建产物和日志已归档到 `dist/acceptance/FEAT-20261125-share-duration-8c3b95b/` 并逐文件核对，已移除任务 worktree 和本地分支。
