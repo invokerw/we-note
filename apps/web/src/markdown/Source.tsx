@@ -104,7 +104,7 @@ export default function Source({
   onChange: (v: string) => void;
   label: string;
   focus?: boolean;
-  language?: "markdown" | "json";
+  language?: "markdown" | "json" | "text";
   editor?: RefObject<EditorView | null>;
   live?: boolean;
   io?: MarkdownIO;
@@ -137,13 +137,16 @@ export default function Source({
             placeholder("开始写作…"),
           ]
         : [basicSetup, Prec.highest(keymap.of([indentWithTab]))],
+      language === "markdown"
+        ? markdown({ base: markdownLanguage, codeLanguages: fenceLanguage })
+        : language === "json" ? json() : [],
       EditorView.contentAttributes.of({
         "aria-label": label,
         role: "textbox",
         "aria-multiline": "true",
       }),
     ],
-    [live, label],
+    [live, label, language],
   );
   useEffect(() => {
     const cm = new EditorView({
@@ -151,7 +154,6 @@ export default function Source({
       doc: text,
       extensions: [
         compartment.of(setup),
-        language === "json" ? json() : markdown({ base: markdownLanguage, codeLanguages: fenceLanguage }),
         EditorView.lineWrapping,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {

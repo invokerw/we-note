@@ -4,7 +4,7 @@ import MindElixir from "mind-elixir";
 export type Topic = MindElixir["currentNodes"][number];
 export type MindMenuTarget = { x: number; y: number; node: Topic | null };
 export type Detail = "备注" | "标签" | "移动到" | "关系箭头" | "双向箭头";
-export type FileActions = { save?: () => void; exportFile?: () => void };
+export type FileActions = { exportFile?: () => void };
 
 type MenuProps = FileActions & {
   mind: MindElixir;
@@ -19,7 +19,6 @@ export function MindMenu({
   target,
   close,
   details,
-  save,
   exportFile,
   change,
 }: MenuProps) {
@@ -107,7 +106,6 @@ export function MindMenu({
           <hr />
         </>
       )}
-      {save && item("保存", save)}
       {exportFile && item("导出当前文件", exportFile)}
       {!node && (
         <>

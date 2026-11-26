@@ -4,7 +4,7 @@ import { markdownWritingMode } from "./markdown/modes";
 import { PluginEditor } from "./plugins/PluginEditor";
 import { fromBase64, type ExportFile } from "./plugins/archive";
 import { isMindMap } from "./plugins/mindFile";
-import { handlerKey, usesPluginEditor } from "./plugins/registry";
+import { handler, handlerKey, openTextDocument } from "./plugins/registry";
 import PersonalSettings, { SettingsButton, useAccountProfile, type ProfileRequest } from "./PersonalSettings";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo, useCallback, useId } from "react";
@@ -149,6 +149,7 @@ function Workspace({
     path => path, notify,
   );
   const originalHandler = useRef("");
+  const [saveHost, setSaveHost] = useState<HTMLSpanElement | null>(null);
   const [localHandler, setLocalHandler] = useState("");
   const [trash, setTrash] = useState<TrashedFile[]>([]);
   const [trashKey, setTrashKey] = useState('');
@@ -181,8 +182,9 @@ function Workspace({
   const panelId = useId();
   const [panelOpen, setPanelOpen] = useState(false);
   const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
+  const markdown = localHandler.startsWith("com.wenote.md:");
   const showMindMap = !!pluginBytes && isMindMap(path);
-  const hasInfo = showMindMap || /\.md$/i.test(path);
+  const hasInfo = showMindMap || !pluginBytes;
   const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     editor = useRef<EditorView | null>(null),
@@ -204,7 +206,7 @@ function Workspace({
   function changeMode(next: Mode) {
     setMode(next);
     if (
-      next !== "edit" && /\.md$/i.test(path) &&
+      next !== "edit" && markdown &&
       markdownPreferences(preferencesRef.current).rememberNoteMode
     )
       saveNoteMode(vault, path, next);
@@ -295,16 +297,14 @@ function Workspace({
       return;
     }
     if (!discardConfirmed && !leave()) return;
-    const special = usesPluginEditor(p);
-    const result = await local<{ text?: string; data?: string; hash: string }>(
-      vault,
-      special ? "read_bytes" : "read",
-      { path: p },
-    );
+    const plugin = handler(p);
+    const result = await local<{ data: string; hash: string }>(vault, "read_bytes", { path: p });
+    const bytes = fromBase64(result.data);
+    const doc = openTextDocument(plugin, bytes);
     setLocalHandler(handlerKey(p));
-    setPluginBytes(special ? fromBase64(result.data!) : null);
+    setPluginBytes(doc ? null : bytes);
     setPluginDirty(false);
-    source.current = new TextFile(result.text || "");
+    source.current = doc ?? new TextFile("");
     setText(source.current.text);
     setSaved(source.current.text);
     setBase(result.hash);
@@ -313,15 +313,15 @@ function Workspace({
     panes.setPane("doc");
     setView("笔记");
     setLinks([]);
-    const md = /\.md$/i.test(p);
+    const md = plugin.manifest.id === "com.wenote.md";
     const settings = markdownPreferences(preferencesRef.current);
     const remembered = md && settings.rememberNoteMode
       ? loadNoteMode(vault, p)
       : undefined;
     const preferred = remembered ?? settings.defaultMode;
     let nextMode: Mode = "read";
-    if (!special && writing) nextMode = md ? markdownWritingMode(remembered, settings.defaultMode) : "edit";
-    else if (!special && !phone && md) nextMode = preferred;
+    if (doc && writing) nextMode = md ? markdownWritingMode(remembered, settings.defaultMode) : "edit";
+    else if (doc && !phone) nextMode = md ? preferred : "edit";
     setMode(nextMode);
     notify("");
   }
@@ -410,7 +410,7 @@ function Workspace({
     }
   }
   function formatBeforeSave() {
-    if (!/\.md$/i.test(path) || !markdownSettings.autoFormatOnSave) return;
+    if (!markdown || !markdownSettings.autoFormatOnSave) return;
     const current = source.current.text,
       formatted = formatMarkdown(current, markdownSettings).text,
       cm = editor.current;
@@ -510,7 +510,7 @@ function Workspace({
     const value = "\n" + links.join("\n") + "\n";
     if (file === source.current && !insertHere?.(value)) {
       edit(file.text + value);
-      changeMode(/\.md$/i.test(path) ? "split" : "edit");
+      changeMode(markdown ? "split" : "edit");
     }
   }
   const backlinkList = links.length ? links.map((hit) => (
@@ -527,7 +527,7 @@ function Workspace({
       output={output}
       dirty={setPluginDirty}
       notify={notify}
-
+      saveHost={saveHost}
     />
   ) : (
     <>
@@ -555,18 +555,18 @@ function Workspace({
           }}
           key={path}
           focusSource={phone && (mode === "edit" || mode === "split")}
-          attach={() => picker.current?.click()}
-          markdown={/\.md$/i.test(path)}
+          attach={markdown ? () => picker.current?.click() : undefined}
+          markdown={markdown}
           text={text}
           edit={edit}
           mode={mode}
           setMode={changeMode}
           editor={editor}
           preferences={
-            /\.md$/i.test(path) ? markdownSettings : undefined
+            markdown ? markdownSettings : undefined
           }
           onPreferencesChange={
-            /\.md$/i.test(path)
+            markdown
               ? (patch) =>
                   updatePluginSetting("com.wenote.md", {
                     ...markdownSettings,
@@ -613,7 +613,7 @@ function Workspace({
       data-columns={panes.columns}
       onPasteCapture={(e) => {
         if (
-          !pluginBytes &&
+          markdown && !pluginBytes &&
           view === "笔记" &&
           editing &&
           e.clipboardData.files.length
@@ -775,7 +775,7 @@ function Workspace({
                       ? {
                           back,
                           dirty,
-                          edit: () => changeMode(/\.md$/i.test(path) ? markdownWritingMode(
+                          edit: () => changeMode(markdown ? markdownWritingMode(
                             markdownSettings.rememberNoteMode ? loadNoteMode(vault, path) : undefined,
                             markdownSettings.defaultMode,
                           ) : "edit"),
@@ -791,7 +791,7 @@ function Workspace({
                   endAction={<><StarButton stars={stars} path={path}/>{hasInfo && <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}</>}
                   mode={mode}
                   change={pluginBytes ? undefined : changeMode}
-                  markdown={/\.md$/i.test(path)}
+                  markdown={markdown}
                   busy={busy}
                   share={
                     binding.android && !pluginBytes
@@ -816,7 +816,7 @@ function Workspace({
                       : undefined
                   }
                   save={
-                    !pluginBytes && (
+                    pluginBytes ? <span ref={setSaveHost} /> : (
                       <button
                         className="save-button"
                         disabled={busy || text === saved}
@@ -828,6 +828,9 @@ function Workspace({
                   }
                   more={
                     <>
+                      {!pluginBytes && <button disabled={busy} onClick={() => run(async () => {
+                        await output(path.split("/").at(-1)!, await entries.read(path));
+                      })}>下载原文件</button>}
                       {!phone && (
                         <button
                           onClick={() =>

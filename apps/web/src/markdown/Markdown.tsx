@@ -145,7 +145,8 @@ export function Document({
     <Source
       editor={editor}
       focus={focusSource}
-      label="笔记源码"
+      language={markdown ? "markdown" : "text"}
+      label={markdown ? "笔记源码" : "纯文本正文"}
       text={text}
       onChange={edit}
     />
@@ -207,7 +208,7 @@ export function Document({
         }
       }}
     >
-      {(mode === "edit" || mode === "split") && (
+      {(markdown || attach) && (mode === "edit" || mode === "split") && (
         <nav className="format-bar" aria-label="编辑工具">
           {markdown &&
             formats.map(([symbol, label, before, after, sample]) => (

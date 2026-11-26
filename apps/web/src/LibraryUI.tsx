@@ -159,6 +159,7 @@ export function NoteHeading({
             {mode === "read" ? (handset.dirty ? "保存" : "编辑") : "完成"}
           </button>
         )}
+        {!change && save}
         {endAction}
         <button aria-label="更多操作" onClick={() => setSheet("more")}><PhoneIcon name="more" /></button>
         {sheet && (

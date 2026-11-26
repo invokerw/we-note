@@ -1007,6 +1007,14 @@ pre {
   margin: 0 auto;
   padding: 24px clamp(20px, 3vw, 48px);
 }
+.document-mode > pre {
+  flex: 1;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .mode-label {
   display: inline-flex;
   gap: 6px;

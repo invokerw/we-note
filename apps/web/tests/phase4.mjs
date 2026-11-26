@@ -208,14 +208,26 @@ try {
   assert.equal(await page.getByLabel("分屏编辑同步滚动").isChecked(), false);
   await click("关闭个人设置");
   await click("values.json");
-  const plain = page.getByRole("textbox", { name: "默认文本编辑器" });
-  assert.match(await plain.inputValue(), /9007199254740993/);
-  await plain.fill('{"changed":true}\n');
+  assert.equal(await page.locator(".document .plugin-document .toolbar").count(), 0, "纯文本正文不显示插件工具栏");
+  const plain = page.locator('.note-content:not([inert]) .document-mode:not([data-markdown-theme]) .cm-content');
+  const headerSave = page.locator('.document-head .head-actions').getByRole('button', {name:'保存', exact:true});
+  async function plainValue() {
+    await plain.waitFor();
+    return (await plain.locator('.cm-line').allTextContents()).join('\n');
+  }
+  async function replacePlain(value) {
+    await plain.focus();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText(value);
+  }
+  await plain.waitFor();
+  assert.match(await plainValue(), /9007199254740993/);
+  await replacePlain('{"changed":true}\n');
   await click("保存");
   await page.getByRole("status").filter({ hasText: "已保存新版本" }).waitFor();
   assert.equal((await content(jsonId)).toString(), '\uFEFF{"changed":true}\r\n');
-  assert.deepEqual(await exportBytes("导出当前文件"), await content(jsonId));
-  await plain.fill('{"draft":true}');
+  assert.equal(await page.getByRole("button", {name:"导出当前文件",exact:true}).count(), 0);
+  await replacePlain('{"draft":true}');
   const latest = (await (await api(`${route}/${jsonId}`)).json())
     .current_version_id;
   await api(`${route}/${jsonId}/content`, "PUT", {
@@ -227,7 +239,7 @@ try {
     .getByRole("status")
     .filter({ hasText: "文件已有新版本" })
     .waitFor();
-  assert.match(await plain.inputValue(), /draft/);
+  assert.match(await plainValue(), /draft/);
   assert.equal((await content(jsonId)).toString(), '{"remote":true}');
   page.once("dialog", (d) => d.accept());
   await click("prefixed.txt");
@@ -240,11 +252,16 @@ try {
   };
   for (const name of ["表格.csv", "运行.log", "README"]) {
     await upload(name, Buffer.from("初稿\r\n"));
-    assert.equal(await plain.inputValue(), "初稿\n");
-    await plain.fill("已修改\n");
-    await click("保存");
-    await button("保存").waitFor();
-    assert.deepEqual(await exportBytes("导出当前文件"), Buffer.from("已修改\r\n"));
+    assert.equal(await plainValue(), "初稿\n");
+    const editorBox = await plain.locator('xpath=ancestor::div[contains(@class,"cm-editor")]').boundingBox();
+    const bodyBox = await page.locator('.document-body.note-workspace').boundingBox();
+    assert.ok(editorBox.width >= bodyBox.width - 32 && editorBox.height >= bodyBox.height - 32, JSON.stringify({editorBox, bodyBox}));
+    await replacePlain("# 原样的 **文本**\n");
+    const saved = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/content'));
+    await headerSave.click();
+    assert.equal((await saved).status(), 200);
+    const note = (await (await api(route)).json()).files.find(file => file.path === name);
+    assert.deepEqual(await content(note.file_id), Buffer.from("# 原样的 **文本**\r\n"));
   }
   await upload("路线.xmind", raw);
   await page.getByRole("alert").filter({hasText: "UTF-8"}).waitFor();
@@ -312,7 +329,22 @@ try {
   await click("禁用 带标记的文本");
   await click("关闭个人设置");
   await click("prefixed.txt");
-  assert.equal(await plain.inputValue(), "WN1\n修改后");
+  assert.equal(await plainValue(), "WN1\n修改后");
+  await click("打开个人设置");
+  await click("编辑与插件");
+  await click("禁用 Markdown");
+  await click("关闭个人设置");
+  await click("自动格式化.md");
+  await replacePlain("# 标题 **原样**\n你好world  ");
+  const fallbackSave = page.waitForResponse(r => r.request().method() === "PUT" && r.url().endsWith("/content"));
+  await headerSave.click();
+  assert.ok((await fallbackSave).ok());
+  assert.equal((await content(formatId)).toString(), "# 标题 **原样**\n你好world  ");
+  await click("编辑模式");
+  await click("预览模式");
+  const preview = page.locator('.document-mode.mode-read > pre');
+  assert.equal(await preview.textContent(), "# 标题 **原样**\n你好world  ");
+  assert.equal(await preview.locator('h1, strong').count(), 0);
   assert.deepEqual(errors, []);
   console.log(
     "Phase 4 browser passed: text fallback, binary original download, Markdown editing, WASM installation, persistence, and permissions.",

@@ -4,7 +4,7 @@ import { NoteInfoToggle, NoteInfoPanel } from "./NoteInfo";
 import { NoteHeading } from "./LibraryUI";
 import { PluginEditor } from "./plugins/PluginEditor";
 import { browserExport } from "./plugins/archive";
-import { handler, usesPluginEditor } from "./plugins/registry";
+import { handler, defaultEditorId, openTextDocument } from "./plugins/registry";
 import { TextFile } from "./markdown/textFile";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { RichWriting } from "./markdown/crepeSource";
@@ -115,11 +115,16 @@ export default function Editor({
     setShareURL(await pendingShare.current());
     pendingShare.current = null;
   }
+  const [plugin] = useState(() => handler(note.path));
+  const markdown = plugin.manifest.id === "com.wenote.md";
+  const plain = plugin.manifest.id === defaultEditorId;
+  const [saveHost, setSaveHost] = useState<HTMLSpanElement | null>(null);
   const markdownSettings = markdownPreferences(preferences);
   const [text, setText] = useState(""),
     [base, setBase] = useState(""),
     [mode, setMode] = useState<Mode | "history">(() => {
-      if (phoneBack || note.format !== "md") return "read";
+      if (phoneBack) return "read";
+      if (!markdown) return plain ? "edit" : "read";
       return (
         (markdownSettings.rememberNoteMode
           ? loadNoteMode(vault, note.file_id)
@@ -129,13 +134,13 @@ export default function Editor({
     [versions, setVersions] = useState<Version[]>([]),
     [history, setHistory] = useState(""),
     [busy, setBusy] = useState(false);
-  const [special] = useState(() => usesPluginEditor(note.path));
   const panelId = useId();
   const [panelOpen, setPanelOpen] = useState(false);
   const [metadataHost, setMetadataHost] = useState<HTMLDivElement | null>(null);
   const loadBacklinks = useCallback(async () => (await request(token,
     `/api/v1/vaults/${vault}/links/backlinks?file_id=${encodeURIComponent(note.file_id)}`)).json(), [token, vault, note.file_id]);
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
+  const special = (!markdown && !plain) || bytes !== null;
   const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     saved = useRef("");
@@ -147,21 +152,15 @@ export default function Editor({
       .then(async (r) => {
         const buf = new Uint8Array(await r.arrayBuffer());
         if (!live) return;
-        if (special) {
+        const doc = openTextDocument(plugin, buf);
+        if (doc) {
+          source.current = doc;
+          saved.current = doc.text;
+          setText(doc.text);
+        } else {
           setBytes(buf);
-          setBase(r.headers.get("X-Version-Id") || note.current_version_id);
-          return;
         }
-        const str = new TextDecoder("utf-8", {
-          fatal: true,
-          ignoreBOM: true,
-        }).decode(buf);
-        if (live) {
-          source.current = new TextFile(str);
-          saved.current = source.current.text;
-          setText(source.current.text);
-          setBase(r.headers.get("X-Version-Id") || note.current_version_id);
-        }
+        setBase(r.headers.get("X-Version-Id") || note.current_version_id);
       })
       .catch((e) => {
         if (live) notify(e.message);
@@ -177,7 +176,7 @@ export default function Editor({
   }
   function changeMode(next: Mode) {
     setMode(next);
-    if (next !== "edit" && note.format === "md" && markdownSettings.rememberNoteMode)
+    if (next !== "edit" && markdown && markdownSettings.rememberNoteMode)
       saveNoteMode(vault, note.file_id, next);
   }
   function changeMarkdownSettings(
@@ -199,7 +198,7 @@ export default function Editor({
     }
   }
   function formatBeforeSave() {
-    if (note.format !== "md" || !markdownSettings.autoFormatOnSave) return;
+    if (!markdown || !markdownSettings.autoFormatOnSave) return;
     const current = source.current.text,
       formatted = formatMarkdown(current, markdownSettings).text,
       cm = editor.current;
@@ -268,7 +267,7 @@ export default function Editor({
     const inserted = "\n" + parts.join("\n") + "\n";
     if (!insertHere?.(inserted)) {
       edit(source.current.text + inserted);
-      setMode(note.format === "md" ? "split" : "edit");
+      setMode(markdown ? "split" : "edit");
     }
   }
   const draftShare = pluginDirty || text !== saved.current;
@@ -299,18 +298,18 @@ export default function Editor({
       className="document"
       onPasteCapture={(e) => {
         const dropped = Array.from(e.clipboardData.files);
-        if (!special && editing && dropped.length) {
+        if (markdown && !special && editing && dropped.length) {
           e.preventDefault();
           e.stopPropagation();
           if (!busy) run(() => insert(dropped));
         }
       }}
       onDragOver={(e) => {
-        if (editing && e.dataTransfer.types.includes("Files"))
+        if (markdown && !special && editing && e.dataTransfer.types.includes("Files"))
           e.preventDefault();
       }}
       onDropCapture={(e) => {
-        if (editing && e.dataTransfer.files.length) {
+        if (markdown && !special && editing && e.dataTransfer.files.length) {
           e.preventDefault();
           e.stopPropagation();
           if (!busy) run(() => insert(Array.from(e.dataTransfer.files)));
@@ -318,7 +317,7 @@ export default function Editor({
       }}
       onKeyDown={(e) => {
         if (
-          editing &&
+          !special && editing &&
           (e.ctrlKey || e.metaKey) &&
           e.key === "s"
         ) {
@@ -362,7 +361,7 @@ export default function Editor({
         handset={phoneBack && {
           back: phoneBack,
           dirty: text !== saved.current,
-          edit: () => setMode(note.format === "md" ? markdownWritingMode(
+          edit: () => setMode(markdown ? markdownWritingMode(
             markdownSettings.rememberNoteMode ? loadNoteMode(vault, note.file_id) : undefined,
             markdownSettings.defaultMode,
           ) : "edit"),
@@ -374,14 +373,14 @@ export default function Editor({
         path={note.path}
         mode={mode}
         change={special ? undefined : changeMode}
-        markdown={note.format === "md"}
+        markdown={markdown}
         busy={busy}
         endAction={
           <><StarButton stars={stars} path={note.path}/><NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} /></>
         }
         share={{ label: "分享", run: openShare }}
         save={
-          !special && (
+          special ? <span ref={setSaveHost} /> : (
             <button
               className="save-button"
               disabled={busy || !base || text === saved.current}
@@ -457,7 +456,7 @@ export default function Editor({
               output={browserExport}
               dirty={value => { setPluginDirty(value); dirty(value); }}
               notify={notify}
-
+              saveHost={mode === "history" ? null : saveHost}
             />
           </div>
         )}
@@ -471,7 +470,7 @@ export default function Editor({
                       run(async () => {
                         if (
                           note.format === "xmind" ||
-                          (special && handler(note.path).wasm)
+                          (special && plugin.wasm)
                         ) {
                           await download(
                             token,
@@ -511,16 +510,16 @@ export default function Editor({
               }}
               metadataHost={panelOpen ? metadataHost : null}
               resolveNote={raw => resolvePath(note.path, raw, files.map(f => f.path))}
-              attach={() => assetPicker.current?.click()}
-              markdown={note.format === "md"}
+              attach={markdown ? () => assetPicker.current?.click() : undefined}
+              markdown={markdown}
               text={text}
               edit={edit}
               mode={mode as Mode}
               setMode={changeMode}
               editor={editor}
-              preferences={note.format === "md" ? markdownSettings : undefined}
+              preferences={markdown ? markdownSettings : undefined}
               onPreferencesChange={
-                note.format === "md" ? changeMarkdownSettings : undefined
+                markdown ? changeMarkdownSettings : undefined
               }
               io={{
                 image: (src, alt) => (

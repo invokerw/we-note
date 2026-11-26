@@ -16,6 +16,13 @@
 - [x] 支持导入、保存与跨设备同步其他 UTF-8 文本（含 .csv、.log 和无扩展名文件），保留文件名、目录、内容和版本。
 - [x] 新建 Markdown 和思维导图的路径保持可用。
 
+### 第二轮界面验收条件
+
+- [x] 默认文本文件使用 `Document`，按纯文本显示与编辑，正文占满标题下方可用宽度和高度。
+- [x] 正文移除截图中的保存、导出和「默认文本编辑器」标签。所有可编辑文件统一从右上角保存。
+- [x] Markdown 标记作为普通字符，文本保存保留 BOM、换行和空行；已禁用 Markdown 插件的 `.md` 同样按纯文本打开。
+- [x] 验证 Markdown、思维导图和 WASM 的右上角保存、只读插件和二进制下载，并在原入口交付。
+
 ## 状态与验证
 
 - 2026-11-26 `PLANNED`，登记需求和验收条件。
@@ -42,3 +49,14 @@
 - 启动 `./scripts/local.py start --port 18946`，停止 `./scripts/local.py stop`。日志 `dist/local/server.log`，数据库 `services/api/data/wenote.db`。
 - 使用交付消息中的本地验收账号，打开「编辑器验收」笔记库；亦可注册普通账号，创建笔记库并自行上传文件。
 - 在「个人设置 → 编辑与插件」查看内置列表。打开 `配置.json` 或 `示例.csv`，修改后保存并重新打开；打开 `旧版格式.xmind` 可下载原件。通过新建菜单可分别验证 Crepe 和 Mind Elixir。
+
+- 2026-11-26 `CHANGES_REQUESTED`，用户要求移除截图红框内的正文操作，采用全幅 Document 纯文本视图，保存统一进入右上角功能区。沿用方式 2。
+
+### 第二轮交付
+
+- 红阶段，使用独立服务执行 `WENOTE_TEST_ORIGIN=http://localhost:18946 node tests/phase4.mjs`（在 `apps/web` 中），退出 1，旧版 CSV/JSON 使用 textarea，没有全幅 Document。
+- 绿阶段，同一命令退出 0。验证编辑区几何尺寸、文本原样预览、禁用 Markdown 后的编辑和保存、BOM/CRLF、写入冲突、只读插件和二进制原件下载。
+- `node tests/native-editors.mjs`、`WENOTE_TEST_ORIGIN=http://localhost:18946 node tests/theme.mjs` 和 `node --test tests/*.test.mjs` 均退出 0。验证思维导图从标题栏保存、Crepe 编辑和响应式布局；单元测试 11 个通过。
+- `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web` 和 `cargo build --locked -p wenote-desktop` 均退出 0。macOS 客户端产物为本 worktree 的 `target/debug/wenote-desktop`。Android 测试脚本通过语法检查，本机缺少上轮记录的 Android SDK，未验证 APK。
+- 自审复查保存权限、快捷键、二进制下载、编辑器切换与附件入口；纯文本不加载 Markdown 语言扩展或自动格式化。`git diff --check` 通过。
+- `DELIVERED`。继续使用原服务、账号及方式 2。打开「示例.csv」可直接输入，并在右上角保存。在 1440 × 850 浏览器视口中，正文和编辑器同为 925 × 775 像素。实测截图 `dist/local/csv-editor.png`。

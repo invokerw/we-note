@@ -237,7 +237,7 @@ try {
   await page.getByRole("dialog", { name: "备注" }).getByRole("textbox").fill("下周访谈");
   await checkCanvasBounds();
   await button("确定").click();
-  const saveMap = () => saveFile(map, () => canvasAction("保存"));
+  const saveMap = () => saveFile(map, () => page.locator(".document-head .head-actions").getByRole("button", { name: "保存", exact: true }).click());
   const saved = JSON.parse(await saveMap());
   assert.equal(saved.nodeData.children[0].note, "下周访谈");
   await button("普通.json").click();

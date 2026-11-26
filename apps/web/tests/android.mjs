@@ -276,13 +276,15 @@ try {
     await button(section).click();
   }
   await pickLocal(logName);
-  const plain = page.getByRole("textbox", { name: "默认文本编辑器" });
+  await tap(button("编辑"));
+  const plain = page.getByRole("textbox", { name: "纯文本正文" });
   await plain.fill("周五验收");
-  await button("保存").click();
+  await tap(button("完成"));
   await pickLocal("原稿.md");
   await pickLocal(logName);
-  assert.equal(await plain.inputValue(), "周五验收");
-  await button("导出当前文件").click();
+  await page.locator(".document-mode > pre").getByText("周五验收").waitFor();
+  await tap(button("更多操作"));
+  await button("下载原文件").click();
   let picker = false;
   for (let i = 0; i < 30; i++) {
     picker = /mCurrentFocus=Window\{[^\n]*documentsui/i.test(

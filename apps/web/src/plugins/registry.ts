@@ -1,4 +1,5 @@
 import { isMindMap, mindSuffix } from "./mindFile";
+import { TextFile } from "../markdown/textFile";
 import { base64 } from "../api";
 import { decodeText, fromBase64, noteLimit, unpack } from "./archive";
 const key = "wenote-plugins-v1";
@@ -65,8 +66,14 @@ export function handlerKey(path: string) {
   const plugin = handler(path);
   return `${plugin.manifest.id}:${plugin.hash || plugin.manifest.version}`;
 }
-export function usesPluginEditor(path: string) {
-  return handler(path).manifest.id !== "com.wenote.md";
+export function openTextDocument(plugin: Plugin, bytes: Uint8Array): TextFile | null {
+  if (plugin.manifest.id !== "com.wenote.md" && plugin.manifest.id !== defaultEditorId) return null;
+  try {
+    return new TextFile(decodeText(bytes));
+  } catch {
+    // Keep the original bytes available for download when text decoding fails.
+    return null;
+  }
 }
 export function setEnabled(id: string, enabled: boolean) {
   const s = settings();

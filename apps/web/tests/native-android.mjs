@@ -82,7 +82,7 @@ export async function verifyAndroid(origin, email, password) {
     const dock = await info.boundingBox(), reduced = await mapSurface().boundingBox();
     assert.ok(Math.abs(reduced.y + reduced.height - dock.y) <= 1);
     await button("笔记信息").click();
-    await longPressAction("保存");
+    await page.locator(".phone-document-head").getByRole("button", { name: "保存", exact: true }).click();
     await page.getByText("已保存到本地目录").waitFor();
     await button("返回笔记列表").click();
     await button("笔记.md").click();

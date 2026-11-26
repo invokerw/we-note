@@ -20,7 +20,6 @@ export default function MindCanvas({
   source,
   change,
   select,
-  save,
   exportFile,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -196,7 +195,6 @@ export default function MindCanvas({
           mind={mind}
           target={menu}
           change={change}
-          save={save}
           exportFile={exportFile}
           close={() => setMenu(null)}
           details={(node, kind) => setDetail({ node, kind })}

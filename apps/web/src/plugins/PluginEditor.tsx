@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { TextFile } from "../markdown/textFile";
 import { decodeText, utf8, type ExportFile } from "./archive";
 import { handler, invoke } from "./registry";
@@ -8,6 +9,7 @@ export function PluginEditor({
   path,
   bytes,
   save,
+  saveHost,
   output,
   dirty,
   notify,
@@ -15,6 +17,7 @@ export function PluginEditor({
   path: string;
   bytes: Uint8Array;
   save: (bytes: Uint8Array) => Promise<void>;
+  saveHost: HTMLElement | null;
   output: ExportFile;
   dirty: (v: boolean) => void;
   notify: (msg: string) => void;
@@ -111,17 +114,13 @@ export function PluginEditor({
         }
       }}
     >
+      {saveHost && ready && caps.includes("serialize") && createPortal(
+        <button className="save-button" disabled={busy || !modified} onClick={saveChanges}>
+          {modified ? "保存" : "已保存"}
+        </button>, saveHost,
+      )}
       <div inert={busy}>
         {!isMind && <div className="toolbar">
-          {ready && caps.includes("serialize") && (
-            <button
-              className="primary"
-              disabled={!modified}
-              onClick={saveChanges}
-            >
-              保存
-            </button>
-          )}
           {ready && caps.includes("export") && (
             <button
               onClick={exportCurrent}
@@ -140,7 +139,7 @@ export function PluginEditor({
         ) : ready ? (
           isMind ? (
             <Suspense fallback="正在载入导图…"><MindCanvas source={originalMindText.current} change={edit}
-              save={caps.includes("serialize") ? saveChanges : undefined} exportFile={caps.includes("export") ? exportCurrent : undefined} /></Suspense>
+              exportFile={caps.includes("export") ? exportCurrent : undefined} /></Suspense>
           ) : (
             <label>
               {plugin.manifest.name}
