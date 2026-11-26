@@ -1,6 +1,6 @@
 # WeNote 文件插件 SDK v1
 
-开发、打包及验收约定见[文件插件开发规范（草案）](../../../docs/插件开发规范.md)。
+开发、打包及验收约定见[文件插件开发规范](../../../docs/插件开发规范.md)。
 
 在 `apps/web` 运行 `npm ci` 和 `node plugin-sdk/pack.mjs plugin-sdk/example /tmp/prefixed-text.zip` 可生成示例插件。从「插件」选择 ZIP，核对来源文件名、SHA-256、扩展名和权限后授权安装。示例打开第一行为 `WN1` 的 TXT，编辑时隐藏标记，保存时写回标记。「英文转大写」按钮通过可选清单字段 `actions` 调用 `action_uppercase`，只改变当前草稿。
 

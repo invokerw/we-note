@@ -1,6 +1,6 @@
 # 本地文件插件与右侧文档区
 
-2026-11-26 · `feature` · Web、桌面、Android · `DELIVERED`
+2026-11-26 · `feature` · Web、桌面、Android · `MERGED`
 
 基线为本地 `main` 的 `23b26aa`，分支为 `codex/feature-plugin-document-ui-20261126`，工作目录为 `.worktrees/plugin-document-ui-20261126`。用户选择方式 2，先在任务分支验收，通过后再合入 main。预期改动集中在客户端，使用任务 worktree 构建 Web 和桌面前端。
 
@@ -46,3 +46,7 @@
 新增 `phase4.mjs` 顺序断言首次运行退出 1，实际为「保存、加星、笔记信息、分享、更多」。Web、桌面和 Android 共用固定操作片段后，宽屏与手机顺序断言通过。自审扩测发现 320 像素宽度下「更多」溢出（退出 1），调整手机插件标题栏换行后，在 320 和 390 像素宽度均通过。
 
 使用原服务执行 `WENOTE_TEST_ORIGIN=http://localhost:19876 node apps/web/tests/phase4.mjs` 及同环境的 `phase2.mjs`，并执行 `node apps/web/tests/native-editors.mjs`，均退出 0。Web 与桌面前端构建、macOS 客户端构建和 `git diff --check` 均退出 0。已同步更新 Android 设备脚本，本机缺少 Android SDK，未实测设备。原服务和账号继续用于验收，刷新网页即加载本轮构建。第二轮提交可用 `git log -1 --format=%h -- apps/web/src/NoteInfo.tsx` 查询。
+
+## 验收归档
+
+2026-11-26 16:30（上海时间），用户确认验收完毕，记录为 `ACCEPTED`。本地 `main` 已快进至受测提交 `abf65b8`，`git merge-base --is-ancestor abf65b8 main` 和 `git diff --exit-code abf65b8 main` 均退出 0。验收服务已停止，任务 worktree 与对应本地分支已删除，状态更新为 `MERGED`。示例插件包及 macOS 可执行文件保存在 `dist/acceptance/FEAT-20261126-plugin-document-ui-abf65b8/`。
