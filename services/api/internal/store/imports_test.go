@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -73,11 +74,19 @@ func TestPortableVaultImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stageDir := t.TempDir()
+	// os.TempDir uses TMPDIR on Unix and TMP on Windows.
+	t.Setenv("TMPDIR", stageDir)
+	t.Setenv("TMP", stageDir)
 	for _, name := range []string{"manifest.json", "asset-manifest.json", "checksums.sha256", "notes/项目/周报.md"} {
 		damaged := changeImportEntry(t, data, name)
 		if _, err := r.PreviewImport(ctx, user.ID, target.ID, bytes.NewReader(damaged)); err == nil {
 			t.Fatal("accepted invalid archive", name)
 		}
+	}
+	stale, err := filepath.Glob(filepath.Join(stageDir, "wenote-portable-*.zip"))
+	if err != nil || len(stale) != 0 {
+		t.Fatalf("staged ZIP after rejected preview: %v, %v", stale, err)
 	}
 	guest, err := r.CreateUser(ctx, "viewer@local.test", "hash")
 	if err != nil {

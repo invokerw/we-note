@@ -60,10 +60,9 @@ jobs:
           distribution: temurin
           java-version: 21
       - if: matrix.platform == 'android-arm64'
-        run: |
-          sdkmanager 'platforms;android-36' 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;27.2.12479018'
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-          rustup target add aarch64-linux-android
+        uses: ./.github/actions/setup-android-sdk
+      - if: matrix.platform == 'android-arm64'
+        run: rustup target add aarch64-linux-android
       - name: Set installer version and icons
         run: |
           npm exec -- tauri icon src-tauri/icons/icon.png --output src-tauri/release-icons
@@ -129,6 +128,8 @@ jobs:
       image: ${{ steps.image.outputs.ref }}
     steps:
       - uses: actions/checkout@v7
+      - name: Test startup probe
+        run: python3 tests/release/check-web.py
       - id: image
         run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v4
@@ -140,7 +141,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -150,14 +152,17 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
-      - name: Check API and bundled web app
+      - name: Check API and bundled web app on each platform
         env:
-          IMAGE: ${{ steps.image.outputs.ref }}
+          IMAGE: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
         run: |
-          docker run --detach --name wenote --publish 127.0.0.1:8080:8080 "$IMAGE"
-          trap 'docker logs wenote; docker rm -fv wenote' EXIT
-          curl -fsS --retry 10 --retry-connrefused http://127.0.0.1:8080/healthz | jq -e '.status == "ok"'
-          curl -fsS http://127.0.0.1:8080/ | grep -q '<title>WeNote'
+          for platform in linux/amd64 linux/arm64; do
+            docker run --pull=always --platform "$platform" --detach --name wenote --publish 127.0.0.1:8080:8080 "$IMAGE"
+            trap 'docker logs wenote; docker rm -fv wenote' EXIT
+            bash scripts/check-release-web.sh http://127.0.0.1:8080
+            docker rm -fv wenote
+            trap - EXIT
+          done
 
   release:
     name: Publish GitHub Release

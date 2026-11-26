@@ -107,8 +107,8 @@ func (r *Repository) PreviewImport(ctx context.Context, user, vault string, body
 	if err != nil {
 		return j, err
 	}
-	defer f.Close()
 	defer func() {
+		f.Close()
 		if err != nil {
 			os.Remove(f.Name())
 		}
@@ -199,7 +199,12 @@ func (r *Repository) ConfirmImport(ctx context.Context, user, vault, id, folder 
 	if err != nil {
 		return j, importError("暂存包已失效，请重新选择 ZIP")
 	}
-	defer f.Close()
+	defer func() {
+		f.Close()
+		if err == nil && j.Status == "completed" {
+			os.Remove(filename)
+		}
+	}()
 	h := sha256.New()
 	size, err := io.Copy(h, io.LimitReader(f, maxImportZip+1))
 	if err != nil {
@@ -233,11 +238,7 @@ func (r *Repository) ConfirmImport(ctx context.Context, user, vault, id, folder 
 	if err != nil {
 		return j, err
 	}
-	err = tx.Commit()
-	if err == nil && j.Status == "completed" {
-		os.Remove(filename)
-	}
-	return j, err
+	return j, tx.Commit()
 }
 func (r *Repository) installArchive(ctx context.Context, tx *sql.Tx, vault, user string, a *importArchive, j ImportJob) error {
 	urls := map[string]string{}

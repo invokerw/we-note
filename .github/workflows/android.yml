@@ -17,9 +17,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/api/go.mod
+      - uses: ./.github/actions/setup-android-sdk
       - run: |
-          sdkmanager 'platforms;android-36' 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;27.2.12479018'
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
           rustup target add x86_64-linux-android
           npm ci --prefix apps/client
           npm ci --prefix apps/web

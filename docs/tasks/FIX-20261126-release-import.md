@@ -1,0 +1,21 @@
+# Windows 便携包清理与正式发布流程修复
+
+用户需求为「修复已知问题，每次都套补建分支吗？」。
+
+- 类型 `bugfix`，影响 `server`、`android` 和镜像发布。2026-11-26 从 `main@73f863c198ea76686a05d0efe8dcf449ac8efdf8` 登记为 `PLANNED`，用户选择方式 2（任务分支验收）后转为 `IN_PROGRESS`。
+- 任务分支 `codex/bugfix-release-import-20261126`，工作区 `.worktrees/release-import-20261126`。服务端验收使用此工作区的独立端口、数据和日志。
+
+## 验收条件
+
+- Windows 成功确认导入和无效 ZIP 预览结束时释放句柄并清理暂存文件。需要重新确认目录和事务回滚时保留暂存包，可继续重试。
+- 正式发布在干净的 Android runner 初始化 SDK 后调用 `sdkmanager`，沿用原有 APK 签名和上传流程。Android 验收复用相同工具准备步骤。
+- 标签工作流在发布前检查本轮镜像的 AMD64、ARM64 两种架构。容器启动期连接被重置时允许重试，API 或首页持续异常时验收失败。
+
+## 验证记录
+
+- v0.1.1 Windows 的 `TestPortableVaultImport` 在导入后暂存包仍存在时失败；发布任务因 `sdkmanager: command not found` 退出 127，镜像第一次探测出现连接重置。详见[Windows 验收](https://github.com/invokerw/we-note/actions/runs/45805709453)和[标签发布](https://github.com/invokerw/we-note/actions/runs/45805709498)。
+
+- 红阶段用原发布脚本运行 `python3 tests/release/check-web.py`，退出 1。首次 HTTP 断连后脚本返回 4，只访问一次 `/healthz`。修复后相同命令退出 0，覆盖断连重试、异常 JSON 状态与错误首页。
+- 任务工作区运行 `go test -count=1 -race ./...` 和 `go vet ./...`，均退出 0。扩展已有导入测试，检查无效 ZIP 预览也要清除文件。保留原有事务回滚、文件夹冲突重试和成功后文件消失的断言。
+- `ruby` 成功解析改动的两个工作流和组合动作。`bash -n scripts/check-release-web.sh`、`git diff --check` 均通过。自审核对签名条件、发布依赖、镜像 digest 和两种目标架构的启动参数。
+- `./scripts/local.py start --port 19461` 成功。独立服务 `http://localhost:19461`，PID 83607，工作区日志 `dist/local/server.log`、数据 `services/api/data/`。`bash scripts/check-release-web.sh http://127.0.0.1:19461`、`WENOTE_TEST_ORIGIN=http://localhost:19461 node apps/web/tests/personal-settings.mjs` 均退出 0。验收可注册普通账号、建立目标库后在「个人设置 → 导出/导入」选择便携 ZIP 并确认。停止命令为本工作区的 `./scripts/local.py stop`。
