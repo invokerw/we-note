@@ -1,0 +1,15 @@
+services:
+  wenote:
+    image: "ghcr.io/invokerw/we-note:${WENOTE_VERSION:?Set WENOTE_VERSION to a published release tag}"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    command:
+      - -public-url
+      - "${WENOTE_PUBLIC_URL:-http://localhost:8080}"
+    volumes:
+      - wenote-data:/app/data
+
+volumes:
+  wenote-data:
+    name: wenote-data
