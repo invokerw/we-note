@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -120,7 +121,7 @@ func TestMultipartResumeAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := strings.TrimPrefix(asset.Hash, "sha256:")
-	wantKey := filepath.Join("users", alice.ID, "vaults", v.ID, "assets", asset.CreatedAt.UTC().Format("2006/01/02"), digest)
+	wantKey := path.Join("users", alice.ID, "vaults", v.ID, "assets", asset.CreatedAt.UTC().Format("2006/01/02"), digest)
 	if storageKey != wantKey {
 		t.Fatalf("storage key = %q, want %q", storageKey, wantKey)
 	}

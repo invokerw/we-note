@@ -248,11 +248,10 @@ try {
     );
     await page.mouse.click(point.x, point.y);
   }
-  assert.equal(
-    await writing.evaluate((el) => el === document.activeElement),
-    true,
-  );
-  await writeDraft("父项\n子项");
+  await page.getByLabel("可视化编辑器").locator(".ProseMirror:focus").waitFor();
+  await keys.press("ControlOrMeta+a");
+  await keys.insertText("父项\n子项");
+  assert.match(await writing.innerText(), /父项/);
   await writing.press("ControlOrMeta+End");
   await keys.press("Tab");
   await checkSource("父项\n  子项");

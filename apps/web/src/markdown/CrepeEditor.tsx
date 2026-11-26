@@ -11,6 +11,7 @@ import { parseMarkdown } from "./document";
 import { patchBlocks, type RichWriting, type Span } from "./crepeSource";
 
 type Props = {
+  focusFrom: RefObject<Element | null>;
   text: string;
   edit: (value: string) => void;
   openSplit: () => void;
@@ -226,6 +227,10 @@ export default function CrepeEditor(props: Props) {
               protectedBlocks.add(n);
           });
           initialized = true;
+          // A mode switch may finish loading after the user has focused another control.
+          const focusFrom = latest.current.focusFrom;
+          if (focusFrom.current && document.activeElement === focusFrom.current) view.focus();
+          focusFrom.current = null;
           if (props.writing)
             props.writing.current = {
               async compositionEnd() {

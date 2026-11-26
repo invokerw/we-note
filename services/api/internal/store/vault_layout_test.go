@@ -115,7 +115,9 @@ func TestVaultDirectoryContainsRecoverableNoteHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(t.TempDir(), "recovered")
-	output, err := exec.Command("python3", "../../../../scripts/recover_vault.py", copyDir, dest).CombinedOutput()
+	cmd := exec.Command("python3", "../../../../scripts/recover_vault.py", copyDir, dest)
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=cp1252:strict")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(err, string(output))
 	}

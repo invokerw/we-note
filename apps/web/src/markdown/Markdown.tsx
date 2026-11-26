@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { boardText, boardStrokes, Whiteboard } from "./Whiteboard";
 import type { MarkdownMode } from "./modes";
 import type { RichWriting } from "./crepeSource";
-import { lazy, Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import SplitEditor from "./SplitEditor";
 import { inspect, linkTarget, taskCheckChange, type Branch } from "./document";
 import Source from "./Source";
@@ -97,6 +97,13 @@ export function Document({
     markdown && metadataHost !== null ? text : "";
   const info = useMemo(() => inspect(metadataText), [metadataText]);
   const root = useRef<HTMLDivElement>(null);
+  const previousMode = useRef(mode);
+  const focusFrom = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    focusFrom.current = mode === "crepe" && previousMode.current !== mode
+      ? document.activeElement : null;
+    previousMode.current = mode;
+  }, [mode]);
   const jumpOffset = useRef<number | null>(null);
   useEffect(() => {
     if (mode === "read" && jumpOffset.current !== null) {
@@ -244,7 +251,7 @@ export function Document({
           )}
         </SplitEditor>
       ) : mode === "crepe" ? (
-        <Suspense fallback="正在载入可视化编辑器…"><CrepeEditor text={text} edit={edit} writing={writing} upload={upload} imageURL={imageURL} openSplit={() => setMode("split")} /></Suspense>
+        <Suspense fallback="正在载入可视化编辑器…"><CrepeEditor focusFrom={focusFrom} text={text} edit={edit} writing={writing} upload={upload} imageURL={imageURL} openSplit={() => setMode("split")} /></Suspense>
       ) : markdown ? (
         <MarkdownView text={text} io={io} />
       ) : (

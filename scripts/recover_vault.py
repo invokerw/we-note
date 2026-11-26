@@ -73,4 +73,8 @@ if __name__ == '__main__':
     parser.add_argument('source', type=Path)
     parser.add_argument('destination', type=Path)
     args = parser.parse_args()
-    print(f'已恢复库修订 {recover(args.source, args.destination)}')
+    revision = recover(args.source, args.destination)
+    try:
+        print(f'已恢复库修订 {revision}')
+    except UnicodeEncodeError:
+        print(f'Recovered vault revision {revision}')

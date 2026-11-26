@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,7 +28,7 @@ func TestLocalStorePutIsAtomicAndContentAddressed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if key != filepath.Join("blobs", "vault_1", "2026", "11", "23", hash[len("sha256:"):]) {
+	if key != path.Join("blobs", "vault_1", "2026", "11", "23", hash[len("sha256:"):]) {
 		t.Fatalf("storage key = %q", key)
 	}
 
