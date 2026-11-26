@@ -19,7 +19,7 @@
 
 ## 任务分支验收
 
-1. 在此工作区启动的独立服务为 `http://localhost:19626`，PID 79477。服务日志 `dist/local/server.log`，数据 `services/api/data/`。使用 `python3 scripts/local.py status` 查看，验收通过后用 `python3 scripts/local.py stop` 停止。
+1. 在此工作区启动的独立服务为 `http://localhost:19626`，PID 81430。服务日志 `dist/local/server.log`，数据 `services/api/data/`。使用 `python3 scripts/local.py status` 查看，验收通过后用 `python3 scripts/local.py stop` 停止。
 2. 在网页用 `dist/local/验收账号.txt` 中的本地测试账号进入「导入验收」库，打开「头像 → 个人设置 → 导出/导入」。选择 `dist/local/导入验收样例.zip`，可核对带图笔记和同名路径。确认后打开导入目录，也可切到新库验证无冲突的原路径导入。
 3. macOS 应用在 `target/debug/bundle/macos/WeNote.app`。填写上述服务地址，登录并选目录，先同步再进入本地编辑器的同一设置页。
 4. 按方式 2 保留任务分支、工作区与服务，等待用户验收。
@@ -31,3 +31,12 @@
 - 红阶段。浏览器回归 `WENOTE_TEST_ORIGIN=http://localhost:19626 node apps/web/tests/personal-settings.mjs` 退出 1，旧页面没有可见的「导入预览」对话框。
 - 实现与自审。校验成功后打开原生模态对话框。按 Esc 可先收起，稍后从「查看导入预览」继续；点击「取消导入」成功后清理暂存。断网时仍可返回设置。预览内容可滚动，操作按钮位于底部。服务端返回新目录时在原弹窗内更新并显示提示。
 - 复测。上述浏览器命令退出 0，验证了取消后笔记数量、Esc 返回与重新打开、目标目录在确认前被占用后再次确认、手机 390 px 宽度及草稿保留。`apps/web` 下 `node --test --test-concurrency=1 tests/*.test.mjs` 12 项通过。`npm run build --prefix apps/web`、`apps/client` 下 `./node_modules/.bin/tauri build --debug --bundles app` 和 `git diff --check` 均退出 0。沿用上方服务、账号和样例，macOS 验收应用已重建。
+
+## 2026-11-26 · 导入完成记录
+
+用户要求「如果没有删除的机制就不要记录了」。验收时，成功导入应在同一事务中移除预览，只在当前设置页显示一次结果。重新打开设置或刷新后只显示待确认预览。升级时清理旧的完成记录，保留实际笔记、资源及仍待确认的预览。重复确认同一预览不能再次写入。沿用任务分支验收。
+
+- 红阶段。`services/api` 下 `go test ./internal/store -run TestPortableVaultImport` 退出 1，复现旧完成记录和新确认的预览仍在数据库中。旧服务的 `WENOTE_TEST_ORIGIN=http://localhost:19626 node apps/web/tests/personal-settings.mjs` 退出 1，第二个浏览器会话仍能读到完成记录。
+- 变更与自审。成功导入在写入笔记和资源的同一事务内删除预览，写入失败后可以重试。成功响应供当前页面提示数量和目录。补测真实提交成功后丢弃响应，再次确认时页面收起失效预览并提示核对目标目录，库中只有一份本次导入的笔记。
+- 升级验证。重启独立验收服务前后核对 SQLite，旧完成记录由 10 条变为 0 条。待确认预览仍为 1 条、笔记文件 68 个、资源 7 个。网页及 macOS 验收入口见上文。
+- 复测。`services/api` 下 `go test ./...`、`apps/web` 下 `node --test --test-concurrency=1 tests/*.test.mjs`（12 项）、上述浏览器回归和 `WENOTE_TEST_ORIGIN=http://localhost:19626 cargo test --locked --offline -p wenote-sync --test two_devices -- --ignored` 均退出 0。`python3 scripts/local.py start --port 19626` 重建网页并启动服务，`apps/client` 下 `./node_modules/.bin/tauri build --debug --bundles app` 与 `git diff --check` 退出 0。

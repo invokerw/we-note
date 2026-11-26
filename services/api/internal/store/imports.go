@@ -24,7 +24,6 @@ type ImportJob struct {
 	Folder    string   `json:"folder"`
 	Exported  string   `json:"exported"`
 	Completed string   `json:"completed,omitempty"`
-	Prior     string   `json:"prior,omitempty"`
 	Files     []string `json:"files"`
 	Conflicts []string `json:"conflicts"`
 	Warnings  []string `json:"warnings"`
@@ -144,17 +143,6 @@ func (r *Repository) PreviewImport(ctx context.Context, user, vault string, body
 	if err = j.plan(ctx, tx, vault, a); err != nil {
 		return j, err
 	}
-	var prior ImportJob
-	var raw string
-	err = tx.QueryRowContext(ctx, `SELECT summary FROM portable_imports WHERE vault=? AND user=? AND digest=? AND staged='' ORDER BY created DESC,rowid DESC LIMIT 1`, vault, user, digest).Scan(&raw)
-	if err == nil {
-		if err = json.Unmarshal([]byte(raw), &prior); err != nil {
-			return j, err
-		}
-		j.Prior = prior.Completed + " · /" + prior.Folder
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return j, err
-	}
 	data, err := json.Marshal(j)
 	if err != nil {
 		return j, err
@@ -166,7 +154,7 @@ func (r *Repository) PreviewImport(ctx context.Context, user, vault string, body
 	return j, tx.Commit()
 }
 func (r *Repository) Imports(ctx context.Context, user, vault string) ([]ImportJob, error) {
-	list, err := stringList(ctx, r.db.DB, `SELECT summary FROM portable_imports WHERE vault=? AND user=? ORDER BY created DESC,rowid DESC LIMIT 50`, vault, user)
+	list, err := stringList(ctx, r.db.DB, `SELECT summary FROM portable_imports WHERE vault=? AND user=? AND staged<>'' ORDER BY created DESC,rowid DESC LIMIT 50`, vault, user)
 	out := []ImportJob{}
 	for _, s := range list {
 		var j ImportJob
@@ -193,14 +181,14 @@ func (r *Repository) ConfirmImport(ctx context.Context, user, vault, id, folder 
 		return j, err
 	}
 	var raw, name, digest string
-	err = tx.QueryRowContext(ctx, `SELECT summary,staged,digest FROM portable_imports WHERE id=? AND vault=? AND user=?`, id, vault, user).Scan(&raw, &name, &digest)
+	err = tx.QueryRowContext(ctx, `SELECT summary,staged,digest FROM portable_imports WHERE id=? AND vault=? AND user=? AND staged<>''`, id, vault, user).Scan(&raw, &name, &digest)
 	if errors.Is(err, sql.ErrNoRows) {
-		return j, ErrNotFound
+		return j, fileError(http.StatusGone, "IMPORT_PREVIEW_GONE", "此预览已结束或过期，请到目标目录核对笔记。")
 	}
 	if err != nil {
 		return j, err
 	}
-	if err = json.Unmarshal([]byte(raw), &j); err != nil || j.Status == "completed" {
+	if err = json.Unmarshal([]byte(raw), &j); err != nil {
 		return j, err
 	}
 	filename, err := stagedImportPath(name)
@@ -234,18 +222,19 @@ func (r *Repository) ConfirmImport(ctx context.Context, user, vault, id, folder 
 		}
 		j.Status = "completed"
 		j.Completed = formatTime(time.Now().UTC())
-		name = ""
+		_, err = tx.ExecContext(ctx, `DELETE FROM portable_imports WHERE id=?`, id)
+	} else {
+		data, marshalErr := json.Marshal(j)
+		if marshalErr != nil {
+			return j, marshalErr
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE portable_imports SET summary=? WHERE id=?`, string(data), id)
 	}
-	data, err := json.Marshal(j)
-	if err != nil {
-		return j, err
-	}
-	_, err = tx.ExecContext(ctx, `UPDATE portable_imports SET summary=?,staged=? WHERE id=?`, string(data), name, id)
 	if err != nil {
 		return j, err
 	}
 	err = tx.Commit()
-	if err == nil && name == "" {
+	if err == nil && j.Status == "completed" {
 		os.Remove(filename)
 	}
 	return j, err

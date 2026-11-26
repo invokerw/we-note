@@ -302,3 +302,7 @@ CREATE TABLE IF NOT EXISTS portable_imports (
  summary TEXT NOT NULL, staged TEXT NOT NULL, created INTEGER NOT NULL DEFAULT (unixepoch())
 );
 CREATE INDEX IF NOT EXISTS portable_import_owner ON portable_imports(vault,user,created);
+
+-- Older versions kept completed jobs and copied their timestamp into later previews.
+DELETE FROM portable_imports WHERE staged='';
+UPDATE portable_imports SET summary=json_remove(summary,'$.prior') WHERE json_type(summary,'$.prior') IS NOT NULL;

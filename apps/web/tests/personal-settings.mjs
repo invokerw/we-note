@@ -94,6 +94,7 @@ try {
   await button(preview, "确认导入").click();
   await preview.waitFor({state:"detached"});
   await settings.getByRole("heading", {name:"导入完成"}).waitFor();
+  await button(settings, "查看笔记").waitFor();
   const imported = await (await api(`vaults/${id}/files`, undefined, token)).json();
   assert.equal(imported.files.length, 3);
   assert.ok(imported.files.some(file => file.path === newFolder + "/草稿.md"));
@@ -152,9 +153,12 @@ try {
   assert.ok(box.x >= 0 && box.x + box.width <= 390 && box.y >= 0 && box.y + box.height <= 844);
   await button(plugin, "关闭 Markdown 设置").click();
   await button(mobile, "返回设置分类").click();
+  const pendingImports = mobile.waitForResponse(r => r.url().endsWith(`/vaults/${id}/imports`) && r.request().method() === "GET");
   await button(mobile, "导出/导入").click();
+  assert.deepEqual(await (await pendingImports).json(), []);
   await button(mobile, "下载 ZIP").first().waitFor();
-  await button(mobile, "查看笔记").waitFor();
+  assert.equal(await button(mobile, "查看笔记").count(), 0);
+  assert.equal(await mobile.getByRole("heading", {name:"导入完成"}).count(), 0);
   await mobile.getByLabel("选择 ZIP").setInputFiles(archive);
   const mobilePreview = mobile.getByRole("dialog", {name:"导入预览", exact:true});
   await mobilePreview.getByText("笔记目录", {exact:true}).click();
@@ -163,6 +167,20 @@ try {
   assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 390);
   await button(mobilePreview, "取消导入").click();
   await mobilePreview.waitFor({state:"detached"});
+  await mobile.getByLabel("选择 ZIP").setInputFiles(archive);
+  await mobilePreview.waitFor();
+  await mobile.route("**/imports/*/confirm", async route => {
+    const committed = await route.fetch();
+    assert.equal((await committed.json()).status, "completed");
+    await route.abort("failed");
+  }, {times:1});
+  await button(mobilePreview, "确认导入").click();
+  await mobilePreview.getByRole("alert").waitFor();
+  await button(mobilePreview, "确认导入").click();
+  await mobilePreview.waitFor({state:"detached"});
+  await mobile.getByText(/此预览已结束或过期/).waitFor();
+  assert.equal(await button(mobile, "查看导入预览").count(), 0);
+  assert.equal((await (await api(`vaults/${id}/files`, undefined, token)).json()).files.length, 4);
   await button(mobile, "返回设置分类").click();
   await button(mobile, "账户与安全").click();
   await mobile.locator(".profile-heading img").waitFor();

@@ -11,8 +11,6 @@ export type ImportJob = {
   conflicts: string[] | null;
   warnings: string[];
   exported: string;
-  completed?: string;
-  prior?: string;
 };
 
 function ImportPreview({
@@ -64,7 +62,6 @@ function ImportPreview({
           <dt>导出时间</dt>
           <dd>{new Date(job.exported).toLocaleString()}</dd>
         </dl>
-        {job.prior && <p>此包曾导入本库 · {job.prior}</p>}
         {!!job.conflicts?.length && (
           <details open>
             <summary>同名路径 · 整包将放入「{job.folder}」</summary>
@@ -133,10 +130,13 @@ export function PortableImport({
   viewFolder: (folder: string) => Promise<void> | void;
 }) {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [result, setResult] = useState<{
+    folder: string;
+    notes: number;
+    assets: number;
+  } | null>(null);
   const [previewId, setPreviewId] = useState("");
-  const preview = jobs.find(
-    (job) => job.id === previewId && job.status === "preview",
-  );
+  const preview = jobs.find((job) => job.id === previewId);
   const [progress, setProgress] = useState("");
   const [message, setMessage] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
@@ -158,7 +158,9 @@ export function PortableImport({
       client
         .json("/imports")
         .then((list) => {
-          if (live && changed.current === revision) setJobs(list);
+          if (live && changed.current === revision) {
+            setJobs(list.filter((job: ImportJob) => job.status === "preview"));
+          }
         })
         .catch((e) => {
           if (live) setMessage(String(e));
@@ -170,6 +172,40 @@ export function PortableImport({
   function update(job: ImportJob) {
     changed.current++;
     setJobs((old) => [job, ...old.filter((item) => item.id !== job.id)]);
+  }
+  function removePreview(id: string) {
+    changed.current++;
+    setJobs((old) => old.filter((job) => job.id !== id));
+    setPreviewId("");
+  }
+  async function confirm(job: ImportJob) {
+    let confirmed: ImportJob;
+    try {
+      confirmed = await client.confirmImport(job.id, job.folder);
+    } catch (error) {
+      // The native client passes HTTP failures across the bridge as strings.
+      if (
+        (error as { code?: string })?.code === "IMPORT_PREVIEW_GONE" ||
+        String(error).includes("HTTP 410:")
+      ) {
+        removePreview(job.id);
+        setMessage(`此预览已结束或过期，请到「${job.folder || "库根目录"}」核对笔记。`);
+        return;
+      }
+      throw error;
+    }
+    if (confirmed.status === "preview") {
+      update(confirmed);
+      setMessage("目标目录已变化，请核对后再次确认。");
+      return;
+    }
+    removePreview(job.id);
+    setResult({
+      folder: confirmed.folder,
+      notes: confirmed.files.length,
+      assets: confirmed.assets,
+    });
+    await onImported?.();
   }
   async function run(label: string, action: () => Promise<void>) {
     setMessage("");
@@ -198,6 +234,7 @@ export function PortableImport({
             event.currentTarget.value = "";
             if (file)
               void run("正在上传并校验…", async () => {
+                setResult(null);
                 if (file.size > 256 * 1024 * 1024)
                   throw Error("ZIP 最大为 256 MiB");
                 const job = await client.previewImport(file);
@@ -209,39 +246,40 @@ export function PortableImport({
       </label>
       {!preview && progress && <p role="status">{progress}</p>}
       {!preview && message && <p role="status">{message}</p>}
+      {result && (
+        <article>
+          <div role="status">
+            <h4>导入完成</h4>
+            <p>
+              {result.notes} 篇笔记 · {result.assets} 个资源文件 ·{" "}
+              {result.folder || "库根目录"}
+            </p>
+          </div>
+          <button
+            disabled={!!progress}
+            onClick={() => run("正在打开…", async () => { await viewFolder(result.folder); })}
+          >
+            查看笔记
+          </button>
+        </article>
+      )}
       {jobs.map((job) => (
         <article key={job.id}>
-          <h4>{job.status === "preview" ? "待确认导入" : "导入完成"}</h4>
+          <h4>待确认导入</h4>
           <p>
             {job.files.length} 篇笔记 · {job.assets} 个资源文件 ·{" "}
             {job.folder || "库根目录"}
           </p>
-          <p>
-            {job.completed ? "导入时间" : "导出时间"} ·{" "}
-            {new Date(job.completed || job.exported).toLocaleString()}
-          </p>
-          {job.status === "preview" ? (
-            <button
-              disabled={!!progress}
-              onClick={() => {
-                setMessage("");
-                setPreviewId(job.id);
-              }}
-            >
-              查看导入预览
-            </button>
-          ) : (
-            <button
-              disabled={!!progress}
-              onClick={() =>
-                run("正在打开…", async () => {
-                  await viewFolder(job.folder);
-                })
-              }
-            >
-              查看笔记
-            </button>
-          )}
+          <p>导出时间 · {new Date(job.exported).toLocaleString()}</p>
+          <button
+            disabled={!!progress}
+            onClick={() => {
+              setMessage("");
+              setPreviewId(job.id);
+            }}
+          >
+            查看导入预览
+          </button>
         </article>
       ))}
       {preview && (
@@ -258,24 +296,10 @@ export function PortableImport({
           cancel={() =>
             run("正在取消…", async () => {
               await client.cancelImport(preview.id);
-              changed.current++;
-              setJobs((old) => old.filter((job) => job.id !== preview.id));
-              setPreviewId("");
+              removePreview(preview.id);
             })
           }
-          confirm={() =>
-            run("正在导入…", async () => {
-              const result = await client.confirmImport(
-                preview.id,
-                preview.folder,
-              );
-              update(result);
-              if (result.status === "completed") {
-                setPreviewId("");
-                await onImported?.();
-              } else setMessage("目标目录已变化，请核对后再次确认。");
-            })
-          }
+          confirm={() => run("正在导入…", () => confirm(preview))}
         />
       )}
     </section>

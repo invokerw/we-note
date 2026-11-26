@@ -5,12 +5,15 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
-	"github.com/weifei/we-note/services/api/internal/blob"
-	"github.com/weifei/we-note/services/api/internal/sqlite"
 	"io"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/weifei/we-note/services/api/internal/blob"
+	"github.com/weifei/we-note/services/api/internal/sqlite"
 )
 
 func TestPortableVaultImport(t *testing.T) {
@@ -93,6 +96,25 @@ func TestPortableVaultImport(t *testing.T) {
 	if len(preview.Files) != 1 || preview.Assets != 1 || preview.Folder != "" {
 		t.Fatal(preview)
 	}
+	t.Run("upgrade removes only completed import history", func(t *testing.T) {
+		if _, err := db.Exec(`INSERT INTO portable_imports(id,vault,user,digest,summary,staged) VALUES ('legacy',?,?, 'digest','{"status":"completed"}','')`, target.ID, user.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`UPDATE portable_imports SET summary=json_set(summary,'$.prior','old import') WHERE id=?`, preview.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Migrate(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var total, cleanPreviews int
+		if err := db.QueryRow(`SELECT count(*),count(CASE WHEN id=? AND staged<>'' AND json_type(summary,'$.prior') IS NULL THEN 1 END) FROM portable_imports`, preview.ID).Scan(&total, &cleanPreviews); err != nil || total != 1 || cleanPreviews != 1 {
+			t.Fatalf("after upgrade rows=%d clean previews=%d err=%v", total, cleanPreviews, err)
+		}
+	})
+	var staged string
+	if err = db.QueryRow(`SELECT staged FROM portable_imports WHERE id=?`, preview.ID).Scan(&staged); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = r.WriteFile(ctx, user.ID, target.ID, "", "create_file", "", FileWrite{Path: note.Path, Content: []byte("keep")}); err != nil {
 		t.Fatal(err)
 	}
@@ -124,8 +146,23 @@ func TestPortableVaultImport(t *testing.T) {
 	if err != nil || done.Status != "completed" {
 		t.Fatal(done, err)
 	}
-	if _, err = r.ConfirmImport(ctx, user.ID, target.ID, preview.ID, changed.Folder); err != nil {
+	var rows int
+	if err = db.QueryRow(`SELECT count(*) FROM portable_imports WHERE id=?`, preview.ID).Scan(&rows); err != nil || rows != 0 {
+		t.Fatalf("completed preview still stored: rows=%d err=%v", rows, err)
+	}
+	if pending, err := r.Imports(ctx, user.ID, target.ID); err != nil || len(pending) != 0 {
+		t.Fatal(pending, err)
+	}
+	filename, err := stagedImportPath(staged)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err = os.Stat(filename); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("staged ZIP after success: %v", err)
+	}
+	var gone *SyncError
+	if _, err = r.ConfirmImport(ctx, user.ID, target.ID, preview.ID, changed.Folder); !errors.As(err, &gone) || gone.Status != 410 {
+		t.Fatalf("expected consumed preview, got %v", err)
 	}
 	files, err := r.ListFiles(ctx, target.ID)
 	if err != nil || len(files) != 2 {
