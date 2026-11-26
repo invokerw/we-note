@@ -43,3 +43,9 @@
 - 自审核对路径与单一文件名两种输入方式，确认手机及目录右键仍走原流程。历史版本测试原先写死了库版本号，新增导图后改为选择笔记的上一个版本。
 - 绿阶段，`apps/web` 下禁用 `window.prompt` 的 `WENOTE_TEST_ORIGIN=http://localhost:18276 node tests/phase1.mjs` 退出 0，实际保存 Markdown 并打开导图中心节点。相同环境的 `node tests/entry-menu.mjs` 退出 0。`node --test tests/*.test.mjs` 退出 0（11/11，从仓库根运行时 Vite 解析路径失败，已在套件工作目录复测）。Web、桌面前端及 macOS 客户端构建退出 0，`git diff --check` 通过。刷新原验收地址即可加载本轮版本。
 - 2026-11-26 `DELIVERED`，方式 2 再次交付受测提交 `5b30a36`，验收地址 `http://localhost:18276`。
+
+## 验收归档
+
+- 2026-11-26 16:33 `ACCEPTED`，用户确认验收完毕，对应修复提交 `5b30a36`。
+- 2026-11-26 16:33 `MERGED`，与本地 `main` 集成时保留两项任务追加的样式和账本记录。Web 和桌面构建通过，`node --test tests/*.test.mjs` 通过 12 项，浏览器 `phase1.mjs`、`entry-menu.mjs` 均通过。快进合并至 `27fe220`，`git merge-base --is-ancestor 5b30a36 main` 退出 0。
+- 已停止端口 18276 的验收服务，并清理任务工作区与分支。验收数据和截图归档在 `dist/acceptance-backups/FEAT-20261126-create-note-picker/`。
