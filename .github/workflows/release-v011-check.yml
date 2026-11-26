@@ -1,0 +1,116 @@
+name: Verify and complete v0.1.1 builds
+on:
+  push:
+    branches: ['codex/chore-release-v011-20261126']
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/client
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 73f863c198ea76686a05d0efe8dcf449ac8efdf8
+          persist-credentials: false
+      - name: Verify release commit
+        run: test "$(git rev-parse HEAD)" = 73f863c198ea76686a05d0efe8dcf449ac8efdf8
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: |
+          npm ci --prefix ../web
+          npm ci
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: ''
+      - run: |
+          sdkmanager 'platforms;android-36' 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;27.2.12479018'
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          rustup target add aarch64-linux-android
+      - name: Set installer version and icons
+        run: |
+          npm exec -- tauri icon src-tauri/icons/icon.png --output src-tauri/release-icons
+          cat > release.json <<JSON
+          {
+            "version": "0.1.1",
+            "bundle": {
+              "active": true,
+              "publisher": "WeNote",
+              "macOS": { "signingIdentity": "-" },
+              "shortDescription": "WeNote desktop client",
+              "icon": ["release-icons/128x128.png", "release-icons/icon.icns", "release-icons/icon.ico"]
+            }
+          }
+          JSON
+          mkdir -p ../../release-assets
+      - name: Build release APK
+        run: |
+          npm exec -- tauri android build --ci --apk --target aarch64 --config release.json
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/*-unsigned.apk "../../release-assets/WeNote-v0.1.1-android-arm64-unsigned.apk"
+      - name: Sign APK when a release keystore is configured
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEYSTORE" ]]; then exit 0; fi
+          umask 077
+          keyfile="$RUNNER_TEMP/release.keystore"
+          trap 'rm -f "$keyfile"' EXIT
+          printf '%s' "$KEYSTORE" | base64 --decode > "$keyfile"
+          signer="$ANDROID_HOME/build-tools/37.0.0/apksigner"
+          apk="../../release-assets/WeNote-v0.1.1-android-arm64"
+          "$signer" sign --ks "$keyfile" --ks-key-alias "$KEY_ALIAS" --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD --v4-signing-enabled false --out "$apk.apk" "$apk-unsigned.apk"
+          "$signer" verify "$apk.apk"
+          rm "$apk-unsigned.apk"
+      - name: Verify Android package
+        run: |
+          apk=(../../release-assets/*.apk)
+          test "${#apk[@]}" -eq 1
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "${apk[0]}" > "$RUNNER_TEMP/badging.txt"
+          grep -E "^package: .*versionName='0.1.1'" "$RUNNER_TEMP/badging.txt"
+          grep -E "^native-code: 'arm64-v8a' *$" "$RUNNER_TEMP/badging.txt"
+          unzip -tq "${apk[0]}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: client-android-arm64
+          path: release-assets/*
+          if-no-files-found: error
+
+  image:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Start published image and verify API and web page
+        env:
+          IMAGE: ghcr.io/invokerw/we-note:v0.1.1
+          ARCH: ${{ matrix.arch }}
+        run: |
+          for attempt in {1..40}; do
+            if docker pull --platform "linux/$ARCH" "$IMAGE"; then break; fi
+            sleep 25
+          done
+          test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = 73f863c198ea76686a05d0efe8dcf449ac8efdf8
+          test "$(docker image inspect "$IMAGE" --format '{{.Architecture}}')" = "$ARCH"
+          docker run -d --name wenote -p 127.0.0.1:8080:8080 "$IMAGE"
+          trap 'docker logs wenote' EXIT
+          curl -fsS --retry 12 --retry-delay 2 --retry-all-errors --output health.json http://127.0.0.1:8080/healthz
+          jq -e '.status == "ok"' health.json
+          curl -fsS --output index.html http://127.0.0.1:8080/
+          grep -F '<title>WeNote' index.html
