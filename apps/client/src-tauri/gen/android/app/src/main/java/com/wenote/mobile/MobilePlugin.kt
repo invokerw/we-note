@@ -8,6 +8,7 @@ import android.content.Intent
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
+import android.webkit.MimeTypeMap
 import androidx.activity.result.ActivityResult
 import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
@@ -207,12 +208,14 @@ class MobilePlugin(private val host: Activity) : Plugin(host) {
     fun exportDocument(invoke: Invoke) {
         val args = invoke.getArgs()
         val name = args.getString("name")
+        val extension = name.substringAfterLast('.', "").lowercase()
         val mime =
-            when (name.substringAfterLast('.').lowercase()) {
+            when (extension) {
                 "xmind" -> "application/vnd.xmind.workbook"
                 "json" -> "application/json"
                 "md" -> "text/markdown"
-                else -> "text/plain"
+                else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                    ?: "application/octet-stream"
             }
         val intent =
             Intent(Intent.ACTION_CREATE_DOCUMENT)

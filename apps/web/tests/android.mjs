@@ -343,7 +343,8 @@ try {
     }
     await delay(200);
   }
-  assert.match(exported, /周五验收/);
+  if (!exported) console.error("Files in emulator Downloads", adb("shell", "ls", "-1", "/storage/emulated/0/Download"));
+  assert.equal(exported, "周五验收", `Expected original file ${logName} in Downloads`);
   await openSettings("编辑与插件");
   const sample = await pack(
     fileURLToPath(new URL("../plugin-sdk/example", import.meta.url)),
