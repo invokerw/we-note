@@ -1,6 +1,6 @@
 # 笔记加星与快速访问
 
-- 任务 `FEAT-20261125-starred-notes`，类型 `feature`，状态 `ACCEPTED`。
+- 任务 `FEAT-20261125-starred-notes`，类型 `feature`，状态 `MERGED`。
 - 已验收需求来自 `main` 的 `c6f8589`，见[笔记加星需求](../笔记加星需求.md)。
 - 用户选择方式 2，在任务分支验收，通过后合入本地 `main`。
 - 分支 `codex/feature-starred-notes-20261125`，工作区 `.worktrees/starred-notes-20261125`。
@@ -26,3 +26,7 @@
 ## 用户验收与合入
 
 2026-11-26，用户确认版本 `7e0ffc1` 验收完毕，按方式 2 收尾。
+
+同日通过 `f82455b` 合入本地 `main`。开发账本保留了两个分支新增的任务行。已验证 `7e0ffc1` 是 `main` 的祖先，应用代码与验收版一致，加星浏览器回归通过。
+
+已停止 19571 验收服务并移除任务 worktree 和本地分支。验收数据、日志、Web 与 macOS 产物保存在 `dist/acceptance/FEAT-20261125-starred-notes-7e0ffc1/`。
