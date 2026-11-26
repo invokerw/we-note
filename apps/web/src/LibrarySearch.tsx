@@ -101,6 +101,7 @@ export function SearchField({
   query,
   change,
   folder,
+  starredOnly,
   currentOnly,
   setCurrentOnly,
   history,
@@ -109,6 +110,7 @@ export function SearchField({
   query: string;
   change: (q: string) => void;
   folder: string | null;
+  starredOnly: boolean;
   currentOnly: boolean;
   setCurrentOnly: (v: boolean) => void;
   history: ReturnType<typeof useRecentSearches>;
@@ -222,7 +224,7 @@ export function SearchField({
                 checked={!folder || !currentOnly}
                 onChange={() => setCurrentOnly(false)}
               />
-              全部笔记
+              {starredOnly ? "加星" : "全部笔记"}
             </label>
           </fieldset>
         </div>

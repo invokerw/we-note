@@ -1,3 +1,4 @@
+import { StarButton, type NoteStars } from "./StarredNotes";
 import { markdownWritingMode } from "./markdown/modes";
 import { NoteInfoToggle, NoteInfoPanel } from "./NoteInfo";
 import { NoteHeading } from "./LibraryUI";
@@ -26,6 +27,7 @@ import { prepareNoteLink } from "./Sharing";
 
 type Props = {
   actions: ReactNode;
+  stars: NoteStars;
   phoneBack?: () => void;
   focused: boolean;
   toggleFocus: () => void;
@@ -81,6 +83,7 @@ export function AssetImage({
 }
 export default function Editor({
   actions,
+  stars,
   phoneBack,
   focused,
   toggleFocus,
@@ -374,7 +377,7 @@ export default function Editor({
         markdown={note.format === "md"}
         busy={busy}
         endAction={
-          <NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />
+          <><StarButton stars={stars} path={note.path}/><NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} /></>
         }
         share={{ label: "分享", run: openShare }}
         save={
