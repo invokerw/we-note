@@ -283,3 +283,15 @@ CREATE TABLE IF NOT EXISTS asset_url_keys (
  day TEXT NOT NULL, content_hash TEXT NOT NULL, url_key TEXT NOT NULL CHECK(length(url_key)=16),
  PRIMARY KEY(vault_id,day,content_hash), UNIQUE(vault_id,day,url_key)
 );
+
+CREATE TABLE IF NOT EXISTS history_sweeps (
+ vault TEXT PRIMARY KEY REFERENCES vaults(id) ON DELETE CASCADE, day TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS history_change_receipts (
+ vault_id TEXT NOT NULL, operation_id TEXT NOT NULL, id TEXT NOT NULL,
+ file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+ version_id TEXT NOT NULL, vault_revision INTEGER NOT NULL,
+ PRIMARY KEY(vault_id,operation_id)
+);
+CREATE INDEX IF NOT EXISTS idx_changes_version ON changes(version_id);
+CREATE INDEX IF NOT EXISTS idx_history_parents ON file_versions(parent_version_id);

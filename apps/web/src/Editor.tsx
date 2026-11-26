@@ -1,3 +1,4 @@
+import { NoteHistory } from "./NoteHistory";
 import { StarButton, type NoteStars } from "./StarredNotes";
 import { markdownWritingMode } from "./markdown/modes";
 import { NoteInfoToggle, NoteInfoPanel } from "./NoteInfo";
@@ -14,7 +15,7 @@ import { Document, type Mode } from "./markdown/Markdown";
 import { formatMarkdown } from "./markdown/saveFormat";
 import { resolvePath, linkTarget } from "./markdown/document";
 import { download } from "./Resources";
-import { base64, Note, pictureTypes, request, uploadAsset, Version } from "./api";
+import { base64, Note, pictureTypes, request, uploadAsset } from "./api";
 import {
   loadNoteMode,
   markdownPreferences,
@@ -123,7 +124,7 @@ export default function Editor({
   const markdownSettings = markdownPreferences(preferences);
   const [text, setText] = useState(""),
     [base, setBase] = useState(""),
-    [mode, setMode] = useState<Mode | "history">(() => {
+    [mode, setMode] = useState<Mode>(() => {
       if (phoneBack) return "read";
       if (!markdown) return plain ? "edit" : "read";
       return (
@@ -132,8 +133,8 @@ export default function Editor({
           : undefined) || markdownSettings.defaultMode
       );
     }),
-    [versions, setVersions] = useState<Version[]>([]),
-    [history, setHistory] = useState(""),
+    [historyOpen, setHistoryOpen] = useState(false),
+    [restoredVersion, setRestoredVersion] = useState(""),
     [busy, setBusy] = useState(false);
   const panelId = useId();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -153,14 +154,7 @@ export default function Editor({
       .then(async (r) => {
         const buf = new Uint8Array(await r.arrayBuffer());
         if (!live) return;
-        const doc = openTextDocument(plugin, buf);
-        if (doc) {
-          source.current = doc;
-          saved.current = doc.text;
-          setText(doc.text);
-        } else {
-          setBytes(buf);
-        }
+        loadContent(buf);
         setBase(r.headers.get("X-Version-Id") || note.current_version_id);
       })
       .catch((e) => {
@@ -170,6 +164,30 @@ export default function Editor({
       live = false;
     };
   }, [token, path]);
+  function loadContent(buf: Uint8Array) {
+    const doc = openTextDocument(plugin, buf);
+    if (doc) {
+      source.current = doc;
+      saved.current = doc.text;
+      setText(doc.text);
+      setBytes(null);
+    } else {
+      setBytes(buf);
+    }
+  }
+  async function restoreVersion(id: string, data: Uint8Array) {
+    if (pluginDirty || source.current.text !== saved.current) throw Error("请先保存当前修改。");
+    const result = await (await request(token, path + "/content", "PUT", {
+      base_version_id: base, source_version_id: id,
+    })).json();
+    if (!alive.current) return;
+    loadContent(data);
+    setBase(result.version_id);
+    setRestoredVersion(result.version_id);
+    dirty(false);
+    notify("已恢复为新版本");
+    void changed().catch(e => notify(String(e)));
+  }
   function edit(value: string) {
     source.current.edit(value);
     setText(value);
@@ -295,6 +313,9 @@ export default function Editor({
   }
   const title = note.path.split("/").at(-1)!;
   return (
+    <>
+    {historyOpen && <NoteHistory token={token} path={path} name={title} draft={draftShare}
+      close={() => setHistoryOpen(false)} restore={restoreVersion} />}
     <article
       className="document"
       onPasteCapture={(e) => {
@@ -379,7 +400,7 @@ export default function Editor({
         star={<StarButton stars={stars} path={note.path} />}
         backlinks={<NoteInfoToggle id={panelId} expanded={panelOpen} toggle={() => setPanelOpen(open => !open)} />}
         share={{ label: "分享", run: openShare }}
-        fileActions={special && mode !== "history" ? <div className="file-actions-slot" ref={setActionHost} /> : null}
+        fileActions={special ? <div className="file-actions-slot" ref={setActionHost} /> : null}
         save={
           special ? <span ref={setSaveHost} /> : (
             <button
@@ -400,22 +421,7 @@ export default function Editor({
         more={
           <>
             {!phoneBack && <button onClick={toggleFocus}>{focused ? "退出专注" : "专注模式"}</button>}
-            {mode === "history" && (
-              <button onClick={() => setMode("read")}>返回文档</button>
-            )}
-            <button
-              disabled={busy}
-              onClick={() =>
-                run(async () => {
-                  const data = await (
-                    await request(token, path + "/versions")
-                  ).json();
-                  setVersions(data.versions);
-                  setHistory("");
-                  setMode("history");
-                })
-              }
-            >
+            <button disabled={busy || !base} onClick={() => setHistoryOpen(true)}>
               历史版本
             </button>
             <button
@@ -449,8 +455,8 @@ export default function Editor({
       />
       <div className="document-body note-workspace">
         {special && bytes && (
-          <div className="note-aux-view" hidden={mode === "history"}>
-            <PluginEditor
+          <div className="note-aux-view">
+            <PluginEditor key={restoredVersion}
               path={note.path}
               bytes={bytes}
               save={saveBytes}
@@ -458,51 +464,13 @@ export default function Editor({
               dirty={value => { setPluginDirty(value); dirty(value); }}
               notify={notify}
               actionHost={actionHost}
-              saveHost={mode === "history" ? null : saveHost}
+              saveHost={saveHost}
             />
           </div>
         )}
-        {mode === "history" ? (
-          <section className="note-aux-view">
-            <ul>
-              {versions.map((v) => (
-                <li key={v.version_id}>
-                  <button
-                    onClick={() =>
-                      run(async () => {
-                        if (
-                          note.format === "xmind" ||
-                          (special && plugin.wasm)
-                        ) {
-                          await download(
-                            token,
-                            path + "/versions/" + v.version_id + "/content",
-                            title,
-                          );
-                          return;
-                        }
-                        setHistory(
-                          await (
-                            await request(
-                              token,
-                              path + "/versions/" + v.version_id + "/content",
-                            )
-                          ).text(),
-                        );
-                      })
-                    }
-                  >
-                    版本 {v.vault_revision} ·{" "}
-                    {new Date(v.created_at).toLocaleString()}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <pre>{history}</pre>
-          </section>
-        ) : special ? null : (
+        {!special && (
           <div className="note-content" inert={!base || busy}>
-            <Document
+            <Document key={restoredVersion}
               writing={rich}
               upload={file => uploadAsset(token, vault, note.file_id, file, notify)}
               imageURL={async url => {
@@ -516,7 +484,7 @@ export default function Editor({
               markdown={markdown}
               text={text}
               edit={edit}
-              mode={mode as Mode}
+              mode={mode}
               setMode={changeMode}
               editor={editor}
               preferences={markdown ? markdownSettings : undefined}
@@ -540,5 +508,6 @@ export default function Editor({
         {panelOpen && <NoteInfoPanel id={panelId} metadata={setMetadataHost} load={loadBacklinks} open={hit => open(hit.file_id)} />}
       </div>
     </article>
+    </>
   );
 }

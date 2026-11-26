@@ -20,7 +20,9 @@ const activeFileQuery = `
 	WHERE f.vault_id = ? AND f.is_deleted = 0`
 
 const versionSelect = `
-	SELECT v.id, v.vault_id, v.file_id, v.blob_id, COALESCE(b.storage_key, ''), v.content_hash, v.content_size, v.parent_version_id,
+	SELECT v.id, v.vault_id, v.file_id, v.blob_id, COALESCE(b.storage_key, ''), v.content_hash, v.content_size,
+        COALESCE(v.parent_version_id,(SELECT c.parent_version_id FROM changes c
+          WHERE c.vault_id=v.vault_id AND c.vault_revision=v.vault_revision AND c.version_id=v.id)),
 		v.created_by_device_id, COALESCE(NULLIF(v.metadata_format, ''), f.format), v.metadata_line_ending,
 		v.vault_revision, v.created_at
 	FROM file_versions v JOIN files f ON f.id = v.file_id AND f.vault_id = v.vault_id
@@ -54,7 +56,7 @@ func (r *Repository) File(ctx context.Context, vaultID, fileID string) (model.Fi
 }
 
 func (r *Repository) ListFileVersions(ctx context.Context, vaultID, fileID string) ([]model.FileVersion, error) {
-	rows, err := r.db.QueryContext(ctx, fileVersionQuery+` ORDER BY v.vault_revision DESC, v.id`, vaultID, fileID)
+	rows, err := r.db.QueryContext(ctx, fileVersionQuery+visibleHistory()+` ORDER BY v.vault_revision DESC, v.id`, vaultID, fileID)
 	if err != nil {
 		return nil, fmt.Errorf("list file versions: %w", err)
 	}

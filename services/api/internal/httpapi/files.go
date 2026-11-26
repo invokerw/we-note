@@ -71,11 +71,16 @@ func (a *API) fileContent(deleted bool) http.HandlerFunc {
 }
 
 func (a *API) listFileVersions(w http.ResponseWriter, r *http.Request) {
-	if !a.canReadFiles(w, r) {
+	user, ok := a.authenticatedUser(w, r)
+	if !ok {
 		return
 	}
 	vaultID := r.PathValue("vault_id")
 	fileID := r.PathValue("file_id")
+	if _, err := a.repository.VaultForUser(r.Context(), user.ID, vaultID); err != nil {
+		resourceError(w, err)
+		return
+	}
 	if _, err := a.repository.File(r.Context(), vaultID, fileID); errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "file not found")
 		return
@@ -88,7 +93,12 @@ func (a *API) listFileVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "could not list file versions")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"versions": versions})
+	canRestore, err := a.repository.UserCanWriteVault(r.Context(), user.ID, vaultID)
+	if err != nil {
+		resourceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"versions": versions, "can_restore": canRestore})
 }
 
 func (a *API) getFileVersion(w http.ResponseWriter, r *http.Request) {

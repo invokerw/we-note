@@ -44,7 +44,7 @@ func (r *Repository) PublishVaults(ctx context.Context) error {
 	if err := r.backupBeforeLayoutUpgrade(ctx); err != nil {
 		return err
 	}
-	ids, err := stringList(ctx, r.db.DB, `SELECT vault FROM vault_publications WHERE dirty=1 ORDER BY vault`)
+	ids, err := stringList(ctx, r.db.DB, `SELECT vault FROM vault_publications WHERE dirty=1 OR NOT EXISTS(SELECT 1 FROM history_sweeps s WHERE s.vault=vault_publications.vault AND s.day=`+historyToday+`) ORDER BY vault`)
 	if err != nil {
 		return err
 	}
@@ -68,9 +68,6 @@ func (r *Repository) publishVault(ctx context.Context, storage blob.Store, vault
 	if err = tx.QueryRowContext(ctx, `SELECT v.owner_user_id,v.name,v.current_revision,p.dirty FROM vaults v JOIN vault_publications p ON v.id=p.vault WHERE v.id=?`, vault).Scan(&m.Owner, &m.Name, &m.Revision, &dirty); err != nil {
 		return err
 	}
-	if !dirty && !full {
-		return nil
-	}
 	ns, err := blob.VaultNamespace(m.Owner, vault)
 	if err != nil {
 		return err
@@ -84,6 +81,15 @@ func (r *Repository) publishVault(ctx context.Context, storage blob.Store, vault
 	upgrading := err == nil && saved == ""
 	if upgrading && report.Backup == "" {
 		return errors.New("vault upgrade requires a verified backup")
+	}
+	if !upgrading && !full {
+		pruned, e := pruneNoteHistory(ctx, tx, vault)
+		if e != nil {
+			return e
+		}
+		if !dirty && !pruned {
+			return tx.Commit()
+		}
 	}
 	scoped := ownedStore{unwrap(storage), r.owners}
 	files, err := tx.QueryContext(ctx, strings.Replace(activeFileQuery, " AND f.is_deleted = 0", "", 1)+` ORDER BY f.id`, vault)

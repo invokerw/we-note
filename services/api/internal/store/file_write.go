@@ -23,12 +23,13 @@ const maxNoteBytes = 16 << 20
 
 // Content contains the original bytes, including any BOM and CRLF sequences.
 type FileWrite struct {
-	Path        string `json:"path,omitempty"`
-	BasePath    string `json:"base_path,omitempty"`
-	BaseVersion string `json:"base_version_id,omitempty"`
-	BaseHash    string `json:"base_content_hash,omitempty"`
-	Content     []byte `json:"content"`
-	Device      string `json:"device_id,omitempty"`
+	Path          string `json:"path,omitempty"`
+	BasePath      string `json:"base_path,omitempty"`
+	BaseVersion   string `json:"base_version_id,omitempty"`
+	BaseHash      string `json:"base_content_hash,omitempty"`
+	SourceVersion string `json:"source_version_id,omitempty"`
+	Content       []byte `json:"content"`
+	Device        string `json:"device_id,omitempty"`
 }
 type FileResult struct {
 	FileID    string            `json:"file_id"`
@@ -146,8 +147,11 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 		return result, ErrNotFound
 	}
 	var ref storedContent
+	if input.SourceVersion != "" && (operation != "update_file_content" || input.Content != nil) {
+		return result, fileError(400, "INVALID_REQUEST", "choose content or a source version")
+	}
 	if operation == "create_file" || operation == "update_file_content" {
-		if input.Content == nil {
+		if input.Content == nil && input.SourceVersion == "" {
 			return result, fileError(400, "INVALID_REQUEST", "content is required")
 		}
 		if len(input.Content) > maxNoteBytes {
@@ -184,11 +188,18 @@ func (r *Repository) WriteFile(ctx context.Context, user, vault, id, operation, 
 		return result, err
 	}
 	var used bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM changes WHERE vault_id=? AND operation_id=?)`, vault, key).Scan(&used); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+changeReceipts+` WHERE vault_id=? AND operation_id=?)`, vault, key).Scan(&used); err != nil {
 		return result, err
 	}
 	if used {
 		return result, fileError(409, "IDEMPOTENCY_KEY_REUSED", "operation already used")
+	}
+	if input.SourceVersion != "" {
+		source, err := scanFileVersion(tx.QueryRowContext(ctx, fileVersionQuery+visibleHistory()+` AND v.id=?3`, vault, id, input.SourceVersion))
+		if err != nil {
+			return result, err
+		}
+		ref = storedContent{Hash: source.ContentHash, Size: source.ContentSize, Key: source.StorageKey}
 	}
 	var replaced map[string]string
 	if input.Content != nil && (operation == "create_file" || operation == "update_file_content") {
@@ -248,7 +259,8 @@ func (r *Repository) writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op,
 		p = input.Path
 	} else {
 		var deleted bool
-		err := tx.QueryRowContext(ctx, `SELECT f.path,f.format,v.id,v.content_hash,v.content_size,f.is_deleted FROM files f JOIN file_versions v ON v.id=f.current_version_id AND v.file_id=f.id AND v.vault_id=f.vault_id WHERE f.vault_id=? AND f.id=?`, vault, id).Scan(&p, &format, &parent, &result.Hash, &ref.Size, &deleted)
+		var currentSize int64
+		err := tx.QueryRowContext(ctx, `SELECT f.path,f.format,v.id,v.content_hash,v.content_size,f.is_deleted FROM files f JOIN file_versions v ON v.id=f.current_version_id AND v.file_id=f.id AND v.vault_id=f.vault_id WHERE f.vault_id=? AND f.id=?`, vault, id).Scan(&p, &format, &parent, &result.Hash, &currentSize, &deleted)
 		if errors.Is(err, sql.ErrNoRows) {
 			return result, ErrNotFound
 		}
@@ -279,9 +291,8 @@ func (r *Repository) writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op,
 				}
 			}
 		}
-		if op == "update_file_content" {
-			ref.Size = int64(len(input.Content))
-		} else {
+		if op != "update_file_content" {
+			ref.Size = currentSize
 			ref.Hash = result.Hash
 		}
 	}
@@ -295,7 +306,7 @@ func (r *Repository) writeFileTx(ctx context.Context, tx *sql.Tx, vault, id, op,
 			return result, err
 		}
 	}
-	if (op == "create_file" || op == "move_file" || op == "restore_file") && needsTextContent(p) && input.Content == nil {
+	if needsTextContent(p) && input.Content == nil && (op == "create_file" || op == "move_file" || op == "restore_file" || input.SourceVersion != "") {
 		// Copies, moves and restores can reuse a blob without resubmitting its bytes.
 		var data []byte
 		var err error

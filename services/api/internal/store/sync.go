@@ -372,7 +372,7 @@ func (r *Repository) SubmitSyncChange(ctx context.Context, request SyncSubmitReq
 	var existingRevision int64
 	err = tx.QueryRowContext(ctx, `
 		SELECT id, file_id, version_id, vault_revision
-		FROM changes WHERE vault_id = ? AND operation_id = ?`, request.VaultID, request.OperationID).
+		FROM `+changeReceipts+` WHERE vault_id = ? AND operation_id = ?`, request.VaultID, request.OperationID).
 		Scan(&existingChangeID, &existingFileID, &existingVersionID, &existingRevision)
 	if err == nil {
 		return SyncSubmitResult{}, &SyncError{
