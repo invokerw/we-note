@@ -76,3 +76,9 @@
 - `node tests/native-editors.mjs` 通过，`node --test tests/*.test.mjs` 的 11 个测试通过。`npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web` 和 `cargo build --locked -p wenote-desktop` 均通过。本机缺少 Android SDK，未验证 Android 客户端。
 - 自审复查了插件按钮的显示条件、弹窗关闭和原有 Markdown 偏好的读写。`git diff --check` 通过。
 - `DELIVERED`，方式 2。使用原验收服务，打开「个人设置 → 编辑与插件」，点击 Markdown 卡片的「设置」。原有偏好会在弹窗中回显，修改时自动保存。
+
+### 验收与归档
+
+- 2026-11-26 `ACCEPTED`。用户确认「验收完毕」，通过的任务分支提交为 `2c6e531`。
+- 2026-11-26 `MERGED`。本地 `main` 从 `76e9883` 快进到 `2c6e531`。`git merge-base --is-ancestor 2c6e531 main` 和 `git diff --exit-code 2c6e531 main` 均退出 0。
+- 15:23（北京时间），任务服务已停止，任务 worktree 和本地任务分支均已删除。验收数据库及附件、服务日志、CSV 编辑器截图和 macOS 客户端保存在主工作区 `dist/acceptance/FEAT-20261126-default-text-editor-2c6e531/`。
