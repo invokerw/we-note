@@ -1,6 +1,6 @@
 # FEAT-20261126-portable-import · 离线便携包导入
 
-- 2026-11-26 · feature · server / web / desktop / android · DELIVERED（Web / macOS，Android APK 待验证）
+- 2026-11-26 · feature · server / web / desktop / android · MERGED（Web / macOS，Android APK 待验证）
 - 基线及已确认设计提交 `main` / `e494fd2`。工作区 `.worktrees/portable-import-20261126`，分支 `codex/feature-portable-import-20261126`。
 - 用户选择方式 2，在任务分支验收，通过后再合入本地 main。
 - 原始需求「在用户设置里面添加一个导入的选项」「导出改成 导出/导入 功能都放到一个分页里」。范围与验收场景见[已确认设计](../离线便携包导入设计.md)。
@@ -40,3 +40,9 @@
 - 变更与自审。成功导入在写入笔记和资源的同一事务内删除预览，写入失败后可以重试。成功响应供当前页面提示数量和目录。补测真实提交成功后丢弃响应，再次确认时页面收起失效预览并提示核对目标目录，库中只有一份本次导入的笔记。
 - 升级验证。重启独立验收服务前后核对 SQLite，旧完成记录由 10 条变为 0 条。待确认预览仍为 1 条、笔记文件 68 个、资源 7 个。网页及 macOS 验收入口见上文。
 - 复测。`services/api` 下 `go test ./...`、`apps/web` 下 `node --test --test-concurrency=1 tests/*.test.mjs`（12 项）、上述浏览器回归和 `WENOTE_TEST_ORIGIN=http://localhost:19626 cargo test --locked --offline -p wenote-sync --test two_devices -- --ignored` 均退出 0。`python3 scripts/local.py start --port 19626` 重建网页并启动服务，`apps/client` 下 `./node_modules/.bin/tauri build --debug --bundles app` 与 `git diff --check` 退出 0。
+
+## 验收归档
+
+- 2026-11-26 `ACCEPTED`。用户确认验收完毕，受测功能提交为 `f2d69d0`。
+- 2026-11-26 18:49 `MERGED`。本地 `main` 快进合入 `f2d69d0`，`git merge-base --is-ancestor f2d69d0 main` 验证通过。已停止 19626 端口的独立服务，删除任务 worktree 和本地任务分支。
+- macOS 应用、导入样例、验收数据和日志保存在主工作区 `dist/acceptance-backups/FEAT-20261126-portable-import/`。已核对应用和数据副本，归档数据库的 `PRAGMA quick_check` 返回 `ok`。
