@@ -19,13 +19,14 @@ const groups = [
 
 type Action = typeof groups[number]["actions"][number]["label"];
 
-export function CreateNoteWindow({ anchor, phone, folder, paths, io, create, browse, close }: {
+export function CreateNoteWindow({ anchor, phone, folder, paths, io, create, createAtPath, browse, close }: {
   anchor: HTMLElement;
   phone: boolean;
   folder: string;
   paths: string[];
   io: EntryIO;
-  create: (format: Format) => void;
+  create?: (format: Format) => void;
+  createAtPath?: EntryIO["write"];
   browse: (folder: string) => void;
   close: () => void;
 }) {
@@ -54,7 +55,7 @@ export function CreateNoteWindow({ anchor, phone, folder, paths, io, create, bro
   }, [anchor, phone, command]);
 
   function choose(action: Action) {
-    if (!phone && (action === "Markdown" || action === "思维导图")) {
+    if (create && !phone && (action === "Markdown" || action === "思维导图")) {
       close();
       create(action);
     } else {
@@ -62,7 +63,7 @@ export function CreateNoteWindow({ anchor, phone, folder, paths, io, create, bro
     }
   }
   if (command) return <EntryDialog command={{ label: command, source: folder, expected: {} }}
-    io={io} paths={paths} onChange={(_, destination) => browse(destination)} close={close} />;
+    io={io} paths={paths} createAtPath={phone ? undefined : createAtPath} onChange={(_, destination) => browse(destination)} close={close} />;
   return (
     <dialog ref={picker} aria-label="新建笔记" className={"create-note-window" + (phone ? " handset" : "")}
       onCancel={e => { e.preventDefault(); close(); }}

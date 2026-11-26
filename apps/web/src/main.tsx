@@ -13,8 +13,6 @@ import { handlerKey } from "./plugins/registry";
 import PersonalSettings, { SettingsButton, useAccountProfile, type ProfileRequest } from "./PersonalSettings";
 import { browserExport } from "./plugins/archive";
 import {
-  formats,
-  newContent,
   containsEntry,
   entryName,
   entryPath,
@@ -388,11 +386,6 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         panes.setPane("doc");
       }
     });
-  const newNote = (format: keyof typeof formats) =>
-    run(async () => {
-      const path = prompt("新笔记路径", (panes.folder || "") + formats[format]);
-      if (path && leave()) await create(path, await newContent(path));
-    });
   const searchContent = useCallback(async (query: string) => {
     if (!vault) return [];
     const hits: {path:string}[] = await (await request(token, base + "/search?" + new URLSearchParams({q:query}))).json();
@@ -508,7 +501,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         }
       />
       {createAnchor && vault && <CreateNoteWindow anchor={createAnchor} phone={phone} folder={panes.folder || ""}
-        paths={paths} io={entries} close={() => setCreateAnchor(null)} create={newNote}
+        paths={paths} io={entries} close={() => setCreateAnchor(null)}
+        createAtPath={async (path, bytes) => { if (leave()) await create(path, bytes); }}
         browse={folder => { setView("files"); panes.browse(folder); }} />}
       {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={() => !dirty.current || confirm("放弃尚未保存的编辑？")} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
         exportPanel={vault ? <><p>当前笔记库 · {vaults.find(v => v.id === vault)?.name}</p><LibraryResources base={base} token={token}/></> : <p>暂无笔记库可导出。</p>}

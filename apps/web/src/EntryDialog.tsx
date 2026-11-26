@@ -32,12 +32,14 @@ export function EntryDialog({
   command,
   io,
   paths,
+  createAtPath,
   onChange,
   close,
 }: {
   command: EntryCommand;
   io: EntryIO;
   paths: string[];
+  createAtPath?: EntryIO["write"];
   onChange: (src: string, dst: string) => void;
   close: () => void;
 }) {
@@ -50,7 +52,7 @@ export function EntryDialog({
     pdf = label === "导出为PDF";
   const [name, setName] = useState(
       format
-        ? formats[format]
+        ? (createAtPath ? container : "") + formats[format]
         : label === "复制"
           ? copyName(source)
           : entryName(source),
@@ -156,15 +158,22 @@ export function EntryDialog({
         }
         onChange("", container);
       } else if (format) {
-        checkName(name);
-        let path = container + name.trim();
+        const value = name.trim();
+        const parts = createAtPath ? value.split("/") : [value];
+        parts.forEach(checkName);
+        let path = createAtPath ? value : container + value;
         const ext = formats[format].slice(formats[format].indexOf("."));
         if (ext && !path.toLowerCase().endsWith(ext)) path += ext;
         checkFree(path);
-        await io.write(path, await newContent(path));
-        await io.refresh();
-        onChange("", container);
-        await io.openCreated(path);
+        const bytes = await newContent(path);
+        if (createAtPath) {
+          await createAtPath(path, bytes);
+        } else {
+          await io.write(path, bytes);
+          await io.refresh();
+          onChange("", container);
+          await io.openCreated(path);
+        }
       } else {
         const op =
           label === "删除" ? "delete" : label === "复制" ? "copy" : "move";
@@ -248,7 +257,7 @@ export function EntryDialog({
         )}
         {(format || destination || label === "重命名") && (
           <label>
-            名称
+            {format && createAtPath ? "新笔记路径" : "名称"}
             <input
               autoFocus
               required
