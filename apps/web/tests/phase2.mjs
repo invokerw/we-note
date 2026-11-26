@@ -86,7 +86,7 @@ try {
   const page = await chrome.newPage({ viewport: { width: 1600, height: 1000 } });
   page.setDefaultTimeout(12000);
   const errors = [];
-  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("pageerror", (e) => errors.push(e.stack || String(e)));
   page.on("console", (m) => {
     if (m.type() === "error" && /CodeMirror plugin crashed/.test(m.text()))
       errors.push(m.text());

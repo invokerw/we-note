@@ -51,3 +51,5 @@ macOS 的 `apps/web/tests/phase2.mjs` 在切换编辑模式后未观察到正文
 新增断言复现了已完成任务按 Enter 后新项被勾选、异步图片上传及键盘保存后正文失焦、代码块光标对比度仅为 2.93 的问题。修复后从任务工作区运行同一条端到端命令退出 0。两个设备同步及全部五个浏览器脚本通过，验证了图片名称、图片预览、离线导出和断点续传后的原始字节。`npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`node --test apps/web/tests/*.test.mjs` 及 `git diff --check` 均退出 0，前端单元测试 10 项通过。自审覆盖了输入法组合输入、异步操作结束时的焦点归属、非待办列表按键和测试中的跨平台光标定位。
 
 远端运行 `45745802543` 在 `4bab7bf` 上通过 macOS 全部步骤。Windows 通过 Go、编辑器与文件菜单，阶段四 `phase4.mjs:171` 在源码编辑器重做时失败。已对照 CodeMirror 的 `historyKeymap` 修正测试按键，Windows 使用 Ctrl+Y，macOS 使用 Cmd+Shift+Z。断言仍逐行比较重做后的完整 Markdown。
+
+运行 `45748045350` 在 Windows 捕获到间歇性的 `Applying a mismatched transaction`。本机对阶段二启用 2–4 倍 CPU 降速并行重复 9 次，从异常栈定位到 Crepe 表格在下一帧提交过期选区，同时复现上传后早于取消 `inert` 尝试恢复焦点。过滤仅变更选区且基于过期文档的事务，在 `inert` 实际移除后恢复键盘焦点。修改前 9 次有 7 次失败，修复后 9 次全部通过。

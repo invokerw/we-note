@@ -135,7 +135,10 @@ export default function CrepeEditor(props: Props) {
       $prose(
         (ctx) =>
           new Plugin({
-            filterTransaction(tr) {
+            filterTransaction(tr, state) {
+              // Table clicks schedule a selection for the next frame. Typing may
+              // already have changed the document that selection belongs to.
+              if (tr.selectionSet && !tr.docChanged && !tr.before.eq(state.doc)) return false;
               if (!active || !initialized || !tr.docChanged) return true;
               const retained = new Set(tr.doc.content.content);
               if (

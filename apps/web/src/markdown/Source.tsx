@@ -31,12 +31,19 @@ export function resumeWriting(
   trigger: Element | null,
 ) {
   requestAnimationFrame(() => {
-    const active = view.root.activeElement;
-    if (
-      view.dom.isConnected &&
-      (active === trigger || active === document.body)
-    )
-      view.focus();
+    function restore() {
+      const active = view.root.activeElement;
+      if (view.dom.isConnected && (active === trigger || active === document.body)) view.focus();
+    }
+    const locked = view.dom.closest("[inert]");
+    if (!locked) return restore();
+    // React can commit the unlocked document after the first animation frame.
+    const observer = new MutationObserver(() => {
+      if (locked.hasAttribute("inert")) return;
+      observer.disconnect();
+      restore();
+    });
+    observer.observe(locked, { attributes: true, attributeFilter: ["inert"] });
   });
 }
 
