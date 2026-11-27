@@ -35,7 +35,7 @@ import { AppShell } from "@mantine/core";
 import { WorkspaceShell } from "./WorkspaceShell";
 import { LibraryResources } from "./Resources";
 import { rememberSession, base64, Note, request, Vault } from "./api";
-import { Cover, LibraryPanes, usePanes } from "./LibraryUI";
+import { authStyleOptions, Cover, LibraryPanes, usePanes, type AuthStyle } from "./LibraryUI";
 import {
   loadLocalPreferences,
   mergeRemotePreferences,
@@ -48,21 +48,60 @@ import "./phone.css";
 import "./workspace.css";
 const Admin = lazy(() => import("./Admin"));
 import { AccountAction, accountAction } from "./AccountAction";
+function AuthStyleSwitcher({
+  value,
+  onChange,
+}: {
+  value: AuthStyle;
+  onChange: (style: AuthStyle) => void;
+}) {
+  return (
+    <div className="auth-style-switcher" aria-label="登录页风格预览">
+      <span>风格预览</span>
+      <div role="group" aria-label="选择登录页风格">
+        {authStyleOptions.map((style) => (
+          <button
+            key={style.id}
+            type="button"
+            aria-pressed={style.id === value}
+            onClick={() => onChange(style.id)}
+          >
+            {style.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function loadAuthStyle(): AuthStyle {
+  const stored = localStorage.getItem("wenote-auth-style");
+  return authStyleOptions.some((style) => style.id === stored)
+    ? (stored as AuthStyle)
+    : "paper";
+}
+
 function Auth({ login, compact = false }: { login: (s: string) => void; compact?: boolean }) {
   const [register, setRegister] = useState(false),
     [mode, setMode] = useState(""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [authStyle, setAuthStyle] = useState<AuthStyle>(loadAuthStyle);
   useEffect(() => {
     request("", "/api/v1/auth/registration")
       .then((r) => r.json())
       .then((p) => setMode(p.registration_mode))
       .catch((e) => setError(String(e)));
   }, []);
+  function chooseAuthStyle(style: AuthStyle) {
+    setAuthStyle(style);
+    localStorage.setItem("wenote-auth-style", style);
+  }
   return (
-    <div className={compact ? "share-auth" : "auth"}>
-      {!compact && <Cover />}
+    <div className={compact ? "share-auth" : `auth auth-style-${authStyle}`}>
+      {!compact && <Cover style={authStyle} />}
       <div className="entry-form">
+        {!compact && <AuthStyleSwitcher value={authStyle} onChange={chooseAuthStyle} />}
         {compact ? <h3>{register ? "创建账户" : "登录"}</h3> : <h1>{register ? "创建账户" : "打开你的笔记库"}</h1>}
         <form
           onSubmit={async (e) => {

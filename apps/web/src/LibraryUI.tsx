@@ -23,21 +23,84 @@ import {
   type ReactNode,
 } from "react";
 
+export type AuthStyle = "paper" | "night" | "garden";
+
+export const authStyleOptions: ReadonlyArray<{
+  id: AuthStyle;
+  label: string;
+  kicker: string;
+  title: string;
+  description: string;
+}> = [
+  {
+    id: "paper",
+    label: "纸页",
+    kicker: "把想法留在身边",
+    title: "从一页笔记开始",
+    description: "记录、整理、回看，让每个想法都有位置。",
+  },
+  {
+    id: "night",
+    label: "夜航",
+    kicker: "CALM · FOCUS",
+    title: "把复杂的事，写清楚",
+    description: "在安静的空间里，专注于正在发生的思考。",
+  },
+  {
+    id: "garden",
+    label: "花园",
+    kicker: "YOUR QUIET SPACE",
+    title: "给灵感一个安静的房间",
+    description: "收集灵感，慢慢长成属于你的知识库。",
+  },
+];
+
+function BrandMark() {
+  return (
+    <svg
+      className="brand-mark"
+      viewBox="0 0 44 44"
+      role="img"
+      aria-label="WeNote 图标"
+    >
+      <path className="brand-mark-back" d="M12 6h15l7 7v22a3 3 0 0 1-3 3H12a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Z" />
+      <path className="brand-mark-front" d="M18 10h11l7 7v18a3 3 0 0 1-3 3H18a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3Z" />
+      <path className="brand-mark-fold" d="M29 10v7h7" />
+      <path className="brand-mark-line" d="M21 24h8M21 29h6" />
+      <path className="brand-mark-spark" d="m10 12 1.1 2.4L13.5 15l-2.4 1.1L10 18.5l-1.1-2.4L6.5 15l2.4-1.1L10 12Z" />
+    </svg>
+  );
+}
+
 export function Brand() {
   return (
     <span className="brand">
-      <i aria-hidden="true" />
-      WeNote
+      <BrandMark />
+      <span>WeNote</span>
     </span>
   );
 }
 
-export function Cover() {
+export function Cover({ style = "paper" }: { style?: AuthStyle }) {
+  const copy = authStyleOptions.find((item) => item.id === style) || authStyleOptions[0];
   return (
-    <div className="cover-panel" aria-hidden="true">
+    <div className={`cover-panel auth-style-${style}`} aria-hidden="true">
       <Brand />
-      <div className="folio">
-        <i />
+      <div className="cover-copy">
+        <p className="cover-kicker">{copy.kicker}</p>
+        <h2>{copy.title}</h2>
+        <p>{copy.description}</p>
+      </div>
+      <div className="cover-art" aria-hidden="true">
+        <span className="note-card note-card-back" />
+        <span className="note-card note-card-middle" />
+        <span className="note-card note-card-front">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="cover-orbit cover-orbit-one" />
+        <span className="cover-orbit cover-orbit-two" />
       </div>
     </div>
   );
