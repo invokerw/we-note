@@ -61,3 +61,12 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 用户随后反馈网关回 `401 API_KEY_REQUIRED`。增加验收条件：网页刷新后，对于之前带 Key 保存的模型，发送前在本地提示补填，保留草稿；历史配置收到网关明确的缺少密钥反馈时给出可读指引；可匿名使用的端点继续支持。仅在本页内存保存密钥，用模拟凭据核对设置、刷新、重新输入与实际聊天请求的认证头。
 
 红阶段：`node --test apps/web/tests/web-build-history.test.mjs` 退出 1，第二次构建删除首版聊天模块。`WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 1，聊天模块 404 时仅显示浏览器异常，用户输入已被移入历史。
+
+### 网页聊天验收 · DELIVERED
+
+受测功能提交 `1ac9529`，沿用方式 2。已从对应提交重建报错页的旧静态依赖，`turn-DW9Wpc4o.js` 已恢复 HTTP 200。同一目录重建保留当前及上一版资源。聊天模块成功加载后才记录用户消息，加载期间继续输入的草稿也会保留。自审核对了旧配置的 401 恢复流程和无密钥服务的行为。
+
+- Chrome 在验收网页的独立空库使用 Responses 和 `gpt-6.2-sol` 实际发送一条测试消息，确认带 Bearer 凭据，网关返回 HTTP 200，助手显示预期回复。
+- `node --test apps/web/tests/web-build-history.test.mjs apps/web/tests/assistant.test.mjs apps/web/tests/mcp-tools.test.mjs` 退出 0，共 8 项。`WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 0，覆盖聊天模块 404、匿名模型、刷新后缺少 Key、旧配置 401 恢复草稿、重新填写后的认证头及正常写入流程。
+- `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 退出 0，桌面调试应用重新构建成功。验收网页已重建并运行在 `http://localhost:19453`，PID 24641。
+- 刷新网页，在「个人设置 → 笔记助手」重新填入 Key 并保存，可从右栏发送草稿。密钥仅存在页面内存，本机配置保存此前是否使用过 Key 的标记。
