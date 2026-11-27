@@ -53,3 +53,11 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 - `node --test apps/web/tests/mcp-tools.test.mjs apps/web/tests/assistant.test.mjs` 退出 0，7 项通过。`git diff --check` 退出 0。
 - `./scripts/local.py stop` 及 `./scripts/local.py start --port 19453` 退出 0，重建后验收地址仍为 `http://localhost:19453`，PID 更新为 22993。桌面 `tauri build --debug --bundles app`（启用 bundle）退出 0，试用产物为 `target/debug/bundle/macos/WeNote.app`。
 - 受测功能提交 `ce3b987`，按方式 2 在任务分支验收。打开桌面客户端，进入笔记库的「个人设置 → 笔记助手」，填写上述协议、模型及网关地址，输入本次会话的 Key 后点「测试连接」。网页使用该网关需要网关允许验收站点跨域访问。
+
+## 2026-11-27 聊天模块加载失败 · CHANGES_REQUESTED
+
+用户在已打开的验收页首次发送消息时，本地 `turn-DW9Wpc4o.js` 返回 404。沿用方式 2。复现网页更新后旧标签页加载聊天代码的流程。本地验收发布需保留上一版资源；若聊天模块已不可用，应保留原输入、提示刷新，且本轮刷新前不产生重复消息、模型请求或笔记写入。以 Chrome 从发送入口验证恢复和后续对话。
+
+用户随后反馈网关回 `401 API_KEY_REQUIRED`。增加验收条件：网页刷新后，对于之前带 Key 保存的模型，发送前在本地提示补填，保留草稿；历史配置收到网关明确的缺少密钥反馈时给出可读指引；可匿名使用的端点继续支持。仅在本页内存保存密钥，用模拟凭据核对设置、刷新、重新输入与实际聊天请求的认证头。
+
+红阶段：`node --test apps/web/tests/web-build-history.test.mjs` 退出 1，第二次构建删除首版聊天模块。`WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 1，聊天模块 404 时仅显示浏览器异常，用户输入已被移入历史。
