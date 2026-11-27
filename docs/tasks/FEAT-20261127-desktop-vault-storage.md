@@ -34,3 +34,9 @@ macOS 通过系统文件夹选择器保存账号位置。按服务 origin 和用
 - 服务由 `./scripts/local.py start --port 18473` 创建，PID 43280，日志 `dist/local/server.log`，数据 `services/api/data`。`./scripts/local.py status` 和 `/healthz` 已确认运行，验收后使用 `./scripts/local.py stop` 停止。
 
 2026-11-27 `DELIVERED`。方式 2，受测提交 `b0a588e`。任务工作区、Apple Silicon 客户端和独立服务保留，等待用户验收。
+
+## 验收与归档
+
+2026-11-27 17:21（上海）`ACCEPTED` → `MERGED`。用户确认验收通过。本地 `main` 已快进至交付记录 `73231d9`，核实包含受测提交 `b0a588e`。验收服务已停止，任务工作区和分支已清理。
+
+客户端、服务日志及测试数据已归档至 `dist/acceptance/FEAT-20261127-desktop-vault-storage/`。归档应用通过签名检查，归档数据逐文件比对一致，SQLite 完整性检查返回 `ok`。
