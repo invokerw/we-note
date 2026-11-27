@@ -9,7 +9,7 @@ import {
   type Proposal,
 } from "./history";
 import { checkedConfig } from "./policy";
-import { readConfig, keyFor } from "./Settings";
+import { readConfig, keyFor, missingKeyHint, gatewayNeedsKey } from "./Settings";
 import type { Connection } from "./turn";
 import "./assistant.css";
 type Props = {
@@ -221,8 +221,15 @@ export function AssistantPanel(props: Props) {
     setStatus("正在生成…");
     text("");
     let partial = "";
+    let key = "";
     try {
       const config = checkedConfig(readConfig());
+      key = keyFor(config);
+      if (config.usesApiKey && !key) throw Error(missingKeyHint);
+      const { runTurn } = await import("./turn").catch(() => {
+        throw Error("聊天模块加载失败。请刷新页面，再发送草稿。");
+      });
+      ctrl.signal.throwIfAborted();
       const contextKey = JSON.stringify([
         grant.id,
         config.baseUrl,
@@ -238,7 +245,7 @@ export function AssistantPanel(props: Props) {
         contextKey,
         contextStart,
         title: c.lines.length ? c.title : prompt.slice(0, 40),
-        draft: "",
+        draft: c.draft === before.draft ? "" : c.draft,
         updated: Date.now(),
         lines: [
           ...c.lines.map((l) =>
@@ -252,14 +259,13 @@ export function AssistantPanel(props: Props) {
           { role: "user", text: prompt },
         ],
       }));
-      const { runTurn } = await import("./turn");
       await runTurn({
         connection,
         chat: { ...before, contextStart },
         prompt,
         folder: props.folder,
         config,
-        key: keyFor(config),
+        key,
         signal: ctrl.signal,
         append: (l) => {
           if (!ctrl.signal.aborted) void append(l);
@@ -291,7 +297,23 @@ export function AssistantPanel(props: Props) {
     } catch (e) {
       if (mounted.current) {
         if (partial) void append({ role: "assistant", text: partial });
-        if (!ctrl.signal.aborted) showError(String(e));
+        if (!ctrl.signal.aborted) {
+          if (gatewayNeedsKey(e, key)) {
+            const c = current.current;
+            if (
+              c?.id === before.id && !c.draft && !partial &&
+              c.lines.length === before.lines.length + 1
+            ) {
+              void update((latest) => ({
+                ...latest,
+                draft: before.draft,
+                lines: latest.lines.slice(0, -1),
+                title: before.title,
+              }));
+            }
+            showError(missingKeyHint);
+          } else showError(e instanceof Error ? e.message : String(e));
+        }
       }
     } finally {
       if (controller.current === ctrl) controller.current = null;

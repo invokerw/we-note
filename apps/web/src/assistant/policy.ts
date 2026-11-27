@@ -5,6 +5,7 @@ export type Config = {
   api: "openai-completions" | "openai-responses";
   baseUrl: string;
   model: string;
+  usesApiKey?: boolean;
 };
 export function checkedConfig(c: Config): Config {
   const url = new URL(c.baseUrl.trim());
@@ -25,6 +26,7 @@ export function checkedConfig(c: Config): Config {
     api: c.api,
     baseUrl: url.href.replace(/\/+$/, ""),
     model: c.model.trim(),
+    ...(c.usesApiKey === true ? { usesApiKey: true } : {}),
   };
 }
 export function checkReference(

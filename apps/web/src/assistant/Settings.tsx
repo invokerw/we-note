@@ -16,6 +16,10 @@ export function clearCredential() {
 export function keyFor(c: Config) {
   return credential.url === c.baseUrl ? credential.key : "";
 }
+export const missingKeyHint = "请在「个人设置 → 笔记助手」填写 API Key 并保存，然后重新发送。";
+export function gatewayNeedsKey(error: unknown, key: string) {
+  return !key && /\b401\b/.test(String(error)) && /\bAPI_KEY_REQUIRED\b/i.test(String(error));
+}
 export function ModelSettings() {
   const [c, config] = useState(readConfig),
     [key, setKey] = useState(() => keyFor(c)),
@@ -24,21 +28,26 @@ export function ModelSettings() {
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   async function submit(test: boolean) {
+    const secret = key.trim();
     try {
-      const checked = checkedConfig(c);
+      const checked = checkedConfig({ ...c, usesApiKey: Boolean(secret) });
       if (test) {
+        if (!secret && c.usesApiKey)
+          throw Error("请先填写这个模型服务的 API Key。");
         setBusy(true);
         status("正在验证工具调用…");
         controller.current = new AbortController();
         const { testModel } = await import("./runtime");
-        await testModel(checked, key, controller.current.signal);
+        await testModel(checked, secret, controller.current.signal);
       }
       localStorage.setItem(storageKey, JSON.stringify(checked));
-      credential = { url: checked.baseUrl, key };
+      credential = { url: checked.baseUrl, key: secret };
+      config(checked);
       window.dispatchEvent(new Event("wenote-model"));
       status(test ? "可用于写笔记，模型设置已保存" : "本机模型设置已保存");
     } catch (e) {
-      status(String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      status(gatewayNeedsKey(e, secret) ? "模型服务要求 API Key，请填写后重新测试。" : message);
     } finally {
       setBusy(false);
     }
@@ -65,7 +74,7 @@ export function ModelSettings() {
           placeholder="http://localhost:11434/v1"
           value={c.baseUrl}
           onChange={(e) => {
-            config({ ...c, baseUrl: e.target.value });
+            config({ ...c, baseUrl: e.target.value, usesApiKey: false });
             setKey("");
           }}
         />
@@ -78,7 +87,7 @@ export function ModelSettings() {
         />
       </label>
       <label>
-        API Key（可选，仅此会话）
+        API Key（按服务要求填写，刷新后需重填）
         <input
           type="password"
           autoComplete="off"

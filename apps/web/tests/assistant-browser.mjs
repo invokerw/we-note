@@ -85,10 +85,19 @@ try {
   await btn("笔记助手").click();
   await checkBrowserTransport();
   let requested = 0;
+  let modelCalls = 0;
+  const expectedKey = "test-chat-key";
   const model = "http://127.0.0.1:19456/v1";
   await page.route(model + "/**", async (route) => {
     const req = route.request(),
       body = req.postDataJSON();
+    modelCalls++;
+    const anonymous = body.model === "anonymous";
+    if (!req.headers().authorization && !anonymous) {
+      await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: { code: "API_KEY_REQUIRED", message: "API key is required" } }) });
+      return;
+    }
+    assert.equal(req.headers().authorization, anonymous ? undefined : `Bearer ${expectedKey}`);
     if (req.url().endsWith("/responses")) {
       assert(body.tools.some((t) => t.name === "check_connection"));
       const item = {
@@ -163,7 +172,11 @@ try {
     });
   });
   await page.getByLabel("服务地址", { exact: true }).fill(model);
+  await page.getByLabel("模型 ID").fill("anonymous");
+  await btn("测试连接").click();
+  await page.getByText("可用于写笔记，模型设置已保存").waitFor();
   await page.getByLabel("模型 ID").fill("test");
+  await page.getByLabel("API Key").fill(expectedKey);
   await page.getByLabel("接口协议").selectOption("openai-responses");
   await btn("测试连接").click();
   await page.getByText("可用于写笔记，模型设置已保存").waitFor();
@@ -174,7 +187,42 @@ try {
   await btn("展开笔记助手").click();
   await btn("授权编辑").click();
   const draft = page.getByLabel("助手消息");
-  await draft.fill("帮我写一篇周报");
+  const turnModule = /\/static\/turn-[^/]+\.js$/;
+  await page.route(turnModule, (route) => route.fulfill({ status: 404, body: "missing" }));
+  const prompt = "帮我写一篇周报";
+  await draft.fill(prompt);
+  const callsBeforeSend = modelCalls;
+  await btn("发送").click();
+  await page.getByRole("alert").filter({ hasText: "刷新" }).waitFor();
+  assert.equal(await draft.inputValue(), prompt);
+  assert.equal(await page.locator(".assistant-line.role-user").count(), 0);
+  await page.unroute(turnModule);
+  await page.reload();
+  await btn("展开笔记助手").click();
+  await btn("发送").click();
+  await page.getByRole("alert").filter({ hasText: "API Key" }).waitFor();
+  assert.equal(await draft.inputValue(), prompt);
+  assert.equal(await page.locator(".assistant-line.role-user").count(), 0);
+  assert.equal(modelCalls, callsBeforeSend);
+  assert(!(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).includes(expectedKey));
+  // A model configuration saved by the previous release has no credential hint.
+  await page.evaluate(() => {
+    const storageKey = "wenote-assistant-model";
+    const { api, baseUrl, model } = JSON.parse(localStorage.getItem(storageKey));
+    localStorage.setItem(storageKey, JSON.stringify({ api, baseUrl, model }));
+  });
+  await page.reload();
+  await btn("展开笔记助手").click();
+  await btn("发送").click();
+  await page.getByRole("alert").filter({ hasText: "个人设置" }).waitFor();
+  assert.equal(await draft.inputValue(), prompt);
+  assert.equal(await page.locator(".assistant-line.role-user").count(), 0);
+  assert.equal(modelCalls, callsBeforeSend + 1);
+  await btn("打开个人设置").click();
+  await btn("笔记助手").click();
+  await page.getByLabel("API Key").fill(expectedKey);
+  await btn("保存模型设置").click();
+  await btn("关闭个人设置").click();
   await btn("发送").click();
   await btn("应用修改").waitFor();
   assert.equal((await api(`vaults/${vault}/files`)).files.length, 0);
