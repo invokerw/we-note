@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>WeNote 桌面同步</title>
+    <title>WeNote</title>
     <link rel="stylesheet" href="style.css" />
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./entry.js"></script>
     <script type="module" src="../../web/src/desktop.tsx"></script>
   </head>
   <body>
@@ -15,7 +15,7 @@
         <div class="folio"><i></i></div>
       </div>
       <div class="entry-form">
-        <h1 id="heading">桌面同步</h1>
+        <h1 id="heading">登录 WeNote</h1>
         <p id="network" role="status" hidden>
           当前离线，可以继续编辑本地笔记。
         </p>
@@ -40,6 +40,15 @@
               required /></label
           ><button class="primary">登录</button>
         </form>
+        <section id="storage-setup" hidden>
+          <p id="storage-description"></p>
+          <button type="button" class="primary" id="pick-storage" hidden>选择文件夹…</button>
+          <button type="button" id="create-separate" hidden>在所选位置新建专用文件夹</button>
+          <button type="button" id="retry-sync" hidden>重试未完成的笔记库</button>
+          <button type="button" id="ready-editor" hidden>打开已就绪的笔记库</button>
+          <label id="mac-auto-label" hidden><input type="checkbox" id="mac-auto" /> 每 15 秒自动同步</label>
+          <button type="button" id="mac-logout">退出账号</button>
+        </section>
         <form id="settings" hidden>
           <label>笔记库<select id="vault"></select></label
           ><label id="folder-label"

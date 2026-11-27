@@ -80,6 +80,7 @@ impl Notebook {
         disk::atomic(&path, key.as_bytes())?;
         Ok(json!(key))
     }
+    pub(crate) fn root_path(&self) -> &Path { &self.root }
     pub fn origin(&self) -> &str {
         &self.origin
     }

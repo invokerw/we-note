@@ -1,3 +1,5 @@
+pub mod storage;
+
 mod api;
 mod disk;
 pub mod notebook;

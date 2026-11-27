@@ -1,5 +1,7 @@
 mod mcp;
 mod model;
+mod storage;
+use sha2::{Digest, Sha256};
 #[cfg(target_os = "android")]
 mod mobile;
 use std::path::PathBuf;
@@ -12,10 +14,14 @@ async fn login(
     password: String,
 ) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || -> Result<serde_json::Value, String> {
-        let session=Api::login_session(&origin,&email,&password).map_err(|e|e.to_string())?;let token=session["access_token"].as_str().ok_or("missing token")?;
+        let session = Api::login_session(&origin,&email,&password).map_err(|e|e.to_string())?;
+        let token = session["access_token"].as_str().ok_or("missing token")?;
         let api = Api::new(&origin, token).map_err(|e| e.to_string())?;
         let vaults = api.vaults().map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({"token":token,"refresh":session["refresh_token"],"expires":session["expires_at"],"vaults":vaults["vaults"]}))
+        let uid = session["user"]["id"].as_str().ok_or("missing account ID")?;
+        let origin = reqwest::Url::parse(&origin).map_err(|e| e.to_string())?.origin().ascii_serialization();
+        let owner = format!("{:x}", Sha256::digest(format!("{origin}\0{uid}")));
+        Ok(serde_json::json!({"owner":owner,"token":token,"refresh":session["refresh_token"],"expires":session["expires_at"],"vaults":vaults["vaults"]}))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -27,6 +33,8 @@ async fn sync(
     token: String,
     vault: String,
     root: PathBuf,
+    owner: Option<String>,
+    name: Option<String>,
 ) -> Result<Report, String> {
     if vault.is_empty()
         || !vault
@@ -55,6 +63,18 @@ async fn sync(
         root
     };
     tauri::async_runtime::spawn_blocking(move || {
+        let (root, dir) = if let Some(owner) = owner {
+            wenote_sync::storage::prepare_sync(
+                dir.parent().ok_or("missing data directory")?,
+                &owner,
+                &origin,
+                &vault,
+                name.as_deref().unwrap_or(&vault),
+            )
+            .map_err(|e| format!("{e:#}"))?
+        } else {
+            (root, dir)
+        };
         let report =
             synchronize(&origin, &token, &vault, &root, &dir).map_err(|e| e.to_string())?;
         wenote_sync::notebook::Notebook::remember_recent(
@@ -214,13 +234,17 @@ async fn notebook(
     app: tauri::AppHandle,
     vault: String,
     session_origin: Option<String>,
+    owner: Option<String>,
     operation: LocalAction,
 ) -> Result<serde_json::Value, String> {
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let downloads = app.path().download_dir();
     tauri::async_runtime::spawn_blocking(move || {
-        let book =
-            wenote_sync::notebook::Notebook::open(&data, &vault).map_err(|e| format!("{e:#}"))?;
+        let book = match owner {
+            Some(owner) => wenote_sync::storage::open_book(&data, &owner, &vault),
+            None => wenote_sync::notebook::Notebook::open(&data, &vault),
+        }
+        .map_err(|e| format!("{e:#}"))?;
         if let Some(origin) = session_origin {
             if origin != book.origin() {
                 return Err("请登录此笔记目录绑定的服务".into());
@@ -364,7 +388,9 @@ fn print_note(webview: tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 #[tauri::command]
-fn mcp_desktop_available() -> bool { !cfg!(mobile) }
+fn mcp_desktop_available() -> bool {
+    !cfg!(mobile)
+}
 
 #[tauri::command]
 fn is_android() -> bool {
@@ -381,6 +407,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             model::model_stream,
             model::model_cancel,
+            storage::mac_storage_available,
+            storage::choose_storage,
+            storage::account_location,
+            storage::account_vaults,
             login,
             refresh,
             logout,
