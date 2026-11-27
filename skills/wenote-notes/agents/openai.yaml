@@ -1,0 +1,4 @@
+interface:
+  display_name: "WeNote 笔记与思维导图"
+  short_description: "通过已授权的 WeNote 连接查找笔记、编辑 Markdown 段落和整理导图节点"
+  default_prompt: "用 $wenote-notes 找到本周的周报，列出其中还没完成的事项。"

@@ -17,6 +17,8 @@ WeNote 是一款可自托管的跨设备笔记应用。你可以在网页上写 
 
 网页及手机在当前应用内使用 `window.weNoteMCP.request(message, token)`。支持 WebMCP 的浏览器可以另行授权浏览器助手。网页可点击「缓存本库可编辑文件」，在当前页面断网时继续编辑已缓存的内容。恢复联网后自动提交；有版本冲突时在「查看同步冲突」中核对待同步内容。桌面和手机的修改先存入本地笔记库，再由客户端同步。
 
+使用支持 Agent Skills 的助手时，将整个 `skills/wenote-notes` 文件夹复制到该助手的技能目录。例如，Codex 可放在当前项目的 `.agents/skills/` 下。用新会话连接已授权的笔记库，然后试试「用 `$wenote-notes` 把 `产品/周报.md` 里的联调日期从周三改为周五」。[查看配套 Skill](skills/wenote-notes/SKILL.md)
+
 ## 编辑和整理
 
 | 想做什么 | 怎么操作 |
