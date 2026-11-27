@@ -1,7 +1,7 @@
 const invoke = window.__TAURI__.core.invoke;
-invoke("mac_storage_available")
-  .then(async (mac) => {
-    if (mac) await (await import("./mac.js")).start();
+invoke("account_storage_available")
+  .then(async (supported) => {
+    if (supported) await (await import("./desktop-storage.js")).start();
     else await import("./app.js");
   })
   .catch((error) => {

@@ -407,7 +407,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             model::model_stream,
             model::model_cancel,
-            storage::mac_storage_available,
+            storage::account_storage_available,
             storage::choose_storage,
             storage::account_location,
             storage::account_vaults,

@@ -181,10 +181,14 @@ pub fn prepare(data: &Path, owner: &str, vault: &str, name: &str) -> Result<Path
     }
     let readable: String = name
         .chars()
-        .filter(|c| !c.is_control() && !"/\\:".contains(*c))
+        .filter(|c| !c.is_control() && !r#"/\:*?"<>|"#.contains(*c))
         .take(32)
         .collect();
-    let folder = format!("{} [{}]", readable.trim(), vault);
+    let mut folder = format!("{} [{}]", readable.trim(), vault);
+    // Windows reserves device names even with extensions (e.g. CON.txt).
+    if disk::relative(&folder).is_err() {
+        folder = format!("笔记库 [{vault}]");
+    }
     let dir = root.join(&folder);
     fs::create_dir(&dir)
         .with_context(|| format!("无法新建独立目录 {}，请检查是否有同名文件夹", dir.display()))?;
@@ -198,14 +202,17 @@ pub fn prepare(data: &Path, owner: &str, vault: &str, name: &str) -> Result<Path
 
 // Snapshot both ordinary files and pending sync/editor state before the first
 // managed sync. The old client can still read its original copy.
-fn copy_contents(from: &Path, to: &Path) -> Result<()> {
+fn copy_contents(from: &Path, to: &Path, skip_held_lock: bool) -> Result<()> {
     for entry in fs::read_dir(from)? {
         let entry = entry?;
+        if skip_held_lock && entry.file_name() == "lock" {
+            continue;
+        }
         let dest = to.join(entry.file_name());
         let kind = entry.file_type()?;
         if kind.is_dir() {
             fs::create_dir(&dest)?;
-            copy_contents(&entry.path(), &dest)?;
+            copy_contents(&entry.path(), &dest, false)?;
         } else if kind.is_file() {
             fs::copy(entry.path(), dest)?;
         } else {
@@ -251,12 +258,16 @@ pub fn prepare_sync(
                 !root.starts_with(&old.root) && !old.root.starts_with(&root),
                 "新旧笔记目录不能嵌套"
             );
+            ensure!(
+                fs::read_dir(&root)?.next().is_none(),
+                "新目录已有内容，请检查后重试旧库迁移"
+            );
             let snapshot = tempfile::tempdir_in(&states)?;
-            copy_contents(&old_dir, snapshot.path())?;
+            copy_contents(&old_dir, snapshot.path(), true)?;
             old.root = old.root.canonicalize()?;
             // Stage next to the destination for an atomic same-volume rename.
             let staged = tempfile::tempdir_in(root.parent().context("存储位置无效")?)?;
-            copy_contents(&old.root, staged.path())?;
+            copy_contents(&old.root, staged.path(), false)?;
             old.root = root.clone();
             old.origin = origin.into();
             disk::atomic(
@@ -286,11 +297,20 @@ pub fn prepare_sync(
         let staged_name: std::ffi::OsString = serde_json::from_slice(&bytes)?;
         let staged = child_path_for_stage(&root, &staged_name)?;
         if staged.try_exists()? {
-            ensure!(
-                fs::read_dir(&root)?.next().is_none(),
-                "新目录已有内容，请检查后重试旧库迁移"
-            );
-            fs::rename(staged, &root)?;
+            // Windows cannot rename a directory over an existing directory.
+            // Each successful rename consumes one entry from the journal's
+            // stage, so an interrupted installation resumes with the rest.
+            for item in fs::read_dir(&staged)? {
+                let item = item?;
+                let target = root.join(item.file_name());
+                ensure!(
+                    fs::symlink_metadata(&target).is_err_and(|e| e.kind() == ErrorKind::NotFound),
+                    "目标文件已存在或无法访问：{}",
+                    target.display()
+                );
+                fs::rename(item.path(), target)?;
+            }
+            fs::remove_dir(staged)?;
         }
         fs::remove_file(journal)?;
     }

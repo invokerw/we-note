@@ -74,8 +74,10 @@ try {
       ],
     ],
   ];
+  commands.push(["cargo", ["test", "--locked", "-p", "wenote-sync", "--test", "account_storage", "--", "--include-ignored"]]);
   if (process.argv.includes("--browser"))
     commands.push(
+      [process.execPath, ["apps/web/tests/desktop-storage.mjs"]],
       [process.execPath, ["apps/web/tests/phase1.mjs"]],
       [process.execPath, ["apps/web/tests/recovery.mjs"]],
       [process.execPath, ["apps/web/tests/client-mcp.mjs"]],

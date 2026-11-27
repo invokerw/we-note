@@ -62,6 +62,8 @@ fn legacy_offline_edits_survive_migration_and_move() {
     }
     let binding = serde_json::json!({"origin":"https://local.test","vault":"v1","root":old.canonicalize().unwrap(),"device":"my-device","revision":12,"files":{}});
     fs::write(data.join("v1/state.json"), binding.to_string()).unwrap();
+    fs::write(data.join("v1/lock"), "held by legacy sync").unwrap();
+    fs::write(old.join("lock"), "普通笔记文件").unwrap();
     fs::write(old.join("未上传.md"), "最新离线修改").unwrap();
     bind(&data, "alice", &root, false).unwrap();
     let (folder, state) = prepare_sync(&data, "alice", "https://local.test", "v1", "工作").unwrap();
@@ -72,6 +74,27 @@ fn legacy_offline_edits_survive_migration_and_move() {
     let saved: serde_json::Value =
         serde_json::from_slice(&fs::read(state.join("state.json")).unwrap()).unwrap();
     assert_eq!(saved["revision"], 12);
+    assert!(!state.join("lock").exists());
+    assert_eq!(
+        fs::read_to_string(folder.join("lock")).unwrap(),
+        "普通笔记文件"
+    );
+    // Replay a journal interrupted between moving two top-level items.
+    let pending = root.join(".tmp-test");
+    fs::create_dir(&pending).unwrap();
+    fs::write(pending.join("second.md"), "待迁移").unwrap();
+    fs::write(
+        state.join("migration.json"),
+        serde_json::to_vec(std::ffi::OsStr::new(".tmp-test")).unwrap(),
+    )
+    .unwrap();
+    assert!(open_book(&data, "alice", "v1").is_err());
+    prepare_sync(&data, "alice", "https://local.test", "v1", "工作").unwrap();
+    assert_eq!(
+        fs::read_to_string(folder.join("second.md")).unwrap(),
+        "待迁移"
+    );
+    assert!(!pending.exists());
     fs::write(folder.join("未上传.md"), "新位置的修改").unwrap();
     let moved = temp.path().join("moved");
     fs::rename(root, &moved).unwrap();
@@ -134,4 +157,20 @@ fn sync_all_account_libraries_and_reopen_offline() -> anyhow::Result<()> {
         assert!(storage::open_book(&data, "different", id).is_err());
     }
     Ok(())
+}
+
+#[test]
+fn vault_names_are_portable_windows_directory_components() {
+    let tmp = tempdir().unwrap();
+    let root = tmp.path().join("books");
+    let data = tmp.path().join("data");
+    fs::create_dir(&root).unwrap();
+    bind(&data, "alice", &root, false).unwrap();
+    for (id, name) in [("v1", "项目：Q1 <草稿> | * ? \"a\""), ("v2", "CON.txt")] {
+        let path = prepare(&data, "alice", id, name).unwrap();
+        let component = path.file_name().unwrap().to_str().unwrap();
+        assert!(!component.contains(['<', '>', '|', '*', '?', '"']));
+        assert!(!component.to_uppercase().starts_with("CON."));
+        assert_eq!(prepare(&data, "alice", id, "renamed").unwrap(), path);
+    }
 }

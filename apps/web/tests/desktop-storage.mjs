@@ -2,7 +2,10 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
-const browser = await chromium.launch({ channel: "chrome" });
+const browser = await chromium.launch({
+  executablePath: process.env.CHROME_PATH,
+  channel: process.env.CHROME_PATH ? undefined : "chrome",
+});
 try {
   const page = await browser.newPage();
   page.setDefaultTimeout(8000);
@@ -33,7 +36,7 @@ try {
         invoke: async (command, args = {}) => {
           window.log.push([command, args]);
           switch (command) {
-            case "mac_storage_available":
+            case "account_storage_available":
               return true;
             case "login":
               who = args.email.split("@")[0];
@@ -54,7 +57,11 @@ try {
                 expires_at: new Date(Date.now() + 3600000).toISOString(),
               };
             case "choose_storage":
-              return "/Documents";
+              if (!sessionStorage.getItem("picked")) {
+                sessionStorage.setItem("picked", "yes");
+                return null;
+              }
+              return "C:\\Users\\测试\\Documents";
             case "account_location": {
               const key = `location:${args.owner}`;
               if (args.path && !args.separate)
@@ -95,9 +102,13 @@ try {
     await page.getByLabel("密码").fill("testpassword");
     await page.getByRole("button", { name: "登录", exact: true }).click();
   }
-  async function choose() {
+  async function choose(cancelFirst = false) {
     await page.getByRole("heading", { name: "选择笔记库存储位置" }).waitFor();
     await page.getByRole("button", { name: "选择文件夹…" }).click();
+    if (cancelFirst) {
+      assert.equal(await page.locator("#storage-setup").isVisible(), true);
+      await page.getByRole("button", {name:"选择文件夹…"}).click();
+    }
     await page.getByText("在所选位置新建专用文件夹").click();
   }
   async function logout() {
@@ -107,7 +118,7 @@ try {
     await page.getByRole("button", { name: /退出(登录|账户|账号)/ }).click();
   }
   await login("alice");
-  await choose();
+  await choose(true);
   await page
     .locator("#status")
     .filter({ hasText: "生活：Error: 网络中断" })
@@ -140,6 +151,7 @@ try {
     0,
   );
   await logout();
+  assert.equal(await page.locator("#open-editor").isVisible(), false);
   await login("bob");
   await choose();
   await page.getByRole("button", { name: "创建第一个笔记库" }).click();
@@ -148,7 +160,7 @@ try {
     "我的笔记",
   ]);
   console.log(
-    "PASS macOS setup, retry, automatic editor, vault switching, restore, relogin and empty second account",
+    "PASS desktop setup, retry, automatic editor, vault switching, restore, relogin and empty second account",
   );
 } finally {
   await browser.close();

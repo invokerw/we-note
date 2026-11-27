@@ -4595,6 +4595,7 @@ dependencies = [
  "tauri-build",
  "tokio",
  "wenote-sync",
+ "windows",
 ]
 
 [[package]]
