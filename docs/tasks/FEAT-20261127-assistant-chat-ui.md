@@ -2,9 +2,9 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 类型与状态 | `feature` · `IN_PROGRESS` · 2026-11-27 |
+| 类型与状态 | `feature` · `DELIVERED` · 2026-11-27 |
 | 影响端 | Web、桌面、Android、iOS 共用的客户端助手与原生模型传输 |
-| 本轮交付 | 在样稿对齐修复 `5c46124` 上补充输入快捷键和生成动效 |
+| 本轮交付 | 回车发送、换行和生成动效 `595bf7e`，等待任务分支验收 |
 | 开发验收方式 | 用户已选 2，在任务分支验收，通过后合入本地 `main` |
 | 基线与分支 | `main@37449f3` → `codex/feature-assistant-chat-ui-20261127` |
 | worktree | `/Users/weifei/.codex/worktrees/assistant-chat-ui-20261127/we-note` |
@@ -87,3 +87,5 @@
 用受控流式响应验证真实聊天页，在首个响应、起草、等待确认、恢复生成、停止和失败阶段分别核对状态。浏览器检查动态模式有运行中的动画，减少动态效果模式下动画为零且状态文字可见。自审另覆盖生成期间按回车保留下一条草稿，以及引用候选打开时换行、空格和回车选择。聚焦浏览器命令复跑退出 0。
 
 `node --test apps/web/tests/assistant*.test.mjs apps/web/tests/{mcp-tools,web-build-history}.test.mjs` 退出 0，共 14 项。`npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 及 `apps/client` 的 macOS 调试版 `tauri build --debug --bundles app` 均退出 0。输入法以浏览器合成事件验证，包括组合输入已结束但 Enter 携带键码 229 的情况；手机沿用窄屏浏览器覆盖。
+
+方式 2 交付 `595bf7e`。验收入口 `http://localhost:19469/`，实例 PID 62494。刷新笔记库并展开「笔记助手」，输入两行后按 Enter，观察多行消息和回复旁的三点动效。macOS 产物在本 worktree 的 `target/debug/bundle/macos/WeNote.app`。
