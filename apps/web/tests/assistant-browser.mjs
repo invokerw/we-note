@@ -209,7 +209,9 @@ try {
   // A model configuration saved by the previous release has no credential hint.
   await page.evaluate(() => {
     const storageKey = "wenote-assistant-model";
-    const { api, baseUrl, model } = JSON.parse(localStorage.getItem(storageKey));
+    const scoped = Object.keys(localStorage).find(k => k.startsWith(storageKey + ":"));
+    const { api, baseUrl, model } = JSON.parse(localStorage.getItem(scoped)).model;
+    localStorage.removeItem(scoped);
     localStorage.setItem(storageKey, JSON.stringify({ api, baseUrl, model }));
   });
   await page.reload();

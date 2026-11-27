@@ -9,10 +9,12 @@ import {
   type Proposal,
 } from "./history";
 import { checkedConfig } from "./policy";
-import { readConfig, keyFor, missingKeyHint, gatewayNeedsKey } from "./Settings";
+import { missingKeyHint, gatewayNeedsKey } from "./Settings";
+import { readConfig, loadCredential, modelSettingsKey } from "./credentials";
 import type { Connection } from "./turn";
 import "./assistant.css";
 type Props = {
+  credentialOwner: string;
   connection: Connection;
   path: string;
   paths: string[];
@@ -53,7 +55,7 @@ export function AssistantPanel(props: Props) {
     [draftPreview, setDraftPreview] = useState(""),
     [busy, setBusy] = useState(false),
     [applying, setApplying] = useState(false),
-    [model, refresh] = useState(readConfig);
+    [model, refresh] = useState(() => readConfig(props.credentialOwner));
   const current = useRef<Chat | undefined>(undefined),
     queue = useRef(Promise.resolve()),
     controller = useRef<AbortController | null>(null),
@@ -130,18 +132,18 @@ export function AssistantPanel(props: Props) {
   useEffect(() => {
     const changed = () => {
       stop();
-      refresh(readConfig());
+      refresh(readConfig(props.credentialOwner));
     };
     window.addEventListener("wenote-model", changed);
     window.addEventListener("storage", changedConfig);
     function changedConfig(e: StorageEvent) {
-      if (e.key === "wenote-assistant-model") changed();
+      if (e.key === modelSettingsKey(props.credentialOwner)) changed();
     }
     return () => {
       window.removeEventListener("wenote-model", changed);
       window.removeEventListener("storage", changedConfig);
     };
-  }, []);
+  }, [props.credentialOwner]);
   useEffect(() => () => stop(), [connection.assistantGrant?.id]);
   useEffect(() => {
     if (open && flow.current)
@@ -224,8 +226,9 @@ export function AssistantPanel(props: Props) {
     let partial = "";
     let key = "";
     try {
-      const config = checkedConfig(readConfig());
-      key = keyFor(config);
+      const config = checkedConfig(readConfig(props.credentialOwner));
+      key = (await loadCredential(props.credentialOwner, config.baseUrl)).key;
+      ctrl.signal.throwIfAborted();
       if (config.usesApiKey && !key) throw Error(missingKeyHint);
       const { runTurn } = await import("./turn").catch(() => {
         throw Error("聊天模块加载失败。请刷新页面，再发送草稿。");

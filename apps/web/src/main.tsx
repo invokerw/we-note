@@ -1,4 +1,4 @@
-import { clearCredential } from "./assistant/Settings";
+import { clearCredential } from "./assistant/credentials";
 import { AssistantPanel } from "./assistant/Panel";
 import { useMcp, McpPanel } from './mcp/Connections';
 import { webBackend } from './mcp/backend';
@@ -191,6 +191,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     picker = useRef<HTMLInputElement>(null);
   const base = `/api/v1/vaults/${vault}`;
   const [mcpDirty, setMcpDirty] = useState(false);
+  const credentialOwner = profile.email ? JSON.stringify([location.origin, profile.email]) : "";
   const connection = useMcp({
     scope: profile.email && vault ? JSON.stringify([location.origin, profile.email, vault]) : '',
     vault, desktop: false, backend: webBackend(token, vault),
@@ -518,7 +519,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         paths={paths} io={entries} close={() => setCreateAnchor(null)}
         createAtPath={async (path, bytes) => { if (leave()) await create(path, bytes); }}
         browse={folder => { setView("files"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={leave} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
+      {settingsOpen && <PersonalSettings credentialOwner={credentialOwner} mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={leave} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
         exportPanel={vault ? <LibraryResources vaultName={vaults.find(v => v.id === vault)?.name || vault} base={base} token={token} onImported={list} viewFolder={folder => { if (!leave()) return; setNote(null); setView("files"); panes.browse(folder ? folder + "/" : null); closeSettings(); }}/> : <p>请先选择笔记库。</p>}
         audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
         shares={<Sharing token={token} vaults={vaults}/>}/>}
@@ -649,7 +650,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           <article className="trash-blank" aria-label="回收站空白内容区" />
         )}
       </AppShell.Main>
-      <AssistantPanel key={"assistant:"+connection.scope} connection={connection} folder={panes.folder??""} path={view==='files' ? note?.path??'':''} paths={paths} openFile={openPath}/>
+      <AssistantPanel credentialOwner={credentialOwner} key={"assistant:"+connection.scope} connection={connection} folder={panes.folder??""} path={view==='files' ? note?.path??'':''} paths={paths} openFile={openPath}/>
     </WorkspaceShell>
   );
 }

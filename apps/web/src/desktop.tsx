@@ -1,4 +1,4 @@
-import { clearCredential } from "./assistant/Settings";
+import { clearCredential } from "./assistant/credentials";
 import { AssistantPanel } from "./assistant/Panel";
 import { useMcp, McpPanel } from './mcp/Connections';
 import { nativeBackend } from './mcp/backend';
@@ -203,6 +203,7 @@ function Workspace({
   const [desktopTransport, setDesktopTransport] = useState(false);
   useEffect(() => { void window.__TAURI__.core.invoke<boolean>('mcp_desktop_available', {}).then(value => setDesktopTransport(value === true)).catch(() => {}); }, []);
   const principal = account || (binding.restoredBinding && `binding:${binding.restoredBinding}`);
+  const credentialOwner = principal ? JSON.stringify([localStorage.getItem('origin'), principal]) : '';
   const connection = useMcp({
     scope: principal && vault ? JSON.stringify([localStorage.getItem('origin'), principal, vault]) : '',
     vault, desktop: desktopTransport, backend: nativeBackend((action, args) => local(vault, action, args)),
@@ -736,7 +737,7 @@ function Workspace({
         paths={files} io={entries} close={() => setCreateAnchor(null)}
         create={format => { setNewPath((panes.folder || "") + formats[format]); panes.setPane("doc"); }}
         browse={folder => { setView("笔记"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {clearCredential();close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
+      {settingsOpen && <PersonalSettings credentialOwner={credentialOwner} mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {clearCredential();close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
         if (!leave()) return;
         if (!await binding.synchronize?.()) throw Error("请完成同步后查看导入的笔记");
         await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); setNewPath(null); panes.browse(folder ? folder + "/" : null);
@@ -889,7 +890,7 @@ function Workspace({
           </article>
         )}
       </AppShell.Main>
-      <AssistantPanel key={"assistant:"+connection.scope} connection={connection} folder={panes.folder??""} path={view==='笔记'?path:''} paths={files} openFile={p=>void run(()=>open(p))}/>
+      <AssistantPanel credentialOwner={credentialOwner} key={"assistant:"+connection.scope} connection={connection} folder={panes.folder??""} path={view==='笔记'?path:''} paths={files} openFile={p=>void run(()=>open(p))}/>
     </WorkspaceShell>
   );
 }

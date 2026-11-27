@@ -162,6 +162,11 @@
   display: grid;
   gap: 3px;
 }
+.assistant-config .assistant-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .layout.android-phone:has(> .assistant-toggle) {
   --assistant-top: 44px;
   --assistant-width: 100%;

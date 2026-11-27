@@ -114,6 +114,7 @@ async function thumbnail(file: File) {
   }
 }
 export default function PersonalSettings(props: {
+  credentialOwner: string;
   profile: ReturnType<typeof useAccountProfile>;
   request: ProfileRequest;
   phone: boolean;
@@ -364,7 +365,7 @@ export default function PersonalSettings(props: {
                 updatePluginSetting={props.updatePluginSetting}
               />
             )}
-            {section === "笔记助手" && <ModelSettings/>}
+            {section === "笔记助手" && <ModelSettings key={props.credentialOwner} owner={props.credentialOwner}/>}
             {section === "MCP 连接" && props.mcp}
             {section === "导出/导入" && props.exportPanel}
             {section === "我的分享" && props.shares}
