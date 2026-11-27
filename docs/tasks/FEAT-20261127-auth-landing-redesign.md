@@ -8,7 +8,7 @@
 | 类型 | `feature` |
 | 登记日期 | `2026-11-27` |
 | 影响端 | `web / desktop` |
-| 状态 | `IN_PROGRESS` |
+| 状态 | `DELIVERED` |
 | 开工前确认的验收方式 | 2（任务分支验收） |
 | 基线分支 | `main` |
 | 基线提交 | `15fb4bf67bf1a184c2fbf7ac1678086560149aa1` |
@@ -90,7 +90,7 @@
 
 | 轮次 / 对应反馈 | 自审发现及优化处理 | 复测命令和结果 | 验收分支及受测提交号 | 验收入口 |
 | --- | --- | --- | --- | --- |
-| 首次交付 | 自审覆盖 Web Auth、共享 Cover、桌面静态入口、三种主题变量和移动端媒体查询。发现浏览器自动化宿主当前不可用，使用构建、入口响应和代码契约完成可执行验证 | `node --test apps/web/tests/auth-design.test.mjs`、`node --check apps/client/ui/auth-style.js`、双模式构建、`curl -fsS http://127.0.0.1:4175/` 均通过 | `codex/feature-auth-landing-20261127`，待提交 | `http://127.0.0.1:4175/` |
+| 首次交付 | 自审覆盖 Web Auth、共享 Cover、桌面静态入口、三种主题变量和移动端媒体查询。发现浏览器自动化宿主当前不可用，使用构建、入口响应和代码契约完成可执行验证 | `node --test apps/web/tests/auth-design.test.mjs`、`node --check apps/client/ui/auth-style.js`、双模式构建、`curl -fsS http://127.0.0.1:4175/` 均通过 | `codex/feature-auth-landing-20261127`，提交 `666b115edfe2b41481fc043fef935e7d8ae05547` | `http://127.0.0.1:4175/` |
 
 ## 独立服务端
 
@@ -120,6 +120,7 @@
 | --- | --- | --- | --- |
 | `2026-11-27` | `PLANNED` | 已创建独立任务 worktree 和任务记录，等待确认验收方式 | 用户选择任务分支验收后开始实现 |
 | `2026-11-27` | `IN_PROGRESS` | 用户选择 2，进入任务分支实现 | 完成多风格预览、自审并提交任务分支 |
+| `2026-11-27` | `DELIVERED` | 提交 `666b115edfe2b41481fc043fef935e7d8ae05547` 已通过构建、契约测试和差异检查 | 用户通过 `http://127.0.0.1:4175/` 对比三个风格并反馈选择 |
 
 ## 用户验收
 
