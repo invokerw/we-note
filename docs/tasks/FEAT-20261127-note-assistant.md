@@ -114,3 +114,9 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 ## 2026-11-27 用户验收 · ACCEPTED
 
 用户确认「验收完毕」。验收版本 `0d839d7`，任务分支交付记录 `b3f8ebd`。集成本地 `main@ab07d20` 时，网页与桌面入口保留双方新增的导入，开发账本保留两项任务。
+
+### 合并归档 · MERGED
+
+本地 `main` 已快进到集成提交 `a207d50`，`git merge-base --is-ancestor` 已核实完整交付版本 `b3f8ebd` 进入 `main`。`npm --prefix apps/web run build`、macOS 调试包构建、9 项助手及 MCP 聚焦测试、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 和笔记库界面回归 `node --test apps/web/tests/library-ui.mjs` 均退出 0。
+
+2026-11-27 16:27（上海时间）已停止 19453 任务服务，移除任务 worktree 和本地分支。数据库和附件、网页产物、macOS 调试包、截图、日志以及主工作区的设计初稿归档至 `dist/acceptance/FEAT-20261127-note-assistant-a207d50`。
