@@ -76,3 +76,5 @@
 | 构建与设备 | `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo build --locked --offline -p wenote-desktop` 均退出 0。`npm run android --prefix apps/client -- --debug` 退出 1，本机 SDK 缺少命令行工具。手机浏览器布局已验证，Android 系统选择器真机待验。 |
 
 验收实例为 `http://localhost:18327`，本轮服务 PID 32826，账号、日志、数据目录、macOS 程序与停止命令见上方验收入口。在「个人设置」依次进入「账户与安全」「编辑与插件」「导出/导入」，核对三个文件按钮；可选择头像查看预览，取消后再选同一张图片。
+
+本轮受测实现提交 `0f1714c`，已在原任务分支交付验收。
