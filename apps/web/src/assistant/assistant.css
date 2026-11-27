@@ -1,0 +1,182 @@
+.layout:has(> .assistant-toggle) {
+  --assistant-width: clamp(280px, 25vw, 420px);
+  --assistant-top: 34px;
+  padding-top: var(--assistant-top);
+  box-sizing: border-box;
+  position: relative;
+}
+.layout:has(> .assistant-toggle)::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--assistant-top);
+  background: var(--rail);
+  border-bottom: 1px solid var(--line);
+}
+.layout:has(> .assistant-panel:not([hidden])) {
+  padding-right: var(--assistant-width);
+}
+.layout .assistant-toggle {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  height: var(--assistant-top);
+  width: 38px;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  color: var(--muted);
+}
+.assistant-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.layout .assistant-toggle[aria-expanded="true"] {
+  color: var(--accent);
+  background: var(--tint);
+}
+.assistant-panel {
+  position: absolute;
+  inset: var(--assistant-top) 0 0 auto;
+  width: var(--assistant-width);
+  background: var(--rail);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  min-height: 0;
+}
+.assistant-panel[hidden] {
+  display: none;
+}
+.assistant-panel header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.assistant-panel header span {
+  flex: 1;
+}
+.assistant-panel header button {
+  font-size: 20px;
+}
+.assistant-flow,
+.assistant-history {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.assistant-flow > * {
+  flex: none;
+}
+.assistant-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-line p {
+  margin: 0;
+}
+.assistant-line.role-user {
+  align-self: flex-end;
+  background: var(--tint);
+  border-radius: 9px;
+  padding: 8px 12px;
+}
+.assistant-preview {
+  border-left: 2px solid var(--accent);
+  padding-left: 9px;
+}
+.assistant-preview pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 36vh;
+  overflow: auto;
+  font: inherit;
+}
+.assistant-compose {
+  margin: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.assistant-compose fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.assistant-compose select {
+  max-width: 100%;
+}
+.assistant-compose textarea {
+  width: 100%;
+  min-height: 50px;
+  resize: vertical;
+}
+.assistant-compose > button {
+  justify-self: end;
+}
+.assistant-error {
+  margin: 8px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow: auto;
+  max-height: 25vh;
+}
+.assistant-history button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.assistant-panel small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.assistant-path {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+}
+.assistant-config {
+  display: grid;
+  gap: 9px;
+}
+.assistant-config label {
+  display: grid;
+  gap: 3px;
+}
+.layout.android-phone:has(> .assistant-toggle) {
+  --assistant-top: 44px;
+  --assistant-width: 100%;
+}
+.layout.android-phone:has(> .assistant-panel:not([hidden])) {
+  padding-right: 0;
+}
+.android-phone .assistant-panel {
+  z-index: 1;
+}
+.android-phone .assistant-toggle {
+  width: 44px;
+}
+
+.layout.android-phone:has(> .assistant-panel:not([hidden]))
+  > :is(.workspace, .sidebar, .note-list-pane) {
+  visibility: hidden;
+}

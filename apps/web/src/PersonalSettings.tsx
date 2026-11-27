@@ -1,3 +1,4 @@
+import { ModelSettings } from "./assistant/Settings";
 import {
   useEffect,
   useLayoutEffect,
@@ -162,7 +163,7 @@ export default function PersonalSettings(props: {
     "外观",
     "编辑与插件",
     "导出/导入",
-    ...(props.mcp ? ["MCP 连接"] : []),
+    ...(props.mcp ? ["笔记助手", "MCP 连接"] : []),
     ...(props.shares ? ["我的分享"] : []),
     ...(props.sync ? ["设备与同步"] : []),
   ];
@@ -363,6 +364,7 @@ export default function PersonalSettings(props: {
                 updatePluginSetting={props.updatePluginSetting}
               />
             )}
+            {section === "笔记助手" && <ModelSettings/>}
             {section === "MCP 连接" && props.mcp}
             {section === "导出/导入" && props.exportPanel}
             {section === "我的分享" && props.shares}

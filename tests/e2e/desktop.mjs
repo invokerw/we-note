@@ -79,6 +79,7 @@ try {
       [process.execPath, ["apps/web/tests/phase1.mjs"]],
       [process.execPath, ["apps/web/tests/recovery.mjs"]],
       [process.execPath, ["apps/web/tests/client-mcp.mjs"]],
+      [process.execPath, ["apps/web/tests/assistant-browser.mjs"]],
       [process.execPath, ["apps/web/tests/sync-conflicts.mjs"]],
       [process.execPath, ["apps/web/tests/phase2.mjs"]],
       [process.execPath, ["apps/web/tests/entry-menu.mjs"]],

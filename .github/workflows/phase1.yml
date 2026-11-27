@@ -26,7 +26,7 @@ jobs:
       - run: npm ci --prefix apps/web
       - run: npm run build --prefix apps/web
       - run: npm run build:desktop --prefix apps/web
-      - run: node --test apps/web/tests/mcp-tools.test.mjs
+      - run: node --test apps/web/tests/mcp-tools.test.mjs apps/web/tests/assistant.test.mjs
       - run: cargo build --locked --workspace
       - run: cargo test --locked -p wenote-desktop --lib
       - name: Check the shared client for the iOS simulator

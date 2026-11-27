@@ -7,6 +7,7 @@ export type Grant = {
   name: string;
   port?: number;
   browserTools?: boolean;
+  internal?: boolean;
 };
 export type Dispatch = (call: Call) => Promise<Record<string, unknown>>;
 function record(value: unknown): value is Record<string, unknown> {

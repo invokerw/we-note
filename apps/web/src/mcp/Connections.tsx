@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { digest, Library } from "./library";
 import { draftLock, journal } from "./journal";
 import { dispatch, type Grant } from "./protocol";
-import { tools, readOnly } from "./tools";
+import { tools, readOnly, type Call } from "./tools";
 import type { Backend } from "./backend";
+import { changeMap, nodes } from "./content";
 
 type Packet = { generation: string; sequence: number; message: unknown };
 type Api = { request(message: unknown, token: string): Promise<unknown> };
@@ -53,7 +54,15 @@ export function useMcp(props: Props) {
     [urls, address] = useState<Record<string, string>>({}),
     [error, status] = useState("");
   const hosts = useRef(
-    new Map<string, { library: Library; api: Api; stop: () => void }>(),
+    new Map<
+      string,
+      {
+        library: Library;
+        api: Api;
+        request: (m: unknown) => ReturnType<typeof dispatch>;
+        stop: () => void;
+      }
+    >(),
   );
   const grants = useMemo(() => stored(key), [key, revision]);
   useEffect(() => {
@@ -164,7 +173,7 @@ export function useMcp(props: Props) {
           status(String(e));
         }
       }
-      const native = props.desktop ? core() : undefined;
+      const native = props.desktop && !auth.internal ? core() : undefined;
       if (native) {
         const channel = new native.Channel();
         channel.onmessage = async (p) => {
@@ -227,7 +236,7 @@ export function useMcp(props: Props) {
         }
         if (native) void native.invoke("mcp_close", { generation });
       };
-      return { library, api, stop };
+      return { library, api, request, stop };
     }
     for (const grant of grants)
       if (!hosts.current.has(grant.id))
@@ -236,7 +245,7 @@ export function useMcp(props: Props) {
       async request(message, token) {
         if (typeof token !== "string") throw Error("ACCESS_DENIED");
         const hash = await digest(token);
-        const match = grants.find((g) => g.hash === hash);
+        const match = grants.find((g) => !g.internal && g.hash === hash);
         const host = match && hosts.current.get(match.id);
         if (!host) throw Error("ACCESS_DENIED");
         return host.api.request(message, token);
@@ -275,6 +284,89 @@ export function useMcp(props: Props) {
     await change((grants) => grants.filter((g) => g.id !== id));
     localStorage.removeItem(key + id + ":port");
   }
+  const assistantGrant = grants.find((g) => g.internal);
+  async function authorizeAssistant(write: boolean) {
+    await change((list) => [
+      ...list.filter((g) => !g.internal),
+      {
+        id: crypto.randomUUID(),
+        hash: "",
+        internal: true,
+        name: "笔记助手",
+        write,
+      },
+    ]);
+  }
+  function assistantHost(id: string) {
+    const host = hosts.current.get(id);
+    if (
+      !host ||
+      current.current.scope !== props.scope ||
+      !stored(key).some((g) => g.internal && g.id === id)
+    )
+      throw Error("笔记助手的库授权已失效");
+    return host;
+  }
+  async function assistantMapPreview(
+    id: string,
+    call: Extract<Call, { name: "edit_mindmap" }>,
+  ) {
+    const { library } = assistantHost(id);
+    return library.journal.lock(async () => {
+      library.check();
+      const state = await library.journal.load();
+      const doc = state.docs.find(
+        (d) => d.id === call.args.file_id && !d.deleted,
+      );
+      if (
+        !doc ||
+        doc.version !== call.args.base_version_id ||
+        doc.path !== call.args.base_path
+      )
+        throw Error("导图已改变，请重新读取");
+      const source = await library.body(doc);
+      library.check();
+      const result = changeMap(source, call.args.operations);
+      return {
+        nodes: nodes(source),
+        removedNodes: result.removed_nodes,
+        removedArrows: result.removed_arrows,
+        removedSummaries: result.removed_summaries,
+      };
+    });
+  }
+  async function assistantReceipts(id: string) {
+    const { library } = assistantHost(id);
+    const state = await library.journal.load();
+    library.check();
+    return (operation: string) =>
+      state.receipts[JSON.stringify([id, operation])];
+  }
+  async function assistantRpc(
+    id: string,
+    method: "tools/list" | "tools/call",
+    call?: Call,
+  ) {
+    const host = assistantHost(id);
+    const reply = await host.request({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: call && { name: call.name, arguments: call.args },
+    });
+    if (!reply || "error" in reply)
+      throw Error(reply?.error?.message ?? "连接已关闭");
+    const result = reply.result as {
+      tools?: typeof tools;
+      isError?: boolean;
+      structuredContent?: Record<string, unknown>;
+    };
+    if (result.isError)
+      throw Error(
+        `${result.structuredContent?.code}：${result.structuredContent?.message}`,
+      );
+    return result;
+  }
   const library = () =>
     hosts.current.get((grants.find((g) => g.write) ?? grants[0])?.id)?.library;
   return {
@@ -285,6 +377,12 @@ export function useMcp(props: Props) {
     error,
     library,
     available: !!props.scope,
+    scope: props.scope,
+    assistantGrant,
+    authorizeAssistant,
+    assistantRpc,
+    assistantMapPreview,
+    assistantReceipts,
   };
 }
 export function McpPanel({
@@ -317,7 +415,9 @@ export function McpPanel({
         <fieldset key={grant.id}>
           <legend>{grant.name}</legend>
           <p>{grant.write ? "可编辑" : "只读"}</p>
-          {connection.urls[grant.id] ? (
+          {grant.internal ? (
+            <p>仅供当前客户端的笔记助手使用</p>
+          ) : connection.urls[grant.id] ? (
             <p>
               连接地址 <code>{connection.urls[grant.id]}</code>，请求头使用{" "}
               <code>Authorization: Bearer</code> 加连接令牌。

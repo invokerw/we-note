@@ -1,3 +1,5 @@
+import { clearCredential } from "./assistant/Settings";
+import { AssistantPanel } from "./assistant/Panel";
 import { useMcp, McpPanel } from './mcp/Connections';
 import { webBackend } from './mcp/backend';
 import { CreateNoteWindow } from "./CreateNoteWindow";
@@ -647,6 +649,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           <article className="trash-blank" aria-label="回收站空白内容区" />
         )}
       </AppShell.Main>
+      <AssistantPanel key={"assistant:"+connection.scope} connection={connection} folder={panes.folder??""} path={view==='files' ? note?.path??'':''} paths={paths} openFile={openPath}/>
     </WorkspaceShell>
   );
 }
@@ -696,6 +699,7 @@ function App() {
           token={token}
           login={setToken}
           logout={() => {
+            clearCredential();
             void request(token, "/api/v1/auth/logout", "POST").catch(() => {});
             sessionStorage.removeItem("wenote-renewal");
             sessionStorage.removeItem("wenote-session");
@@ -712,6 +716,7 @@ function App() {
     <Library
       token={token}
       logout={() => {
+        clearCredential();
         void request(token, "/api/v1/auth/logout", "POST").catch(() => {});
         sessionStorage.removeItem("wenote-renewal");
         sessionStorage.removeItem("wenote-session");

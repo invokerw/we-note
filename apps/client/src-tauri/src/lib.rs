@@ -1,4 +1,5 @@
 mod mcp;
+mod model;
 #[cfg(target_os = "android")]
 mod mobile;
 use std::path::PathBuf;
@@ -376,7 +377,10 @@ pub fn run() {
     let builder = builder.plugin(mobile::plugin());
     builder
         .manage(mcp::Transport::default())
+        .manage(model::Requests::default())
         .invoke_handler(tauri::generate_handler![
+            model::model_stream,
+            model::model_cancel,
             login,
             refresh,
             logout,
