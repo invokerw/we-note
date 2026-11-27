@@ -6,7 +6,7 @@
 | --- | --- |
 | 任务 ID | `FEAT-20261127-offline-recovery` |
 | 日期与类型 | 2026-11-27 · feature，含三项 Bug 修复 |
-| 状态与验收方式 | `DELIVERED`，方式 2 · 在任务 worktree 验收，通过后合入 main |
+| 状态与验收方式 | `MERGED`，方式 2 · 已在任务 worktree 验收并合入本地 `main` |
 | 影响端 | 桌面、Android 共享同步核心，Web 编辑器，服务端同步接口 |
 | 基线 | `main` · `5240088ad470f855921446436d91a5e131fca0ad` |
 | 任务分支 | `codex/feature-offline-recovery-20261127` |
@@ -84,7 +84,7 @@
 
 小数据集 `python3 tests/performance/sync.py 100` 在改动前命中「空闲仍获取全量清单」断言，退出 1。实现后退出 0，同时验证了过期游标获取完整清单。首次绑定批量登记已匹配文件。后续先拉取连续变更，游标过期或响应不连续时回退。macOS、Android 等 Unix 文件系统依据设备号、inode、文件大小、修改时间和状态变更时间复用哈希，粗粒度时间戳回退到读取正文。Windows 使用增量网络拉取，本地扫描继续逐文件校验。未对真实手机或广域网进行性能外推。
 
-### 验证与验收入口
+### 交付时的验证结果与验收入口
 
 | 项目 | 结果 |
 | --- | --- |
@@ -92,10 +92,16 @@
 | 协议模型 | `node --test tests/protocol/*.test.mjs` 通过 98 项，`node tests/protocol/mutation-check.mjs` 命中 105 项 |
 | Web 与桌面 | `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo build --locked -p wenote-desktop` 退出 0 |
 | 单测与浏览器 | Web 12 项单测、Rust 共享核心单测通过。双设备与浏览器验收使用 `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` |
-| Android | 本机 `npm run android --prefix apps/client -- --debug` 退出 1。SDK 目录为空，缺少 Android 命令行工具和模拟器。APK 构建与系统级验收待完成，远端任务分支推送授权待确认 |
-| 独立服务 | `http://localhost:18427`，PID `92282`。`./scripts/local.py start --port 18427` 启动。`dist/local/server.log` 记录日志，数据位于 `services/api/data/`。当前开放注册，可创建验收账号和测试笔记库。`./scripts/local.py stop` 停止服务 |
+| Android | 本机 `npm run android --prefix apps/client -- --debug` 退出 1。SDK 目录为空，缺少 Android 命令行工具和模拟器。本轮未完成 APK 构建和模拟器验收 |
+| 独立服务 | `http://localhost:18427`，PID `92282`。`./scripts/local.py start --port 18427` 启动。`dist/local/server.log` 记录日志，数据位于 `services/api/data/`。验收期间开放注册，可创建验收账号和测试笔记库。`./scripts/local.py stop` 停止服务 |
 | 桌面客户端 | 运行本工作区 `target/debug/wenote-desktop`，服务地址填写 `http://localhost:18427`，绑定准备好的本地测试目录 |
 
 网页可编辑一篇笔记、刷新并恢复草稿，再从另一窗口保存远端版本，核对草稿与服务端正文。桌面可用两个独立本地目录修改同一篇笔记的同一行，依次同步后从「同步冲突」对照并合并。两设备端到端脚本自建账号、目录和临时库，可重复执行。
 
 - 2026-11-27 · `DELIVERED`。第一轮受测提交 `950bf0c`，本轮受测提交 `36cd5a2`。完整双设备、Web 与原生前端浏览器验收退出 0。Web 与 macOS 入口可按方式 2 验收。Android APK 与模拟器结果待补。
+
+### 验收归档
+
+- 2026-11-27 · `ACCEPTED`。用户确认「验收通过」。最终受测代码为 `36cd5a2`，交付记录提交为 `904f139`。Android APK 和模拟器仍缺少验证结果。
+- 2026-11-27 · `MERGED`。本地 `main` 从 `5240088` 快进到 `904f139`，已核对受测提交包含在主分支中。端口 18427 的任务服务已停止，任务 worktree 和本地任务分支已清理。
+- 验收产物保存在主工作区的 `dist/acceptance/FEAT-20261127-offline-recovery/`，包含 macOS 客户端、Web 与桌面前端构建、API 程序、验收数据和服务日志。已逐文件核对归档内容。
