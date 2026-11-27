@@ -292,6 +292,27 @@ try {
     await button("打开个人设置").click();
     await button(section).click();
   }
+  await openSettings('MCP 连接');
+  await page.getByLabel('允许新建、修改和移入回收站').check();
+  await button('授权当前笔记库').click();
+  const credential = await page.getByLabel('连接令牌（仅此次显示）').inputValue();
+  const result = await page.evaluate(async token => {
+    const call = async (name, args) => {
+      const {result} = await window.weNoteMCP.request({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}},token);
+      if (result.isError) throw Error(JSON.stringify(result.structuredContent));
+      return result.structuredContent;
+    };
+    const base = note => ({file_id:note.file_id,base_path:note.path,base_version_id:note.version_id,operation_id:crypto.randomUUID()});
+    const note = await call('create_note',{path:'手机验收.mind.json',kind:'mindmap',root_topic:'根',operation_id:crypto.randomUUID()});
+    const edited = await call('edit_mindmap',{...base(note),operations:[{op:'add_node',parent_id:note.root_node_id,topic:'离线节点'}]});
+    const {nodes} = await call('read_mindmap_nodes',{file_id:note.file_id,query:'离线节点'});
+    const deleted = await call('delete_note',base(edited));
+    return {topic:nodes[0]?.topic,trashed:deleted.trashed};
+  },credential);
+  assert.deepEqual(result,{topic:'离线节点',trashed:true});
+  await button('撤销连接').click();
+  await button('关闭个人设置').click();
+  console.log('Android MCP created, edited, queried and trashed an offline mind map');
   await pickLocal(logName);
   await tap(button("编辑"));
   const plain = page.getByRole("textbox", { name: "纯文本正文" });

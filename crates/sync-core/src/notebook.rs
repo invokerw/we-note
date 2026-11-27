@@ -90,6 +90,24 @@ impl Notebook {
         disk::scan(&self.root)
     }
 
+    /// Join the current disk contents with the last confirmed sync manifest.
+    pub fn mcp_catalog(&self) -> Result<Vec<Value>> {
+        let state: State = serde_json::from_slice(&fs::read(self.state_dir.join("state.json"))?)?;
+        let tracked: BTreeMap<_, _> = state.files.iter().map(|(id, file)| (&file.path, (id, file))).collect();
+        let mut entries = Vec::new();
+        for (path, hash) in self.library()? {
+            let known = tracked.get(&path);
+            let confirmed = known.filter(|(_, f)| f.hash == hash);
+            entries.push(json!({
+                "id": known.map(|(id, _)| id.as_str()).unwrap_or(&path),
+                "path": path, "version": hash, "hash": hash,
+                "confirmedVersion": confirmed.map(|(_, f)| &f.version),
+                "conflict": state.conflicts.values().any(|c| c.path == path) || state.conflicts.contains_key(&path)
+            }));
+        }
+        Ok(entries)
+    }
+
     fn trash_root(&self, external: bool) -> Result<Option<PathBuf>> {
         let mut dir = if external {
             self.root.clone()

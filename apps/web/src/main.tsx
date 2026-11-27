@@ -1,3 +1,5 @@
+import { useMcp, McpPanel } from './mcp/Connections';
+import { webBackend } from './mcp/backend';
 import { CreateNoteWindow } from "./CreateNoteWindow";
 import { useNoteStars } from "./StarredNotes";
 import { lazy, Suspense, useCallback, useMemo } from "react";
@@ -186,6 +188,13 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
   const base = `/api/v1/vaults/${vault}`;
+  const [mcpDirty, setMcpDirty] = useState(false);
+  const connection = useMcp({
+    scope: profile.email && vault ? JSON.stringify([location.origin, profile.email, vault]) : '',
+    vault, desktop: false, backend: webBackend(token, vault),
+    dirty: p => !!dirty.current && note?.path === p, dirtyPath: mcpDirty ? note?.path ?? '' : '',
+    changed: (path, previous) => { void run(list); if (!dirty.current && (note?.path === path || note?.path === previous)) setEditorRevision(n => n + 1); },
+  });
   async function run(f: () => Promise<void>) {
     try {
       await f();
@@ -193,7 +202,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       msg(String(e));
     }
   }
-  useEffect(() => { dirty.current = false; }, [vault, note?.file_id, note?.path, editorRevision]);
+  useEffect(() => { dirty.current = false; setMcpDirty(false); }, [vault, note?.file_id, note?.path, editorRevision]);
   function leave() {
     if (!dirty.current) return true;
     if (!confirm("放弃尚未保存的编辑？")) return false;
@@ -507,7 +516,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         paths={paths} io={entries} close={() => setCreateAnchor(null)}
         createAtPath={async (path, bytes) => { if (leave()) await create(path, bytes); }}
         browse={folder => { setView("files"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={leave} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
+      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={leave} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
         exportPanel={vault ? <LibraryResources vaultName={vaults.find(v => v.id === vault)?.name || vault} base={base} token={token} onImported={list} viewFolder={folder => { if (!leave()) return; setNote(null); setView("files"); panes.browse(folder ? folder + "/" : null); closeSettings(); }}/> : <p>请先选择笔记库。</p>}
         audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
         shares={<Sharing token={token} vaults={vaults}/>}/>}
@@ -611,7 +620,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 discardOnLeave,
                 changed: list,
                 dirty: (b) => {
-                  dirty.current = b;
+                  dirty.current = b; setMcpDirty(b);
                 },
                 notify: msg,
               }}

@@ -12,6 +12,7 @@ export const permissionNames: Record<Capability, string> = {
 };
 export type DocumentAction = { id: string; label: string; kind: "edit" | "message" };
 export type Manifest = {
+  mcp_model?: "text" | "mindmap";
   actions?: DocumentAction[];
   id: string;
   name: string;
@@ -153,6 +154,8 @@ export async function inspectPackage(file: File): Promise<Plugin> {
     m.capabilities.includes("edit") !== m.capabilities.includes("serialize")
   )
     throw Error("权限不受支持，编辑和保存权限须同时声明");
+  if (m.mcp_model !== undefined && (!['text','mindmap'].includes(m.mcp_model) || !m.capabilities.includes('serialize')))
+    throw Error("MCP 格式需要受支持的内容模型与序列化权限");
   const hash = Array.from(
     new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
     (n) => n.toString(16).padStart(2, "0"),

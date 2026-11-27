@@ -1,3 +1,4 @@
+mod mcp;
 #[cfg(target_os = "android")]
 mod mobile;
 use std::path::PathBuf;
@@ -161,6 +162,7 @@ enum LocalAction {
     },
     List,
     Library,
+    McpCatalog,
     Trash,
     ReadTrash {
         item: wenote_sync::notebook::TrashedFile,
@@ -295,6 +297,7 @@ async fn notebook(
             SearchNotes { query, paths } => book
                 .search_notes(&query, &paths)
                 .map(|hits| serde_json::json!(hits)),
+            McpCatalog => book.mcp_catalog().map(|items| serde_json::json!(items)),
             Library => book.library().map(|v| serde_json::json!(v)),
             ChangeEntry {
                 operation,
@@ -360,6 +363,9 @@ fn print_note(webview: tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 #[tauri::command]
+fn mcp_desktop_available() -> bool { !cfg!(mobile) }
+
+#[tauri::command]
 fn is_android() -> bool {
     cfg!(target_os = "android")
 }
@@ -369,6 +375,7 @@ pub fn run() {
     #[cfg(target_os = "android")]
     let builder = builder.plugin(mobile::plugin());
     builder
+        .manage(mcp::Transport::default())
         .invoke_handler(tauri::generate_handler![
             login,
             refresh,
@@ -377,7 +384,11 @@ pub fn run() {
             notebook,
             devices,
             is_android,
+            mcp_desktop_available,
             print_note,
+            mcp::mcp_open,
+            mcp::mcp_close,
+            mcp::mcp_reply,
             recent_notebook,
             mobile::mobile_control
         ])

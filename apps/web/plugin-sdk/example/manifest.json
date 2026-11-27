@@ -5,6 +5,7 @@
   "api_version": "1",
   "file_extensions": [".txt"],
   "capabilities": ["parse", "edit", "serialize", "export"],
+  "mcp_model": "text",
   "actions": [{ "id": "uppercase", "label": "英文转大写", "kind": "edit" }],
   "entry": { "core": "core.wasm" }
 }

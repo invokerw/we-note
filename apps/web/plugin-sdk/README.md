@@ -21,3 +21,7 @@
 ## 内置编辑器
 
 Markdown 与 Mind Elixir 分别处理 `.md` 与 `.mind.json`。默认文本编辑器读取 UTF-8 文本并保留 BOM 和换行。无法解码的文件可下载原件。
+
+## 客户端 MCP
+
+每种新增文件格式都须通过 MCP 的增删改查验收。新增可编辑格式须在 v1 清单中声明 `"mcp_model": "text"` 或 `"mcp_model": "mindmap"`，并声明 `parse`、`edit` 和 `serialize`。前者将 `open` 的 UTF-8 结果交给文本工具，后者返回符合内置 `.mind.json` 结构的 JSON，支持稳定节点 ID 和子树操作。`serialize` 将编辑结果还原为该格式的持久内容。自定义后缀仍须满足 WeNote 的 UTF-8 存储约束。工具以文件实际匹配的已启用插件为准；离线请求绑定插件包哈希。发布前请用旧样例验证创建、查询、局部修改、删除和未改字段的往返结果。

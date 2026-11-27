@@ -1,3 +1,5 @@
+import { useMcp, McpPanel } from './mcp/Connections';
+import { nativeBackend } from './mcp/backend';
 import { SyncConflicts } from "./SyncConflicts";
 import { CreateNoteWindow } from "./CreateNoteWindow";
 import { StarButton, useNoteStars } from "./StarredNotes";
@@ -195,6 +197,19 @@ function Workspace({
   const vault = binding.vault,
     dirty = pluginDirty || text !== saved,
     editing = mode === "crepe" || mode === "edit" || mode === "split";
+  const [desktopTransport, setDesktopTransport] = useState(false);
+  useEffect(() => { void window.__TAURI__.core.invoke<boolean>('mcp_desktop_available', {}).then(value => setDesktopTransport(value === true)).catch(() => {}); }, []);
+  const connection = useMcp({
+    scope: account && vault ? JSON.stringify([localStorage.getItem('origin'), account, vault]) : '',
+    vault, desktop: desktopTransport, backend: nativeBackend((action, args) => local(vault, action, args)),
+    dirty: p => dirty && p === path, dirtyPath: dirty ? path : '',
+    changed: (target, previous, deleted) => { void run(async () => {
+      await load();
+      if (dirty || !path || (path !== target && path !== previous)) return;
+      if (deleted) { choose(''); setPluginBytes(null); }
+      else await open(target, true);
+    }); },
+  });
   const markdownSettings = markdownPreferences(preferences);
   function updatePluginSetting(pluginId: string, settings: unknown) {
     const next = updatePluginPreferences(
@@ -717,7 +732,7 @@ function Workspace({
         paths={files} io={entries} close={() => setCreateAnchor(null)}
         create={format => { setNewPath((panes.folder || "") + formats[format]); panes.setPane("doc"); }}
         browse={folder => { setView("笔记"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
+      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
         if (!leave()) return;
         if (!await binding.synchronize?.()) throw Error("请完成同步后查看导入的笔记");
         await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); setNewPath(null); panes.browse(folder ? folder + "/" : null);

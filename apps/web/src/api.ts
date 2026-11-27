@@ -74,7 +74,7 @@ export async function request(
         ? "文件已有新版本。请保留当前草稿，查看新版本后再保存。"
         : e.error?.message || e.message || `请求失败 (${response.status})`,
     );
-    throw Object.assign(error, { code: e.error?.code });
+    throw Object.assign(error, { code: e.error?.code, status: response.status });
   }
   return response;
 }
