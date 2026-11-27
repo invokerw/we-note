@@ -2,9 +2,9 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 类型与状态 | `feature` · `DELIVERED` · 2026-11-27 |
+| 类型与状态 | `feature` · `IN_PROGRESS` · 2026-11-27 |
 | 影响端 | Web、桌面、Android、iOS 共用的客户端助手与原生模型传输 |
-| 本轮交付 | 样稿对齐修复 `5c46124`，等待任务分支验收 |
+| 本轮交付 | 在样稿对齐修复 `5c46124` 上补充输入快捷键和生成动效 |
 | 开发验收方式 | 用户已选 2，在任务分支验收，通过后合入本地 `main` |
 | 基线与分支 | `main@37449f3` → `codex/feature-assistant-chat-ui-20261127` |
 | worktree | `/Users/weifei/.codex/worktrees/assistant-chat-ui-20261127/we-note` |
@@ -74,3 +74,16 @@
 `npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser`、14 项助手和相关单测、macOS `tauri build --debug --bundles app` 均退出 0。新回归使用受控模型响应并实际调用本库的读取、修改和保存接口。桌面与 390px 手机宽度的浏览器截图在本 worktree 的 `dist/assistant-design/after/`，对照样稿为 `reference-edit.png`，实装为 `live-edit.png`、`live-edit-mobile.png`、`live-empty.png`、`live-read.png`。手机按浏览器窄屏验收。
 
 实际入口 `http://localhost:19469/`，重新加载后在笔记库展开「笔记助手」；原样稿对照入口 `http://localhost:19469/static/assistant-design/`。实例 PID 62494、日志和数据目录沿用上轮。
+
+## 2026-11-27 · 输入快捷键与生成动效
+
+用户希望回车发送、Shift + 回车换行，并让「正在生成」呈现动态反馈。沿用方式 2，在笔记库内的实际聊天页验收。
+
+- 在输入框按 Shift + Enter 插入换行，按 Enter 发出一条包含该换行的消息。中文输入法确认候选和 `@` 选择笔记时，回车只完成当前选择。
+- 从发出请求开始，到接收回复及起草笔记时，状态旁持续显示动效。需要用户确认修改时暂停，应用后继续生成时恢复。完成、停止或失败后动效消失。系统开启减少动态效果时保留静态提示。
+
+在旧构建运行 `WENOTE_TEST_ORIGIN=http://localhost:19469 node apps/web/tests/assistant-browser.mjs` 退出 1，Shift + Enter 后得到的是连在一起的两行文字。修正引用菜单对按键的拦截后，回归又复现了输入框有内容但回车未发送。将底部发送和「修改要求」接入 Ant Design X `Sender` 提供的 `SendButton`，点击和键盘共用同一个提交入口。
+
+用受控流式响应验证真实聊天页，在首个响应、起草、等待确认、恢复生成、停止和失败阶段分别核对状态。浏览器检查动态模式有运行中的动画，减少动态效果模式下动画为零且状态文字可见。自审另覆盖生成期间按回车保留下一条草稿，以及引用候选打开时换行、空格和回车选择。聚焦浏览器命令复跑退出 0。
+
+`node --test apps/web/tests/assistant*.test.mjs apps/web/tests/{mcp-tools,web-build-history}.test.mjs` 退出 0，共 14 项。`npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 及 `apps/client` 的 macOS 调试版 `tauri build --debug --bundles app` 均退出 0。输入法以浏览器合成事件验证，包括组合输入已结束但 Enter 携带键码 229 的情况；手机沿用窄屏浏览器覆盖。

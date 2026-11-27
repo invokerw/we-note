@@ -44,6 +44,16 @@ function rounds(lines: Line[]): Round[] {
   });
   return result;
 }
+export function GenerationStatus({ status }: { status: string }) {
+  return (
+    <small role="status" className="assistant-generation-status">
+      {status.replace(/…$/, "")}
+      <span className="assistant-generation-dots" aria-hidden="true">
+        <i /><i /><i />
+      </span>
+    </small>
+  );
+}
 function Answer({
   text,
   summary,
@@ -316,7 +326,7 @@ function Reply({
         </div>
       )}
       {live && p.status && p.status !== "等待应用修改" && (
-        <small role="status">{p.status}</small>
+        <GenerationStatus status={p.status} />
       )}
       {!!paths.size && (
         <Sources

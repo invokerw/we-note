@@ -1,6 +1,6 @@
-import { Sender, Suggestion } from "@ant-design/x";
+import { Sender, Suggestion, type SenderProps } from "@ant-design/x";
 import type { SenderRef } from "@ant-design/x/es/sender/interface";
-import { useState, type ReactNode, type Ref } from "react";
+import { useState, type Ref } from "react";
 import { Button, Checkbox, Popover, Tag } from "antd";
 import {
   CloseOutlined,
@@ -18,7 +18,7 @@ type Props = {
   references: (refs: string[], all: boolean) => void;
   changeDraft: (value: string) => void;
   submit: () => void;
-  footer: ReactNode;
+  footer: SenderProps["footer"];
 };
 export function NoteSender({
   sender,
@@ -118,8 +118,21 @@ export function NoteSender({
         {({ onTrigger, onKeyDown, open: suggesting }) => (
           <Sender
             ref={sender}
+            submitType="enter"
             onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return false;
+              if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+                e.stopPropagation();
+                return false;
+              }
+              // Suggestion's outer combobox consumes Space and Enter on bubble.
+              if (
+                e.key === " " ||
+                (e.key === "Enter" && (!suggesting || e.shiftKey))
+              ) {
+                e.stopPropagation();
+                if (suggesting) onTrigger(false);
+                return;
+              }
               if (suggesting) {
                 onKeyDown(e);
                 if (e.defaultPrevented) return false;
@@ -131,7 +144,7 @@ export function NoteSender({
             }}
             value={draft}
             aria-label="助手消息"
-            placeholder="给笔记助手发消息…"
+            placeholder="发消息，Enter 发送，Shift + Enter 换行"
             autoSize={{ minRows: 1, maxRows: 5 }}
             onChange={changeDraft}
             onSubmit={submit}

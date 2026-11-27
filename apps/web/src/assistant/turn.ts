@@ -165,6 +165,7 @@ export async function runTurn(t: Turn) {
   t.signal.addEventListener("abort", abort, { once: true });
   agent.subscribe((event) => {
     if (t.signal.aborted) return;
+    if (event.type === "turn_start" && !consecutiveFailures) t.status("正在生成…");
     if (event.type === "message_update") {
       const update = event.assistantMessageEvent;
       if (update.type === "text_delta") t.text(update.delta);

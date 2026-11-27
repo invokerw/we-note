@@ -13,11 +13,10 @@ import { Conversations, Prompts, Welcome, XProvider } from "@ant-design/x";
 import zhCN from "@ant-design/x/es/locale/zh_CN";
 import type { SenderRef } from "@ant-design/x/es/sender/interface";
 import { NoteSender } from "./NoteSender";
-import { ThreadMessages } from "./ThreadMessages";
+import { GenerationStatus, ThreadMessages } from "./ThreadMessages";
 import { Button } from "antd";
 import {
   SettingOutlined,
-  ArrowUpOutlined,
   FileTextOutlined,
   StopOutlined,
 } from "@ant-design/icons";
@@ -787,7 +786,11 @@ export function AssistantPanel(props: Props) {
                   }
                 />
               )}
-              {status && !activeUser && <small role="status">{status}</small>}
+              {status && !activeUser && (busy ? (
+                <GenerationStatus status={status} />
+              ) : (
+                <small role="status">{status}</small>
+              ))}
             </div>
             {chat && (
               <div className="assistant-compose">
@@ -805,7 +808,7 @@ export function AssistantPanel(props: Props) {
                   submit={() => {
                     if (canSend) void submit();
                   }}
-                  footer={
+                  footer={(_, { components: { SendButton } }) => (
                     <div className="assistant-sender-footer">
                       {model.baseUrl ? (
                         <ModelPicker
@@ -832,13 +835,15 @@ export function AssistantPanel(props: Props) {
                       )}
                       <div className="assistant-send-actions">
                         {busy && pending.current && chat.draft.trim() && (
-                          <Button
+                          <SendButton
                             size="small"
+                            type="default"
+                            shape="default"
+                            icon={null}
                             disabled={!canSend}
-                            onClick={() => void submit()}
                           >
                             修改要求
-                          </Button>
+                          </SendButton>
                         )}
                         {busy ? (
                           <Button
@@ -859,19 +864,15 @@ export function AssistantPanel(props: Props) {
                             }}
                           />
                         ) : (
-                          <Button
-                            type="primary"
-                            shape="circle"
+                          <SendButton
                             aria-label="发送"
-                            title="发送"
-                            icon={<ArrowUpOutlined />}
+                            title="发送（Enter）"
                             disabled={!canSend}
-                            onClick={() => void submit()}
                           />
                         )}
                       </div>
                     </div>
-                  }
+                  )}
                 />
                 {notice && (
                   <small role="status">
