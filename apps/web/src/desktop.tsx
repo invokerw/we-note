@@ -57,6 +57,11 @@ type Binding = {
   vault: string;
   account?: string;
   restoredBinding?: string;
+  owner?: string;
+  books?: {id: string; name: string}[];
+  switchBook?: (id: string) => void;
+  settings?: () => void;
+  logout?: () => void;
   name?: string;
   synchronize?: () => Promise<boolean | undefined>;
   access: () => Promise<string>;
@@ -73,16 +78,19 @@ declare global {
     };
   }
 }
-function local<T>(
-  vault: string,
-  action: string,
-  args: Record<string, unknown> = {},
-) {
-  return window.__TAURI__.core.invoke<T>("notebook", {
-    vault,
-    sessionOrigin: args.token ? localStorage.getItem("origin") : null,
-    operation: { action, ...args },
-  });
+function notebookCommand(owner?: string) {
+  return function local<T>(
+    vault: string,
+    action: string,
+    args: Record<string, unknown> = {},
+  ) {
+    return window.__TAURI__.core.invoke<T>("notebook", {
+      vault,
+      owner,
+      sessionOrigin: args.token ? localStorage.getItem("origin") : null,
+      operation: { action, ...args },
+    });
+  };
 }
 function isAsset(src: string) {
   return src.startsWith("https://wenote-draft.invalid/assets/") || /^https?:\/\/[^/]+\/assets\/(?:asset_[\w-]+|(?:[\w-]+\/[\w-]+\/)?\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{64}|[\w-]+\/[\w-]+\/\d{4}\/\d{2}\/\d{2}\/[a-f0-9]{16})$/.test(src);
@@ -96,6 +104,7 @@ function LocalImage({
   src: string;
   alt: string;
 }) {
+  const local = useMemo(() => notebookCommand(binding.owner), [binding.owner]);
   const [url, set] = useState("");
   useEffect(() => {
     let live = true;
@@ -135,6 +144,17 @@ function Workspace({
   binding: Binding;
   close: () => void;
 }) {
+  const local = useMemo(() => notebookCommand(binding.owner), [binding.owner]);
+  const [books, setBooks] = useState(binding.books);
+  useEffect(() => {
+    function update(event: Event) {
+      const detail = (event as CustomEvent<Pick<Binding, "owner" | "books">>).detail;
+      if (detail.owner === binding.owner) setBooks(detail.books);
+    }
+    window.addEventListener("account-vaults-updated", update);
+    return () => window.removeEventListener("account-vaults-updated", update);
+  }, [binding]);
+  const recentKey = binding.owner ? `mac-note:${binding.owner}:${binding.vault}` : undefined;
   const [revisions, list] = useState<Record<string, string>>({}),
     [path, choose] = useState(""),
     [text, setText] = useState(""),
@@ -305,7 +325,14 @@ function Workspace({
     list(await local<Record<string, string>>(vault, "library"));
   }
   useEffect(() => {
-    load().catch((e) => notify(String(e)));
+    let mounted = true;
+    local<Record<string,string>>(vault,"library").then(async entries => {
+      if (!mounted) return;
+      list(entries);
+      const recent = recentKey && localStorage.getItem(recentKey);
+      if (recent && Object.hasOwn(entries, recent)) await open(recent, true);
+    }).catch(e => {if (mounted) notify(String(e));});
+    return () => {mounted = false;};
   }, [vault]);
   useEffect(() => {
     function warn(e: BeforeUnloadEvent) {
@@ -347,6 +374,7 @@ function Workspace({
     setSaved(source.current.text);
     setBase(result.hash);
     choose(p);
+    if (recentKey) localStorage.setItem(recentKey, p);
     setPanelOpen(false);
     panes.setPane("doc");
     setView("笔记");
@@ -678,12 +706,14 @@ function Workspace({
         busy={busy}
         open={(p) => run(() => open(p))}
         libraryTitle="本地笔记库"
-        vault={<strong className="local-vault">本地笔记库</strong>}
+        vault={books ? <select aria-label="切换笔记库" value={vault} disabled={busy} onChange={e => {
+          if (leave()) binding.switchBook?.(e.target.value);
+        }}>{books.map(book => <option key={book.id} value={book.id}>{book.name}</option>)}</select> : <strong className="local-vault">本地笔记库</strong>}
         create={setCreateAnchor}
         avatar={<SettingsButton avatar={profile.avatar} open={() => {originalHandler.current = handlerKey(path);setSettingsOpen(true);}}/>}
         allNotes={() => {if (!leave()) return false; setView("笔记");choose("");setPluginBytes(null);setPluginDirty(false);setSaved(text);return true;}}
         searchContent={searchContent}
-        historyKey={vault}
+        historyKey={binding.owner ? `${binding.owner}:${vault}` : vault}
         trash={{ active: view === "回收站", disabled: busy, open: () => run(async () => {
           if (!leave()) return;
           setTrash(await local<TrashedFile[]>(vault, "trash"));
@@ -736,7 +766,7 @@ function Workspace({
           await load();
         }}
         browse={folder => { setView("笔记"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {clearCredential();close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
+      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {clearCredential();close();if (binding.logout) binding.logout(); else document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
         if (!leave()) return;
         if (!await binding.synchronize?.()) throw Error("请完成同步后查看导入的笔记");
         await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); panes.browse(folder ? folder + "/" : null);
@@ -863,16 +893,45 @@ function Workspace({
 }
 void catalogVersion();
 const root = createRoot(document.getElementById("desktop-editor")!);
+type EmptyLibraryProps = {email:string; root:string; create:(name:string) => Promise<void>; logout:() => void};
+function EmptyLibrary(props: EmptyLibraryProps) {
+  const [name,setName] = useState("我的笔记");
+  const [busy,setBusy] = useState(false);
+  const [error,setError] = useState("");
+  return <WorkspaceShell className="empty-library"><AppShell.Main>
+    <header><strong>WeNote</strong><span>{props.email}</span><button disabled={busy} onClick={() => {
+      window.dispatchEvent(new Event("close-empty-notebooks")); props.logout();
+    }}>退出账号</button></header>
+    <form onSubmit={async event => {
+      event.preventDefault(); if (busy || !name.trim()) return;
+      setBusy(true); setError("");
+      try {await props.create(name.trim());} catch (e) {setError(String(e));} finally {setBusy(false);}
+    }}><h1>创建第一个笔记库</h1><p>笔记库存储位置<br/>{props.root}</p>
+      <label>笔记库名称<input required maxLength={100} value={name} onChange={e => setName(e.target.value)}/></label>
+      <button className="primary" disabled={busy || !name.trim()}>创建第一个笔记库</button>
+      <output role="status">{error}</output>
+    </form></AppShell.Main></WorkspaceShell>;
+}
+window.addEventListener("empty-notebooks", event => {
+  (document.querySelector("body > main") as HTMLElement).hidden = true;
+  root.render(<EmptyLibrary {...(event as CustomEvent<EmptyLibraryProps>).detail}/>);
+});
+window.addEventListener("close-empty-notebooks", () => {
+  root.render(null);
+  (document.querySelector("body > main") as HTMLElement).hidden = false;
+});
 window.addEventListener("open-notebook", (e) => {
   const binding = (e as CustomEvent<Binding>).detail,
     settings = document.querySelector("body > main") as HTMLElement;
   settings.hidden = true;
   root.render(
     <Workspace
+      key={JSON.stringify([binding.owner, binding.vault])}
       binding={binding}
       close={() => {
         root.render(null);
         settings.hidden = false;
+        binding.settings?.();
       }}
     />,
   );

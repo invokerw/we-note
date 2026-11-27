@@ -45,7 +45,7 @@ async function initialize() {
     byId("open-editor").hidden = false;
     if (!localStorage.getItem("origin")) byId("origin").value = recent.origin;
   }
-  if (!android) return;
+  if (!android) { byId("heading").textContent = "桌面同步"; return; }
   document.documentElement.classList.add("android-client");
   byId("heading").textContent = "笔记同步";
   byId("open-editor").textContent = "打开笔记";

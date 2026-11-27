@@ -42,3 +42,48 @@
   border: 0;
   margin: 0 0 12px;
 }
+#storage-setup p {
+  color: var(--muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+#storage-setup button {
+  margin: 0.3rem 0.4rem 0.3rem 0;
+}
+#storage-setup .primary {
+  width: 100%;
+}
+#storage-setup #mac-auto-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+#storage-setup [hidden] {
+  display: none !important;
+}
+
+.empty-library header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.empty-library header strong {
+  margin-right: auto;
+}
+.empty-library form {
+  width: min(24rem, 90vw);
+  margin: 15vh auto;
+  display: grid;
+  gap: 1rem;
+}
+.empty-library form p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.empty-library label {
+  display: grid;
+  gap: 0.5rem;
+}

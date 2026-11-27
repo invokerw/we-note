@@ -2,9 +2,9 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 类型与状态 | `feature` · `DELIVERED` · 2026-11-27 |
+| 类型与状态 | `feature` · `ACCEPTED` · 2026-11-27 |
 | 影响端 | Web、桌面、Android、iOS 共用的客户端助手与原生模型传输 |
-| 本轮交付 | 回车发送、换行和生成动效 `595bf7e`，等待任务分支验收 |
+| 本轮交付 | 回车发送、换行和生成动效 `595bf7e`，用户已通过任务分支验收 |
 | 开发验收方式 | 用户已选 2，在任务分支验收，通过后合入本地 `main` |
 | 基线与分支 | `main@37449f3` → `codex/feature-assistant-chat-ui-20261127` |
 | worktree | `/Users/weifei/.codex/worktrees/assistant-chat-ui-20261127/we-note` |
@@ -89,3 +89,9 @@
 `node --test apps/web/tests/assistant*.test.mjs apps/web/tests/{mcp-tools,web-build-history}.test.mjs` 退出 0，共 14 项。`npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 及 `apps/client` 的 macOS 调试版 `tauri build --debug --bundles app` 均退出 0。输入法以浏览器合成事件验证，包括组合输入已结束但 Enter 携带键码 229 的情况；手机沿用窄屏浏览器覆盖。
 
 方式 2 交付 `595bf7e`。验收入口 `http://localhost:19469/`，实例 PID 62494。刷新笔记库并展开「笔记助手」，输入两行后按 Enter，观察多行消息和回复旁的三点动效。macOS 产物在本 worktree 的 `target/debug/bundle/macos/WeNote.app`。
+
+## 2026-11-27 · 验收与合并
+
+用户确认验收完毕，受测实现 `595bf7e`、交付记录 `b70fe05`。集成本地 `main@1398af7` 时，保留主分支的桌面账号退出回调、设备密钥实现与存储任务记录，以及助手独立的模型设置入口。
+
+集成后运行 `npm --prefix apps/web run build`、`node --test apps/web/tests/assistant*.test.mjs apps/web/tests/{mcp-tools,web-build-history}.test.mjs`（14 项）、`cargo test --locked --manifest-path apps/client/src-tauri/Cargo.toml --lib model::tests`（2 项）、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 和 macOS 调试版 `tauri build --debug --bundles app`，均退出 0。完整回归覆盖桌面账号与库切换、助手快捷键、生成状态及凭据隔离。
