@@ -101,6 +101,7 @@ export function ModelPicker(p: Props) {
           >
             {step === "model" || !selected || !levels.length ? (
               <>
+                <small>选择模型</small>
                 <Space.Compact>
                   <Input
                     aria-label="模型 ID"
@@ -225,6 +226,7 @@ export function ModelPicker(p: Props) {
       >
         <Button
           ref={trigger}
+          shape="round"
           size="small"
           type="text"
           className="assistant-model-trigger"

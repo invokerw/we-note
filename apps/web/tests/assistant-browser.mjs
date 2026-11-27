@@ -1,3 +1,4 @@
+import {checkAssistantDesign} from "./assistant-design.mjs";
 import {assistantUI} from "./assistant-ui.mjs";
 import { checkResponsesTurn } from "./assistant-responses.mjs";
 import assert from "node:assert/strict";
@@ -368,6 +369,7 @@ try {
   );
   await page.setViewportSize({ width: 1280, height: 800 });
   await checkResponsesTurn(page, origin, async () => (await api(`vaults/${other}/files`)).files);
+  await checkAssistantDesign(page,origin,api);
   assert.deepEqual(errors, []);
   console.log(
     "通过：Pi 流式工具测试、MCP 预览与写入、历史切换、刷新恢复和窄屏开关",

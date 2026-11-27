@@ -2,7 +2,7 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 类型与状态 | `feature` · `DELIVERED` · 2026-11-27 |
+| 类型与状态 | `feature` · `CHANGES_REQUESTED` · 2026-11-27 |
 | 影响端 | Web、桌面、Android、iOS 共用的客户端助手与原生模型传输 |
 | 本轮交付 | 任务分支实现 `20530db`，等待用户验收 |
 | 开发验收方式 | 用户已选 2，在任务分支验收，通过后合入本地 `main` |
@@ -64,3 +64,7 @@
 - `node --test apps/web/tests/assistant*.test.mjs apps/web/tests/{mcp-tools,web-build-history}.test.mjs` 通过 14 项，`cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib model::tests` 通过 2 项。
 - `npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 和桌面 `tauri build --debug --bundles app` 均退出 0。浏览器使用受控网关核对两种协议的出站等级、流式摘要、停止起草、已读来源、反馈恢复、待确认修改、历史草稿以及 390px 宽的滑杆和发送按钮。`git diff --cached --check` 通过。
 - 手机在浏览器窄屏验证。Android SDK 目录为空，本轮未构建手机安装包或进行 Android、iOS 真机验证。
+
+## 2026-11-27 · 对照交互样稿返工
+
+用户在验收中指出真实聊天未按 `/static/assistant-design/` 样稿更新。沿用方式 2，在真实笔记库对照修改笔记、只读总结和新对话。验收核对右栏宽度、工具链与状态、原文和改为的分行展示、完成后的来源与反馈、输入框外引用标签、圆形发送和合并模型入口，并确认首次配置与授权、窄屏及旧会话可操作。

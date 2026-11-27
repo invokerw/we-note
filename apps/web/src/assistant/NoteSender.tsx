@@ -1,6 +1,12 @@
 import { Sender, Suggestion } from "@ant-design/x";
 import type { SenderRef } from "@ant-design/x/es/sender/interface";
-import type { ReactNode, Ref } from "react";
+import { useState, type ReactNode, type Ref } from "react";
+import { Button, Checkbox, Popover, Tag } from "antd";
+import {
+  CloseOutlined,
+  FileTextOutlined,
+  PaperClipOutlined,
+} from "@ant-design/icons";
 
 type Props = {
   sender: Ref<SenderRef>;
@@ -26,79 +32,114 @@ export function NoteSender({
   submit,
   footer,
 }: Props) {
+  const [choosing, setChoosing] = useState(false);
   return (
-    <Suggestion
-      block
-      items={availableRefs.map((path) => ({
-        label: path,
-        value: path,
-      }))}
-      onSelect={(path) => references([...refs, path], all)}
-    >
-      {({ onTrigger, onKeyDown, open: suggesting }) => (
-        <Sender
-          ref={sender}
-          onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing) return false;
-            if (suggesting) {
-              onKeyDown(e);
-              if (e.defaultPrevented) return false;
-            } else if (e.key === "@" && !locked && availableRefs.length) {
-              e.preventDefault();
-              onTrigger();
-              return false;
-            }
-          }}
-          header={
-            <fieldset disabled={locked}>
+    <>
+      <div className="assistant-reference-bar">
+        {refs.map((path) => (
+          <Tag
+            key={path}
+            bordered={false}
+            title={path}
+            icon={<FileTextOutlined />}
+          >
+            <span className="assistant-reference-name">{path}</span>
+            <button
+              type="button"
+              title={`移除引用 ${path}`}
+              aria-label={`移除引用 ${path}`}
+              disabled={locked}
+              onClick={() =>
+                references(
+                  refs.filter((p) => p !== path),
+                  all,
+                )
+              }
+            >
+              <CloseOutlined />
+            </button>
+          </Tag>
+        ))}
+        <Popover
+          trigger="click"
+          placement="topLeft"
+          open={choosing && !locked}
+          onOpenChange={setChoosing}
+          content={
+            <div className="assistant-reference-options">
               <select
                 aria-label="引用笔记"
                 value=""
+                disabled={locked}
                 onChange={(e) => {
-                  if (e.target.value)
+                  if (e.target.value) {
                     references([...refs, e.target.value], all);
+                    setChoosing(false);
+                  }
                 }}
               >
-                <option value="">＋ 引用笔记</option>
-                {availableRefs.map((p) => (
-                  <option key={p}>{p}</option>
+                <option value="">选择笔记</option>
+                {availableRefs.map((path) => (
+                  <option key={path}>{path}</option>
                 ))}
               </select>
-              {refs.map((ref) => (
-                <button
-                  type="button"
-                  key={ref}
-                  title={"移除引用 " + ref}
-                  onClick={() =>
-                    references(
-                      refs.filter((p) => p !== ref),
-                      all,
-                    )
-                  }
-                >
-                  {ref} ×
-                </button>
-              ))}
-              <label>
-                <input
-                  type="checkbox"
-                  checked={all}
-                  onChange={(e) => references(refs, e.target.checked)}
-                />
+              <Checkbox
+                checked={all}
+                disabled={locked}
+                onChange={(e) => references(refs, e.target.checked)}
+              >
                 搜索本库
-              </label>
-            </fieldset>
+              </Checkbox>
+            </div>
           }
-          value={draft}
-          aria-label="助手消息"
-          placeholder="给笔记助手发消息…"
-          autoSize={{ minRows: 2, maxRows: 5 }}
-          onChange={changeDraft}
-          onSubmit={submit}
-          suffix={false}
-          footer={footer}
-        />
-      )}
-    </Suggestion>
+        >
+          <Button
+            size="small"
+            type="text"
+            className="assistant-reference-trigger"
+            icon={<PaperClipOutlined />}
+            aria-label="管理引用"
+            title="引用笔记与搜索范围"
+            aria-expanded={choosing && !locked}
+            disabled={locked}
+          >
+            {all ? "搜索本库" : refs.length ? undefined : "引用笔记"}
+          </Button>
+        </Popover>
+      </div>
+      <Suggestion
+        block
+        items={availableRefs.map((path) => ({
+          label: path,
+          value: path,
+        }))}
+        onSelect={(path) => references([...refs, path], all)}
+      >
+        {({ onTrigger, onKeyDown, open: suggesting }) => (
+          <Sender
+            ref={sender}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return false;
+              if (suggesting) {
+                onKeyDown(e);
+                if (e.defaultPrevented) return false;
+              } else if (e.key === "@" && !locked && availableRefs.length) {
+                e.preventDefault();
+                onTrigger();
+                return false;
+              }
+            }}
+            value={draft}
+            aria-label="助手消息"
+            placeholder="给笔记助手发消息…"
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            onChange={changeDraft}
+            onSubmit={submit}
+            suffix={false}
+            footer={footer}
+          />
+        )}
+      </Suggestion>
+    </>
   );
 }

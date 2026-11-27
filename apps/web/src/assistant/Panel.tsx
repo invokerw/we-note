@@ -15,7 +15,12 @@ import type { SenderRef } from "@ant-design/x/es/sender/interface";
 import { NoteSender } from "./NoteSender";
 import { ThreadMessages } from "./ThreadMessages";
 import { Button } from "antd";
-import { SettingOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
+import {
+  SettingOutlined,
+  ArrowUpOutlined,
+  FileTextOutlined,
+  StopOutlined,
+} from "@ant-design/icons";
 import { ModelPicker } from "./ModelPicker";
 import { useCatalog } from "./useCatalog";
 import { ModelSettings, missingKeyHint, gatewayNeedsKey } from "./Settings";
@@ -264,6 +269,14 @@ export function AssistantPanel(props: Props) {
       event.preventDefault();
       const dropdown = document.querySelector(".ant-select-open input");
       if (dropdown instanceof HTMLElement) dropdown.blur();
+      else if (
+        document.querySelector(
+          '.assistant-reference-trigger[aria-expanded="true"]',
+        )
+      )
+        document
+          .querySelector<HTMLButtonElement>(".assistant-reference-trigger")
+          ?.click();
       else if (settings)
         document
           .querySelector<HTMLButtonElement>(
@@ -560,7 +573,10 @@ export function AssistantPanel(props: Props) {
     (p) => !p.endsWith("/") && !chat?.refs.includes(p),
   );
   const prompts = chat?.refs.length
-    ? ["总结引用的笔记", "提炼笔记中的待办"]
+    ? [
+        "总结这篇笔记的待办",
+        grant?.write ? "帮我润色这篇笔记" : "概括这篇笔记的要点",
+      ]
     : ["起草一篇笔记", "列一份待办清单"];
   function fillDraft(value: string) {
     void update((c) => ({
@@ -685,6 +701,14 @@ export function AssistantPanel(props: Props) {
               role="log"
               aria-label="对话"
             >
+              {chat && !chat.lines.length && (
+                <Welcome
+                  icon={<FileTextOutlined />}
+                  title={
+                    chat.refs.length ? "想怎样处理这篇笔记？" : "想从哪里开始？"
+                  }
+                />
+              )}
               {!model.baseUrl && (
                 <Button onClick={() => setSettings(true)}>配置模型服务</Button>
               )}
@@ -726,26 +750,15 @@ export function AssistantPanel(props: Props) {
                 )
               )}
               {chat && !chat.lines.length && grant && model.baseUrl && (
-                <>
-                  <Welcome
-                    variant="borderless"
-                    title="想从哪里开始？"
-                    description={
-                      chat.refs.length
-                        ? "围绕引用的笔记提问，或一起修改内容。"
-                        : "把想法写成笔记，或引用已有笔记继续整理。"
-                    }
-                  />
-                  <Prompts
-                    vertical
-                    items={prompts.map((label) => ({
-                      key: label,
-                      label,
-                      disabled: !!chat.draft.trim(),
-                    }))}
-                    onItemClick={({ data }) => fillDraft(data.key as string)}
-                  />
-                </>
+                <Prompts
+                  wrap
+                  items={prompts.map((label) => ({
+                    key: label,
+                    label,
+                    disabled: !!chat.draft.trim(),
+                  }))}
+                  onItemClick={({ data }) => fillDraft(data.key as string)}
+                />
               )}
               {chat && (
                 <ThreadMessages
@@ -794,7 +807,7 @@ export function AssistantPanel(props: Props) {
                   }}
                   footer={
                     <div className="assistant-sender-footer">
-                      {model.baseUrl && (
+                      {model.baseUrl ? (
                         <ModelPicker
                           id={model.model}
                           options={options}
@@ -806,6 +819,16 @@ export function AssistantPanel(props: Props) {
                           reload={() => reload((v) => v + 1)}
                           test={() => void testConnection()}
                         />
+                      ) : (
+                        <Button
+                          size="small"
+                          type="text"
+                          shape="round"
+                          className="assistant-model-trigger"
+                          onClick={() => setSettings(true)}
+                        >
+                          选择模型
+                        </Button>
                       )}
                       <div className="assistant-send-actions">
                         {busy && pending.current && chat.draft.trim() && (
@@ -819,6 +842,7 @@ export function AssistantPanel(props: Props) {
                         )}
                         {busy ? (
                           <Button
+                            shape="circle"
                             aria-label="停止"
                             title="停止"
                             disabled={applying}
@@ -837,9 +861,10 @@ export function AssistantPanel(props: Props) {
                         ) : (
                           <Button
                             type="primary"
+                            shape="circle"
                             aria-label="发送"
                             title="发送"
-                            icon={<SendOutlined />}
+                            icon={<ArrowUpOutlined />}
                             disabled={!canSend}
                             onClick={() => void submit()}
                           />
