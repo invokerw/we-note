@@ -1,3 +1,4 @@
+import { checkResponsesTurn } from "./assistant-responses.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -257,6 +258,8 @@ try {
     await page.getByText("已完成周报。", { exact: true }).count(),
     0,
   );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await checkResponsesTurn(page, origin, async () => (await api(`vaults/${other}/files`)).files);
   assert.deepEqual(errors, []);
   console.log(
     "通过：Pi 流式工具测试、MCP 预览与写入、历史切换、刷新恢复和窄屏开关",

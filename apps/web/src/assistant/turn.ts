@@ -3,7 +3,7 @@ import skill from "../../../../skills/wenote-notes/SKILL.md?raw";
 import { createAgent } from "./runtime";
 import { parseCall, readOnly, type Call } from "../mcp/tools";
 import type { useMcp } from "../mcp/Connections";
-import { checkReference, prepareWrite, type Config } from "./policy";
+import { checkReference, prepareCreateArguments, prepareWrite, type Config } from "./policy";
 import type { Chat, Line, Proposal } from "./history";
 export type Connection = ReturnType<typeof useMcp>;
 type Turn = {
@@ -16,6 +16,7 @@ type Turn = {
   signal: AbortSignal;
   append: (line: Line) => void;
   text: (s: string) => void;
+  draft: (s: string) => void;
   status: (s: string) => void;
   propose: (p: Proposal) => Promise<Record<string, unknown>>;
 };
@@ -54,6 +55,7 @@ export async function runTurn(t: Turn) {
       label: tool.description,
       description: tool.description,
       parameters: tool.inputSchema,
+      prepareArguments: tool.name === "create_note" ? prepareCreateArguments : undefined,
       execute: async (_id, args) => {
         const call = parseCall(tool.name, args);
         checkReference(call.name, call.args, t.chat.all, allowed);
@@ -112,22 +114,50 @@ export async function runTurn(t: Turn) {
     `${skill}\n你是 WeNote 内置笔记助手。用中文回复。用户确认写入后才能报告已保存。以工具回执为准。当前目录 ${JSON.stringify(t.folder)}。用户选中的引用 ${JSON.stringify(refs)}。`,
     tools,
   );
+  let consecutiveFailures = 0;
+  let stopped = "";
+  agent.finishTurn = ({ toolResults }) => {
+    const failure = toolResults.find((result) => result.isError);
+    if (!failure) {
+      consecutiveFailures = 0;
+      return;
+    }
+    const error = failure.content.find((block) => block.type === "text")?.text || "工具执行失败";
+    const [reason] = error.split("\n\nReceived arguments:");
+    t.append({ role: "tool", text: `${failure.toolName} 调用失败：${reason.slice(0, 300)}` });
+    if (++consecutiveFailures >= 2) {
+      stopped = "工具连续两次调用失败，本轮已停止。请查看上方原因后重新发送。";
+      return { action: "end" };
+    }
+    t.status("工具调用失败，正在尝试修正…");
+  };
   const abort = () => agent.abort();
   t.signal.throwIfAborted();
   t.signal.addEventListener("abort", abort, { once: true });
   agent.subscribe((event) => {
     if (t.signal.aborted) return;
-    if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent.type === "text_delta"
-    )
-      t.text(event.assistantMessageEvent.delta);
+    if (event.type === "message_update") {
+      const update = event.assistantMessageEvent;
+      if (update.type === "text_delta") t.text(update.delta);
+      if (update.type === "toolcall_start" || update.type === "toolcall_delta") {
+        const block = update.partial.content[update.contentIndex];
+        if (block?.type === "toolCall") {
+          const args = block.arguments;
+          if (block.name === "create_note") {
+            t.status(typeof args.path === "string" ? `正在起草 ${args.path}…` : "正在起草笔记…");
+            const body = args.kind === "mindmap" ? args.root_topic : args.text;
+            if (typeof body === "string") t.draft(body);
+          } else t.status(`正在准备调用 ${block.name}…`);
+        }
+      }
+    }
     if (event.type === "message_end" && event.message.role === "assistant") {
       const text = event.message.content
         .flatMap((b) => (b.type === "text" ? [b.text] : []))
         .join("");
       if (text) t.append({ role: "assistant", text });
       t.text("");
+      t.draft("");
     }
   });
   try {
@@ -147,6 +177,7 @@ export async function runTurn(t: Turn) {
         : t.prompt,
     );
     t.signal.throwIfAborted();
+    if (stopped) throw Error(stopped);
     if (agent.state.errorMessage) throw Error(agent.state.errorMessage);
   } finally {
     t.signal.removeEventListener("abort", abort);

@@ -29,6 +29,21 @@ export function checkedConfig(c: Config): Config {
     ...(c.usesApiKey === true ? { usesApiKey: true } : {}),
   };
 }
+// Some model gateways require every property of a strict tool, including the
+// property reserved for the other note kind. Keep the MCP contract canonical.
+export function prepareCreateArguments(args: unknown) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return args;
+  const fields = args as Record<string, unknown>;
+  if ((fields.kind === "markdown" || fields.kind === "text") && typeof fields.text === "string") {
+    const { root_topic: _unused, ...note } = fields;
+    return note;
+  }
+  if (fields.kind === "mindmap" && (fields.text == null || fields.text === "")) {
+    const { text: _unused, ...map } = fields;
+    return map;
+  }
+  return args;
+}
 export function checkReference(
   name: Tool,
   args: Record<string, unknown>,

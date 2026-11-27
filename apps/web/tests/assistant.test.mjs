@@ -3,8 +3,25 @@ import assert from "node:assert/strict";
 import {
   checkedConfig,
   prepareWrite,
+  prepareCreateArguments,
   checkReference,
 } from "../src/assistant/policy.ts";
+
+import { parseCall } from "../src/mcp/tools.ts";
+
+test("gateway create arguments keep the selected note kind and validate the resulting MCP call", () => {
+  const base = { operation_id: "test", path: "note.md", kind: "markdown", text: "", root_topic: "extra" };
+  const parse = (args) => parseCall("create_note", prepareCreateArguments(args)).args;
+  assert.throws(() => parseCall("create_note", base));
+  assert.equal(parse(base).text, "");
+  assert.equal(parse({ ...base, kind: "text" }).root_topic, undefined);
+  const map = { ...base, path: "map.mind.json", kind: "mindmap", text: null };
+  assert.equal(parse(map).root_topic, "extra");
+  assert.equal(parse(map).text, undefined);
+  assert.throws(() => parse({ ...map, text: "retain substantive text" }));
+  assert.throws(() => parse({ ...base, text: null }));
+  assert.throws(() => parse({ ...base, unexpected: true }));
+});
 
 test("custom model address is bound to its protocol and excludes credentials in URL", () => {
   const config = {

@@ -50,6 +50,7 @@ export function AssistantPanel(props: Props) {
     [error, showError] = useState(""),
     [status, setStatus] = useState(""),
     [stream, text] = useState(""),
+    [draftPreview, setDraftPreview] = useState(""),
     [busy, setBusy] = useState(false),
     [applying, setApplying] = useState(false),
     [model, refresh] = useState(readConfig);
@@ -145,7 +146,7 @@ export function AssistantPanel(props: Props) {
   useEffect(() => {
     if (open && flow.current)
       flow.current.scrollTop = flow.current.scrollHeight;
-  }, [chat?.lines.length, stream]);
+  }, [chat?.lines.length, stream, draftPreview]);
   useEffect(() => {
     const id = connection.assistantGrant?.id;
     if (
@@ -270,6 +271,9 @@ export function AssistantPanel(props: Props) {
         append: (l) => {
           if (!ctrl.signal.aborted) void append(l);
         },
+        draft: (s) => {
+          if (!ctrl.signal.aborted) setDraftPreview(s);
+        },
         status: (s) => {
           if (!ctrl.signal.aborted) setStatus(s);
         },
@@ -320,6 +324,7 @@ export function AssistantPanel(props: Props) {
       if (mounted.current) {
         text("");
         setStatus("");
+        setDraftPreview("");
         setBusy(false);
       }
     }
@@ -574,6 +579,11 @@ export function AssistantPanel(props: Props) {
                 );
               })}
               {stream && <p>{stream}</p>}
+              {draftPreview && (
+                <div className="assistant-preview" aria-label="正在起草的笔记">
+                  <pre>{draftPreview}</pre>
+                </div>
+              )}
               {status && <small role="status">{status}</small>}
             </div>
             {chat && (
