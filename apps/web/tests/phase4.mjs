@@ -254,10 +254,12 @@ try {
   page.once("dialog", (d) => d.accept());
   await click("prefixed.txt");
   const upload = async (name, buffer) => {
-    page.once("dialog", (d) => d.accept(name));
     await page
       .locator("main.workspace > input[type=file]")
       .setInputFiles({ name, mimeType: "application/octet-stream", buffer });
+    const form = page.getByRole("dialog", {name:"上传笔记"});
+    await form.getByLabel("保存路径").fill(name);
+    await form.getByRole("button", {name:"上传", exact:true}).click();
     await page.getByRole("heading", { name, exact: true }).waitFor();
   };
   for (const name of ["表格.csv", "运行.log", "README"]) {
@@ -314,6 +316,8 @@ try {
   await install(withCaps(["parse", "network"]));
   await page.getByRole("alert").filter({ hasText: "权限不受支持" }).waitFor();
   await install(withCaps(["parse"]));
+  await button("授权并安装").waitFor();
+  await page.getByLabel("安装本地插件包").setInputFiles([]);
   await click("授权并安装");
   const readOnlyAction = { id: "uppercase", label: "查看转换结果", kind: "message" };
   const readOnlyPackage = action => zipSync({ ...entries, "manifest.json": strToU8(JSON.stringify({

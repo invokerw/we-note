@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useRef } from "react";
+import FilePickerButton from "./FilePickerButton";
 import type { ResourceClient } from "./Resources";
 
 export type ImportJob = {
@@ -223,27 +224,18 @@ export function PortableImport({
       <h3>导入</h3>
       <p>选择通过「完整笔记库 → 离线便携」导出的 ZIP。</p>
       {disabled && <p role="status">连接服务器并登录当前库后可导入。</p>}
-      <label>
-        选择 ZIP{" "}
-        <input
-          type="file"
-          accept=".zip,application/zip"
-          disabled={!!progress || disabled}
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0];
-            event.currentTarget.value = "";
-            if (file)
-              void run("正在上传并校验…", async () => {
-                setResult(null);
-                if (file.size > 256 * 1024 * 1024)
-                  throw Error("ZIP 最大为 256 MiB");
-                const job = await client.previewImport(file);
-                update(job);
-                setPreviewId(job.id);
-              });
-          }}
-        />
-      </label>
+      <FilePickerButton
+        label="选择 ZIP"
+        accept=".zip,application/zip"
+        disabled={!!progress || disabled}
+        onSelect={file => run("正在上传并校验…", async () => {
+          setResult(null);
+          if (file.size > 256 * 1024 * 1024) throw Error("ZIP 最大为 256 MiB");
+          const job = await client.previewImport(file);
+          update(job);
+          setPreviewId(job.id);
+        })}
+      />
       {!preview && progress && <p role="status">{progress}</p>}
       {!preview && message && <p role="status">{message}</p>}
       {result && (

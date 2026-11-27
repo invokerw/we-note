@@ -1,5 +1,8 @@
 import { clearCredential } from "./assistant/credentials";
 import { AssistantPanel } from "./assistant/Panel";
+import { Button } from "antd";
+import { LibraryNameDialog } from "./LibraryNameDialog";
+import { EntryDialog, type EntryCommand } from "./EntryDialog";
 import { useMcp, McpPanel } from './mcp/Connections';
 import { webBackend } from './mcp/backend';
 import { CreateNoteWindow } from "./CreateNoteWindow";
@@ -177,7 +180,9 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   }
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
-  const [createAnchor, setCreateAnchor] = useState<HTMLButtonElement | null>(null);
+  const [createAnchor, setCreateAnchor] = useState<HTMLElement | null>(null);
+  const [nameDialog, setNameDialog] = useState<"vault" | File | null>(null);
+  const [fileCommand, setFileCommand] = useState<EntryCommand | null>(null);
   const panes = usePanes();
   const phone = !!useMediaQuery("(max-width: 720px)");
   const profileRequest = useCallback<ProfileRequest>(async (action, body) => {
@@ -389,18 +394,15 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     const f = files.find((n) => n.file_id === id);
     if (f) select(f);
   }
-  const newVault = () =>
-    run(async () => {
-      const name = prompt("笔记库名称");
-      if (name && leave()) {
-        const v = await (
-          await request(token, "/api/v1/vaults", "POST", { name })
-        ).json();
-        await listVaults();
-        setVault(v.id);
-        panes.setPane("doc");
-      }
-    });
+  const newVault = () => setNameDialog("vault");
+  async function createVault(name: string) {
+    if (!leave()) return;
+    const response = await request(token, "/api/v1/vaults", "POST", { name });
+    const vault = await response.json();
+    await listVaults();
+    setVault(vault.id);
+    panes.setPane("doc");
+  }
   const searchContent = useCallback(async (query: string) => {
     if (!vault) return [];
     const hits: {path:string}[] = await (await request(token, base + "/search?" + new URLSearchParams({q:query}))).json();
@@ -504,7 +506,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         avatar={<SettingsButton avatar={profile.avatar} open={openSettings}/>}
         searchContent={searchContent}
         historyKey={vault}
-        trash={{active:view === 'trash',disabled:!vault,open:openTrash,list:<TrashList
+        trash={{active:view === 'trash',disabled:!vault,open:openTrash,list:<TrashList phone={phone}
           entries={trashEntries} error={trashError} selected={trashSelected} action={trashAction} busy={trashBusy} canPurge={!!trash?.can_manage}
           select={entry => {setTrashSelected(entry.key);panes.setPane(entry.kind === 'file' ? 'doc' : 'list');}}
           footer={!!trashEntries?.length && trash?.can_manage && <button disabled={trashBusy} onClick={() => run(() => changeTrash('empty'))}>清空回收站</button>}/>}}
@@ -515,6 +517,15 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           </button>
         }
       />
+      {nameDialog && <LibraryNameDialog title={nameDialog === "vault" ? "新建笔记库" : "上传笔记"}
+        label={nameDialog === "vault" ? "笔记库名称" : "保存路径"}
+        initialValue={nameDialog === "vault" ? "" : nameDialog.name} action={nameDialog === "vault" ? "创建" : "上传"}
+        close={() => setNameDialog(null)} save={nameDialog === "vault" ? createVault : async path => {
+          if (nameDialog.size > 16 << 20) throw Error("笔记超过 16 MiB");
+          if (leave()) await create(path, new Uint8Array(await nameDialog.arrayBuffer()));
+        }} />}
+      {fileCommand && <EntryDialog command={fileCommand} paths={paths} io={entries}
+        onChange={(_, destination) => panes.browse(destination)} close={() => setFileCommand(null)} />}
       {createAnchor && vault && <CreateNoteWindow anchor={createAnchor} phone={phone} folder={panes.folder || ""}
         paths={paths} io={entries} close={() => setCreateAnchor(null)}
         createAtPath={async (path, bytes) => { if (leave()) await create(path, bytes); }}
@@ -535,13 +546,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
           type="file"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f)
-              run(async () => {
-                const path = prompt("保存路径", f.name);
-                if (f.size > 16 << 20) throw Error("笔记超过 16 MiB");
-                if (path && leave())
-                  await create(path, new Uint8Array(await f.arrayBuffer()));
-              });
+            if (f) setNameDialog(f);
             e.target.value = "";
           }}
         />
@@ -565,51 +570,11 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 focused: panes.columns === 1,
                 actions: (
                   <>
-                    <button
-                      onClick={() =>
-                        run(async () => {
-                          if (!leave()) return;
-                          const p = prompt("新路径", note.path);
-                          if (!p) return;
-                          await request(
-                            token,
-                            base + "/files/" + note.file_id,
-                            "PATCH",
-                            {
-                              path: p,
-                              base_version_id: note.current_version_id,
-                              base_path: note.path,
-                            },
-                          );
-                          await list();
-                          panes.browse(p.slice(0, p.lastIndexOf("/") + 1));
-                          panes.setPane("doc");
-                        })
-                      }
-                    >
-                      移动或重命名
-                    </button>
-                    <button
-                      onClick={() =>
-                        run(async () => {
-                          if (!confirm("将这篇笔记移入回收站？") || !leave())
-                            return;
-                          await request(
-                            token,
-                            base + "/files/" + note.file_id,
-                            "DELETE",
-                            {
-                              base_version_id: note.current_version_id,
-                              base_path: note.path,
-                            },
-                          );
-                          setNote(null);
-                          await list();
-                        })
-                      }
-                    >
-                      移入回收站
-                    </button>
+                    {["重命名", "移动到", "复制", "删除"].map(label => (
+                      <button key={label} onClick={() => setFileCommand({
+                        label, source: note.path, expected: { [note.path]: note.current_version_id },
+                      })}>{label === "删除" ? "移入回收站" : label}</button>
+                    ))}
                   </>
                 ),
                 files,
@@ -639,9 +604,9 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                   ? "新建笔记，或上传已有文件。"
                   : "创建笔记库，开始整理笔记。"}
             </p>
-            <button className="primary" aria-haspopup={vault ? "dialog" : undefined} onClick={e => vault ? setCreateAnchor(e.currentTarget) : newVault()}>
+            <Button type="primary" aria-haspopup="dialog" onClick={e => vault ? setCreateAnchor(e.currentTarget) : newVault()}>
               {vault ? "写一篇笔记" : "创建笔记库"}
-            </button>
+            </Button>
           </article>
         ) : selectedTrash?.kind === 'file' ? (
           <TrashDocument key={selectedTrash.key} entry={selectedTrash} read={readTrash} io={{image:entries.image}}

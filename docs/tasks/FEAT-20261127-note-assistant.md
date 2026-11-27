@@ -110,3 +110,7 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 - `WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 0，覆盖标题布局、模式菜单、对话历史、写入和草稿恢复。
 - `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 和 `git diff --check` 均退出 0。
 - Web 重新构建并运行在 `http://localhost:19453`，PID 35749，`/healthz` 返回 `ok`。刷新后打开笔记，点击「更多操作」右侧的分栏图标试用。macOS 调试包 `target/debug/bundle/macos/WeNote.app` 构建成功，本轮交互验证在 Chrome 完成。
+
+## 2026-11-27 用户验收 · ACCEPTED
+
+用户确认「验收完毕」。验收版本 `0d839d7`，任务分支交付记录 `b3f8ebd`。集成本地 `main@ab07d20` 时，网页与桌面入口保留双方新增的导入，开发账本保留两项任务。

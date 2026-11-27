@@ -96,7 +96,7 @@
 .library-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .phone-library-head .library-avatar { width: 38px; min-height: 38px; margin: 0; }
 .personal-settings summary { cursor: pointer; padding: 8px; }
-.sidebar-trash { display: flex; align-items: center; gap: 7px; width: 100%; padding-inline: 18px; text-align: start; }
+.all-notes, .sidebar-trash { display: flex; align-items: center; gap: 7px; width: 100%; padding-inline: 18px; text-align: start; }
 .sidebar-trash svg { width: 16px; height: 16px; }
 .android-phone .side-files { margin: 12px 16px 0; padding: 8px; background: var(--surface, white); border-radius: 12px; }
 .android-phone .side-files button { min-height: 44px; }
@@ -122,9 +122,6 @@
 
 .profile-heading { padding: 12px 0; }
 .profile-heading strong { overflow-wrap: anywhere; }
-.settings-detail .choose-avatar { position: relative; display: inline-flex; align-items: center; margin: 0; padding: 6px 14px; border: 1px solid #cfdae8; border-radius: 6px; cursor: pointer; }
-.choose-avatar input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.choose-avatar:focus-within { outline: 2px solid #416bd2; }
 .settings-detail > .profile-action, .settings-detail > details { display: block; width: 100%; margin-top: 8px; border-top: 1px solid #e5e9ef; border-radius: 0; text-align: left; }
 .settings-detail > .profile-action, .settings-detail > details > summary { padding: 12px 0; }
 .settings-detail .profile-logout { margin-top: 20px; color: #984145; }
@@ -168,6 +165,7 @@
 .appearance-times input { margin-top: 4px; }
 
 [data-color-scheme="dark"] .layout { --paper: #111720; }
+[data-color-scheme="dark"] .android-phone .sidebar { background: var(--rail); }
 [data-color-scheme="dark"] :is(.personal-settings, .phone-head, .phone-sheet, .phone-tabs, .note-search-options, .library-avatar),
 [data-color-scheme="dark"] .android-phone :is(.sections, .side-files, .phone-library-actions, .account) {
   background: var(--paper);
@@ -175,7 +173,7 @@
   border-color: var(--line);
 }
 [data-color-scheme="dark"] :is(.settings-layout nav, .settings-detail .library-avatar, .recent-terms button) { background: var(--rail); }
-[data-color-scheme="dark"] :is(.personal-settings header, .profile-action, .settings-detail details, .choose-avatar, .note-search-options fieldset) { border-color: var(--line); }
+[data-color-scheme="dark"] :is(.personal-settings header, .profile-action, .settings-detail details, .note-search-options fieldset) { border-color: var(--line); }
 [data-color-scheme="dark"] :is(.settings-layout nav [aria-current=page], .layout .sidebar .current, button[aria-pressed=true]) { background: var(--tint); color: var(--accent); }
 [data-color-scheme="dark"] .layout .note-search-field input[type=search] { background: var(--rail); border-color: var(--line); }
 [data-color-scheme="dark"] :is(.recent-heading, .phone-sheet .sheet-cancel) { color: var(--muted); }
@@ -275,3 +273,6 @@
   .conflict-switch { display: flex; gap: .5rem; }
   .recovery-columns[data-side=local] > [data-side=remote], .recovery-columns[data-side=remote] > [data-side=local] { display: none; }
 }
+
+.danger-action { color: var(--danger, #a33439); }
+[data-color-scheme="dark"] .danger-action { color: #ffabae; }

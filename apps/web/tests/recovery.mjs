@@ -51,7 +51,8 @@ try {
   const button = (name) => page.getByRole("button", { name, exact: true });
   await button("更多操作").click();
   page.on("dialog", (d) => (d.type() === "prompt" ? d.dismiss() : d.accept()));
-  await button("移动或重命名").click();
+  await button("重命名").click();
+  await page.getByRole("dialog", {name:"重命名"}).getByRole("button", {name:"取消"}).click();
   assert(await guarded(), "cancelled rename must keep unsaved protection");
   assert.equal(await editor.textContent(), "unsaved edits");
   const second = await page.context().newPage();

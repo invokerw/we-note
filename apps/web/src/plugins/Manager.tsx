@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import FilePickerButton from "../FilePickerButton";
 import MarkdownSettings from "../markdown/Settings";
 import { markdownPreferences, type UserPreferences } from "../preferences";
 import {
@@ -72,27 +73,21 @@ export default function Manager({
     p.manifest.capabilities.map((c) => permissionNames[c]).join("、");
   return (
     <article>
-      <label>
-        安装本地插件包{" "}
-        <input
-          type="file"
-          accept=".zip"
-          onChange={async (e) => {
-            const ticket = ++selection.current;
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            setPending(null);
-            notify("");
-            if (f)
-              try {
-                const candidate = await inspectPackage(f);
-                if (ticket === selection.current) setPending(candidate);
-              } catch (err) {
-                if (ticket === selection.current) notify(String(err));
-              }
-          }}
-        />
-      </label>
+      <FilePickerButton
+        label="安装本地插件包"
+        accept=".zip"
+        onSelect={async file => {
+          const ticket = ++selection.current;
+          setPending(null);
+          notify("");
+          try {
+            const candidate = await inspectPackage(file);
+            if (ticket === selection.current) setPending(candidate);
+          } catch (err) {
+            if (ticket === selection.current) notify(String(err));
+          }
+        }}
+      />
       {error && <p role="alert">{error}</p>}
       {pending && (
         <section className="plugin-entry">

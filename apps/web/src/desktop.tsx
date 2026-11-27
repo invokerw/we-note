@@ -1,5 +1,6 @@
 import { clearCredential } from "./assistant/credentials";
 import { AssistantPanel } from "./assistant/Panel";
+import { Button } from "antd";
 import { useMcp, McpPanel } from './mcp/Connections';
 import { nativeBackend } from './mcp/backend';
 import { SyncConflicts } from "./SyncConflicts";
@@ -24,8 +25,6 @@ import { Resources, type ResourceClient, type Hit } from "./Resources";
 import { multipart, multipartThreshold } from "./multipart";
 import { base64 } from "./api";
 import {
-  formats,
-  newContent,
   containsEntry,
   entryPath,
   parentFolder,
@@ -147,7 +146,7 @@ function Workspace({
     () => Object.entries(revisions).map(([p, h]) => entryPath(p, h)),
     [revisions],
   );
-  const [createAnchor, setCreateAnchor] = useState<HTMLButtonElement | null>(null);
+  const [createAnchor, setCreateAnchor] = useState<HTMLElement | null>(null);
   const panes = usePanes();
   const phone = useAndroidPhone(!!binding.android);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -180,8 +179,7 @@ function Workspace({
     setTrash(await local<TrashedFile[]>(binding.vault,'trash'));
     await load();
   });
-  const [view, setView] = useState("笔记"),
-    [newPath, setNewPath] = useState<string | null>(null);
+  const [view, setView] = useState("笔记");
   const [pluginBytes, setPluginBytes] = useState<Uint8Array | null>(null),
     [pluginDirty, setPluginDirty] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences>(
@@ -237,11 +235,6 @@ function Workspace({
   const leave = () => !dirty || confirm("放弃尚未保存的编辑？");
   function back() {
     if (busy) return;
-    if (newPath !== null) {
-      setNewPath(null);
-      panes.setPane("list");
-      return;
-    }
     if (panes.pane === "doc") {
       panes.setPane("list");
       return;
@@ -693,9 +686,9 @@ function Workspace({
         trash={{ active: view === "回收站", disabled: busy, open: () => run(async () => {
           if (!leave()) return;
           setTrash(await local<TrashedFile[]>(vault, "trash"));
-          choose(""); setPluginBytes(null); setPluginDirty(false); setSaved(text); setNewPath(null);
+          choose(""); setPluginBytes(null); setPluginDirty(false); setSaved(text);
           setView("回收站"); setTrashKey(''); panes.browse(null);
-        }), list:<TrashList entries={trashRows} selected={trashKey} select={entry => {
+        }), list:<TrashList phone={phone} entries={trashRows} selected={trashKey} select={entry => {
           setTrashKey(entry.key);panes.setPane(entry.kind === 'file' ? 'doc' : 'list');
         }} action={trashAction} canPurge busy={busy}/> }}
         listActions={
@@ -735,12 +728,17 @@ function Workspace({
       {conflictsOpen && <SyncConflicts invoke={conflictAction} close={() => setConflictsOpen(false)} changed={async () => {await load(); if(path) await open(path,true);}} />}
       {createAnchor && <CreateNoteWindow anchor={createAnchor} phone={phone} folder={panes.folder || ""}
         paths={files} io={entries} close={() => setCreateAnchor(null)}
-        create={format => { setNewPath((panes.folder || "") + formats[format]); panes.setPane("doc"); }}
+        createAtPath={async (target, bytes) => {
+          if (!leave()) return;
+          await entries.write(target, bytes);
+          await open(target, true, true);
+          await load();
+        }}
         browse={folder => { setView("笔记"); panes.browse(folder); }} />}
       {settingsOpen && <PersonalSettings credentialOwner={credentialOwner} mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {clearCredential();close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
         if (!leave()) return;
         if (!await binding.synchronize?.()) throw Error("请完成同步后查看导入的笔记");
-        await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); setNewPath(null); panes.browse(folder ? folder + "/" : null);
+        await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); panes.browse(folder ? folder + "/" : null);
       }}/>} preferences={preferences} updatePluginSetting={updatePluginSetting}/>}
       <AppShell.Main className="workspace">
         {phone && view !== "笔记" && (
@@ -749,39 +747,6 @@ function Workspace({
               <PhoneIcon name="back" />
             </button>
           </header>
-        )}
-        {newPath !== null && (
-          <form
-            className="new-path"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(async () => {
-                if (!leave()) return;
-                await local(vault, "save_bytes", {
-                  path: newPath,
-                  base: null,
-                  data: base64(await newContent(newPath)),
-                });
-                await open(newPath, true, true);
-                setNewPath(null);
-                await load();
-              });
-            }}
-          >
-            <label>
-              新笔记路径
-              <input
-                autoFocus
-                required
-                value={newPath}
-                onChange={(e) => setNewPath(e.target.value)}
-              />
-            </label>
-            <button disabled={busy}>创建</button>
-            <button type="button" onClick={() => setNewPath(null)}>
-              取消
-            </button>
-          </form>
         )}
         {message && (
           <p className="message" role="status">
@@ -801,6 +766,7 @@ function Workspace({
                     ? "从笔记列表打开一篇笔记。"
                     : "新建笔记，或导入本地文件。"}
                 </p>
+                <Button type="primary" aria-haspopup="dialog" onClick={event => setCreateAnchor(event.currentTarget)}>写一篇笔记</Button>
               </>
             )}
             {path && (

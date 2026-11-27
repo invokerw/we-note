@@ -4,7 +4,7 @@ import ApartmentOutlined from "@ant-design/icons/ApartmentOutlined";
 import FileAddOutlined from "@ant-design/icons/FileAddOutlined";
 import FolderOpenOutlined from "@ant-design/icons/FolderOpenOutlined";
 import { EntryDialog } from "./EntryDialog";
-import { type EntryIO, type Format } from "./libraryEntries";
+import { type EntryIO } from "./libraryEntries";
 
 const groups = [
   { title: "新建笔记", actions: [
@@ -19,13 +19,12 @@ const groups = [
 
 type Action = typeof groups[number]["actions"][number]["label"];
 
-export function CreateNoteWindow({ anchor, phone, folder, paths, io, create, createAtPath, browse, close }: {
+export function CreateNoteWindow({ anchor, phone, folder, paths, io, createAtPath, browse, close }: {
   anchor: HTMLElement;
   phone: boolean;
   folder: string;
   paths: string[];
   io: EntryIO;
-  create?: (format: Format) => void;
   createAtPath?: EntryIO["write"];
   browse: (folder: string) => void;
   close: () => void;
@@ -54,14 +53,6 @@ export function CreateNoteWindow({ anchor, phone, folder, paths, io, create, cre
     };
   }, [anchor, phone, command]);
 
-  function choose(action: Action) {
-    if (create && !phone && (action === "Markdown" || action === "思维导图")) {
-      close();
-      create(action);
-    } else {
-      setCommand(action);
-    }
-  }
   if (command) return <EntryDialog command={{ label: command, source: folder, expected: {} }}
     io={io} paths={paths} createAtPath={phone ? undefined : createAtPath} onChange={(_, destination) => browse(destination)} close={close} />;
   return (
@@ -77,7 +68,7 @@ export function CreateNoteWindow({ anchor, phone, folder, paths, io, create, cre
           <h2>{title}</h2>
           <div className="create-note-choices">
             {actions.map(({label, icon: Icon, color}) => (
-              <button key={label} type="button" onClick={() => choose(label)}>
+              <button key={label} type="button" onClick={() => setCommand(label)}>
                 <span aria-hidden="true" className={"create-note-icon " + color}><Icon /></span>
                 {label}
               </button>
