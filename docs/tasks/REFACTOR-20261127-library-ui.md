@@ -58,3 +58,5 @@
 - Web 使用 `http://localhost:18327`，独立账号保存在工作区 `dist/local/preview-login.txt`。已通过浏览器登录并打开示例库的移动表单。打开「会议/周会.md」，从正文更多及列表右键分别操作；在回收站打开「待恢复.md」，在个人设置切换深色查看正文。
 - macOS 程序为工作区 `target/debug/wenote-desktop`，本地客户端前端在 `apps/client/dist/`。验收实例由 `./scripts/local.py start --port 18327` 启动，PID 25827，日志 `dist/local/server.log`，数据 `services/api/data/`，停止命令 `./scripts/local.py stop`。
 - 验收方式 2。任务 worktree、分支和实例保留，用户反馈沿用本任务记录。
+
+受测实现提交 `e131c4a`。提交前 `git diff --cached --check` 退出 0。实现已在 `codex/refactor-library-ui-20261127` 交付首轮验收。
