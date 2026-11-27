@@ -1,3 +1,4 @@
+import { PhoneSheet } from "./PhoneUI";
 import { decodeText } from "./plugins/archive";
 import {
   lazy,
@@ -34,12 +35,14 @@ export function TrashList({
   canPurge,
   busy,
   footer,
+  phone,
   error,
 }: Actions & {
   entries?: TrashEntry[];
   selected: string;
   select: (entry: TrashEntry) => void;
   footer?: ReactNode;
+  phone: boolean;
   error?: string;
 }) {
   const [menu, setMenu] = useState<{
@@ -49,7 +52,7 @@ export function TrashList({
   }>();
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!menu) return;
+    if (!menu || phone) return;
     menuRef.current?.querySelector("button")?.focus();
     const outside = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) setMenu(undefined);
@@ -61,7 +64,7 @@ export function TrashList({
       document.removeEventListener("pointerdown", outside);
       window.removeEventListener("resize", close);
     };
-  }, [menu]);
+  }, [menu, phone]);
   function show(entry: TrashEntry, x: number, y: number) {
     if (busy || (entry.kind === "asset" && !canPurge)) return;
     setMenu({
@@ -129,8 +132,13 @@ export function TrashList({
       <footer>
         总共 {entries?.length || 0} 项{footer}
       </footer>
-      {menu &&
-        createPortal(
+      {menu && phone && <PhoneSheet title="回收站操作" close={() => setMenu(undefined)}>
+        <div className="phone-choices">
+          <button onClick={() => apply("restore")}>恢复</button>
+          {canPurge && <button className="danger-action" onClick={() => apply("purge")}>永久删除</button>}
+        </div>
+      </PhoneSheet>}
+      {menu && !phone && createPortal(
           <div
             ref={menuRef}
             className="entry-menu"
@@ -148,7 +156,7 @@ export function TrashList({
               恢复
             </button>
             {canPurge && (
-              <button role="menuitem" onClick={() => apply("purge")}>
+              <button className="danger-action" role="menuitem" onClick={() => apply("purge")}>
                 永久删除
               </button>
             )}
@@ -201,7 +209,7 @@ export function TrashDocument({
           )}
         </div>
       </header>
-      <div className="trash-preview-content">
+      <div className="trash-preview-content document-mode" data-markdown-theme="clean">
         {content.text === undefined ? (
           <p>{content.error || "正在加载笔记…"}</p>
         ) : isMindMap(entry.path) ? (

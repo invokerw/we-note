@@ -1,3 +1,4 @@
+import { Button, Input, Select } from "antd";
 import { isMindMap, mindSuffix } from "./plugins/mindFile";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -58,6 +59,7 @@ export function EntryDialog({
           : entryName(source),
     ),
     [dir, setDir] = useState(parentFolder(source));
+  const [choosingFolder, setChoosingFolder] = useState(false);
   const [error, setError] = useState(""),
     [working, setWorking] = useState(false),
     [preview, setPreview] = useState<string | null>(null),
@@ -210,7 +212,8 @@ export function EntryDialog({
       aria-labelledby="entry-dialog-title"
       onCancel={(e) => {
         e.preventDefault();
-        if (!working) close();
+        if (choosingFolder) setChoosingFolder(false);
+        else if (!working) close();
       }}
     >
       <form
@@ -243,22 +246,22 @@ export function EntryDialog({
         {destination && (
           <label>
             目标文件夹
-            <select value={dir} onChange={(e) => setDir(e.target.value)}>
-              {[...folders]
-                .sort()
-                .filter((p) => !folder || !containsEntry(source, p))
-                .map((p) => (
-                  <option key={p} value={p}>
-                    {p || "我的文件夹"}
-                  </option>
-                ))}
-            </select>
+            <Select aria-label="目标文件夹" value={dir} onChange={setDir} virtual={false}
+              open={choosingFolder} onOpenChange={setChoosingFolder}
+              onInputKeyDown={event => {
+                if (choosingFolder && event.key === "Escape") {
+                  event.preventDefault(); event.stopPropagation(); setChoosingFolder(false);
+                }
+              }}
+              getPopupContainer={trigger => trigger.parentElement!}
+              options={[...folders].sort().filter(path => !folder || !containsEntry(source, path))
+                .map(path => ({value: path, label: path || "我的文件夹"}))} />
           </label>
         )}
         {(format || destination || label === "重命名") && (
           <label>
             {format && createAtPath ? "新笔记路径" : "名称"}
-            <input
+            <Input
               autoFocus
               required
               value={name}
@@ -300,12 +303,12 @@ export function EntryDialog({
         )}
         {error && <p role="alert">{error}</p>}
         <footer>
-          <button type="button" disabled={working} onClick={close}>
+          <Button disabled={working} onClick={close}>
             {pdf || label === "项目信息" ? "关闭" : "取消"}
-          </button>
+          </Button>
           {label !== "项目信息" && (
-            <button
-              className="primary"
+            <Button
+              type="primary" htmlType="submit" danger={label === "删除"} loading={working}
               disabled={
                 working ||
                 (pdf && preview === null) ||
@@ -321,7 +324,7 @@ export function EntryDialog({
                     : upload
                       ? "导入"
                       : "确定"}
-            </button>
+            </Button>
           )}
         </footer>
       </form>

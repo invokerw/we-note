@@ -21,8 +21,10 @@ async function register(name) {
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill("phase-one-browser");
   await button(page, "注册并登录").click();
-  page.once("dialog", (d) => d.accept(name));
   await button(page, "新建笔记库").click();
+  const form = page.getByRole("dialog", {name:"新建笔记库"});
+  await form.getByLabel("笔记库名称").fill(name);
+  await button(form, "创建").click();
   await page.getByRole("heading", { name: "笔记库", exact: true }).waitFor();
   return { page, email };
 }
@@ -201,9 +203,9 @@ try {
   await b.getByLabel("笔记源码").fill("Bob 独立编辑");
   await button(b, "保存").click();
   await b.getByText("已保存新版本").waitFor();
-  b.once("dialog", (d) => d.accept());
   await button(b, "更多操作").click();
   await button(b, "移入回收站").click();
+  await button(b.getByRole("dialog"), "确认删除").click();
   await button(b, "回收站").click();
   await button(b, "验收.md").click();
   assert.equal(await b.locator(".trash-preview-content .reading").innerText(), "Bob 独立编辑");

@@ -44,7 +44,7 @@ button,
   line-height: 1.45;
   cursor: pointer;
 }
-button:hover:enabled,
+button:where(:not(.ant-btn)):hover:enabled,
 .file-action:hover {
   background: #eceef1;
 }
@@ -72,7 +72,7 @@ button.primary {
 button.primary:hover:enabled {
   background: var(--navy);
 }
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+input:where(:not(.ant-input, .ant-select input)):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 select,
 textarea {
   min-width: 0;
@@ -462,11 +462,11 @@ pre {
   color: var(--ink);
   font-size: 14px;
 }
-.layout button {
+.layout button:where(:not(.ant-btn)) {
   font-size: inherit;
   border-radius: 4px;
 }
-.layout button:hover:enabled {
+.layout button:where(:not(.ant-btn)):hover:enabled {
   background: #f0f3f7;
 }
 .layout .primary {
@@ -1417,13 +1417,6 @@ pre {
   width: 100%;
   cursor: pointer;
 }
-.new-path {
-  padding: 12px;
-  background: #f4f7fe;
-}
-.new-path label {
-  display: block;
-}
 @media (max-width: 720px) {
   .layout,
   .layout[data-columns] {
@@ -1534,7 +1527,7 @@ pre {
   -webkit-user-select: none;
 }
 [data-library-path][data-context]:not([data-library-background]) {
-  background: #edf2fa;
+  background: var(--tint);
 }
 .entry-row {
   position: relative;
@@ -1975,12 +1968,12 @@ pre {
   background: var(--paper);
   color: var(--ink);
 }
-[data-color-scheme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+[data-color-scheme="dark"] :is(input:where(:not(.ant-input, .ant-select input)):not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
   color: var(--ink);
   background: #18212d;
   border-color: #405065;
 }
-[data-color-scheme="dark"] button:hover:enabled,
+[data-color-scheme="dark"] button:where(:not(.ant-btn)):hover:enabled,
 [data-color-scheme="dark"] .file-action:hover {
   background: #202c3d;
 }
@@ -2011,7 +2004,7 @@ pre {
   background: #0f141c;
   color: var(--ink);
 }
-[data-color-scheme="dark"] .layout button:hover:enabled {
+[data-color-scheme="dark"] .layout button:where(:not(.ant-btn)):hover:enabled {
   background: #202c3d;
 }
 [data-color-scheme="dark"] .layout .current {
@@ -2114,9 +2107,6 @@ pre {
   background: #1d2c45;
   border-color: #3a5274;
   box-shadow: 0 8px 24px #00000055;
-}
-[data-color-scheme="dark"] .new-path {
-  background: #182539;
 }
 [data-color-scheme="dark"] .whiteboard svg {
   background: #141c27;

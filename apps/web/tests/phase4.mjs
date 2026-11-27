@@ -254,10 +254,12 @@ try {
   page.once("dialog", (d) => d.accept());
   await click("prefixed.txt");
   const upload = async (name, buffer) => {
-    page.once("dialog", (d) => d.accept(name));
     await page
       .locator("main.workspace > input[type=file]")
       .setInputFiles({ name, mimeType: "application/octet-stream", buffer });
+    const form = page.getByRole("dialog", {name:"上传笔记"});
+    await form.getByLabel("保存路径").fill(name);
+    await form.getByRole("button", {name:"上传", exact:true}).click();
     await page.getByRole("heading", { name, exact: true }).waitFor();
   };
   for (const name of ["表格.csv", "运行.log", "README"]) {

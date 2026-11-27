@@ -88,7 +88,8 @@ try {
   await dialog.waitFor({ state: "hidden" });
   await context("资料/", "nav");
   await item("复制").click();
-  await dialog.getByLabel("目标文件夹").selectOption("存档/");
+  await dialog.getByRole("combobox", {name: "目标文件夹"}).click();
+  await dialog.getByRole("option", {name: "存档/", exact: true}).click();
   await done("确定");
   await button("资料 副本").waitFor();
   await context("资料/", "nav");
@@ -98,7 +99,8 @@ try {
   await button("参考").waitFor();
   await context("参考/说明.md");
   await item("移动到").click();
-  await dialog.getByLabel("目标文件夹").selectOption("存档/");
+  await dialog.getByRole("combobox", {name: "目标文件夹"}).click();
+  await dialog.getByRole("option", {name: "存档/", exact: true}).click();
   await done("确定");
   await context("存档/说明.md");
   await item("删除").click();

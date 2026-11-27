@@ -1,3 +1,5 @@
+import { Button } from "antd";
+import { AppstoreOutlined, PlusOutlined, StarOutlined } from "@ant-design/icons";
 import type { NoteStars } from "./StarredNotes";
 import { MatchText, SearchField, useDocumentMatches, useRecentSearches } from "./LibrarySearch";
 import { markdownModes, type MarkdownMode } from "./markdown/modes";
@@ -414,7 +416,7 @@ export function LibraryPanes({
   open: (path: string) => void;
   panes: Panes;
   vault?: ReactNode;
-  create: (anchor: HTMLButtonElement) => void;
+  create: (anchor: HTMLElement) => void;
   trash: { active: boolean; open: () => void; disabled?: boolean; list: ReactNode };
   avatar: ReactNode;
   searchContent: (query: string) => Promise<string[]>;
@@ -523,17 +525,17 @@ export function LibraryPanes({
         </header>
       ) : avatar}
       {vault}
-      {!phone && <button className="primary create-button" aria-label="新建笔记" aria-haspopup="dialog"
-        disabled={busy || !entries} onClick={e => create(e.currentTarget)}>＋　新建笔记</button>}
+      {!phone && <Button type="primary" icon={<PlusOutlined />} className="create-button" aria-label="新建笔记" aria-haspopup="dialog"
+        disabled={busy || !entries} onClick={e => create(e.currentTarget)}>新建笔记</Button>}
       <div className="side-files">
         <button aria-label="全部笔记" className={"all-notes" + (!trash.active && !starredOnly && folder === null ? " current" : "")}
           onClick={() => { if (!allNotes || allNotes()) pickFolder(null); }}>
-          ▦　全部笔记
+          <AppstoreOutlined />全部笔记
         </button>
         <button aria-label="加星" className={"all-notes" + (starredOnly && !trash.active ? " current" : "")}
           aria-current={starredOnly && !trash.active ? "page" : undefined}
           onClick={() => { if (!trash.active || !allNotes || allNotes()) panes.browse(null, true); }}>
-          <span aria-hidden="true">☆　</span>加星
+          <StarOutlined />加星
         </button>
         <FolderTree paths={paths} active={trash.active ? null : folder} select={pickFolder} />
         <button className={"sidebar-trash" + (trash.active ? " current" : "")} aria-current={trash.active ? "page" : undefined}
