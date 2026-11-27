@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 const origin = process.env.WENOTE_TEST_ORIGIN;
@@ -31,7 +32,58 @@ page.setDefaultTimeout(10000);
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 const btn = (name) => page.getByRole("button", { name, exact: true });
+async function checkBrowserTransport() {
+  const received = [];
+  const gateway = createServer((req, res) => {
+    received.push(`${req.method} ${req.url}`);
+    if (req.url.startsWith("/denied/")) {
+      res.writeHead(403).end();
+      return;
+    }
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "POST");
+    res.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
+    if (req.method === "OPTIONS") res.writeHead(204).end();
+    else res.writeHead(401, { "Content-Type": "application/json" }).end(
+      JSON.stringify({ error: { message: "credential rejected" } }),
+    );
+  });
+  await new Promise((resolve) => gateway.listen(0, "127.0.0.1", resolve));
+  try {
+    const service = `http://127.0.0.1:${gateway.address().port}`;
+    const address = page.getByLabel("服务地址", { exact: true });
+    await address.fill(`${service}/denied/v1`);
+    await page.getByLabel("模型 ID").fill("test");
+    await page.getByLabel("API Key").fill("test-only");
+    await btn("测试连接").click();
+    const status = page.locator(".assistant-config [role=status]");
+    await status.filter({ hasText: "桌面客户端" }).waitFor();
+    const diagnostic = await status.innerText();
+    assert(diagnostic.includes(origin) && diagnostic.includes(service));
+    assert(diagnostic.includes("跨域"));
+    assert(!diagnostic.includes("test-only"));
+    assert.deepEqual(received, ["OPTIONS /denied/v1/chat/completions"]);
+    await address.fill(`${service}/allowed/v1`);
+    await page.getByLabel("API Key").fill("test-only");
+    await btn("测试连接").click();
+    await status.filter({ hasText: "credential rejected" }).waitFor();
+    assert(!(await status.innerText()).includes("跨域"));
+    assert(received.includes("POST /allowed/v1/chat/completions"));
+  } finally {
+    gateway.closeAllConnections();
+    await new Promise((resolve) => gateway.close(resolve));
+  }
+}
 try {
+  await page.addInitScript(
+    (t) => sessionStorage.setItem("wenote-session", t),
+    token,
+  );
+  await page.goto(`${origin}/?vault=${vault}`);
+  await btn("展开笔记助手").waitFor();
+  await btn("打开个人设置").click();
+  await btn("笔记助手").click();
+  await checkBrowserTransport();
   let requested = 0;
   const model = "http://127.0.0.1:19456/v1";
   await page.route(model + "/**", async (route) => {
@@ -110,14 +162,6 @@ try {
       body: events + "data: [DONE]\n\n",
     });
   });
-  await page.addInitScript(
-    (t) => sessionStorage.setItem("wenote-session", t),
-    token,
-  );
-  await page.goto(`${origin}/?vault=${vault}`);
-  await btn("展开笔记助手").waitFor();
-  await btn("打开个人设置").click();
-  await btn("笔记助手").click();
   await page.getByLabel("服务地址", { exact: true }).fill(model);
   await page.getByLabel("模型 ID").fill("test");
   await page.getByLabel("接口协议").selectOption("openai-responses");

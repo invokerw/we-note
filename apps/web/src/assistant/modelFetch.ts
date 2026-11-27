@@ -22,13 +22,23 @@ export function modelFetch(base: string, key: string): typeof fetch {
     });
     if (key) headers.set("Authorization", `Bearer ${key}`);
     const core = window.__TAURI__?.core;
-    if (!core)
-      return fetch(req, {
-        headers,
-        credentials: "omit",
-        redirect: "error",
-        referrerPolicy: "no-referrer",
-      });
+    if (!core) {
+      try {
+        return await fetch(req, {
+          headers,
+          credentials: "omit",
+          redirect: "error",
+          referrerPolicy: "no-referrer",
+        });
+      } catch (error) {
+        if (req.signal.aborted || !(error instanceof TypeError)) throw error;
+        const hint =
+          root.origin === window.location.origin
+            ? "请检查模型服务地址和网络连接。"
+            : `请检查网络，并确认网关允许来自 ${window.location.origin} 的跨域请求（CORS）。也可以在 WeNote 桌面客户端使用相同的模型配置直连。`;
+        throw new Error(`浏览器无法连接模型服务 ${root.origin}。${hint}`);
+      }
+    }
     const body = await req.text(),
       id = crypto.randomUUID();
     req.signal.throwIfAborted();
