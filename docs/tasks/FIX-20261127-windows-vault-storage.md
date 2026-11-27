@@ -28,3 +28,5 @@ Windows 和 macOS 共用账号初始化页面、目录归属校验、同步和�
 将本工作区 `dist/acceptance/WeNote-Windows-x64.zip` 解压到安装有 WebView2 Runtime 的 Windows x64 电脑，运行 `WeNote.exe`。服务地址使用验收人员现有的 WeNote HTTPS 服务（服务在同一台 Windows 电脑时可用 `http://localhost:8080`）。用含两个库的账号验证首次选目录、同步和自动打开编辑器，退出后换账号检查独立目录。原生文件夹对话框与 WebView2 真机启动由 Windows 设备验收。
 
 2026-11-27 `DELIVERED`。按方式 2 交付受测提交 `69ac542`。保留任务分支、工作区和验收包，等待 Windows 用户确认。
+
+2026-11-27 `ACCEPTED` → `MERGED`。用户确认验收通过，已将包含受测实现 `69ac542` 的任务分支快进合入本地 `main`（`ff8d91a`），并清理任务工作区和本地分支。Windows x64 验收包归档至主工作区 `dist/acceptance/FIX-20261127-windows-vault-storage/WeNote-Windows-x64.zip`，已比对原包并复核 SHA-256 和 ZIP 完整性。
