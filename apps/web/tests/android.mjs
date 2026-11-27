@@ -292,7 +292,10 @@ try {
     await button("打开个人设置").click();
     await button(section).click();
   }
-  await openSettings('MCP 连接');
+  if (await button('返回笔记列表').isVisible()) await tap(button('返回笔记列表'));
+  await tap(button('打开个人设置'));
+  await tap(button('MCP 连接'));
+  console.log('Android MCP settings', await page.getByRole('dialog').innerText());
   await page.getByLabel('允许新建、修改和移入回收站').check();
   await button('授权当前笔记库').click();
   const credential = await page.getByLabel('连接令牌（仅此次显示）').inputValue();
