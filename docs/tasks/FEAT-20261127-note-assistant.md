@@ -36,3 +36,20 @@
 - 本次模型验收使用受控响应。用户自选模型的实际生成质量待试用。未运行 Windows、Linux 和移动端原生设备验收，本机 Android SDK 目录为空，iOS 工具链仅有 Command Line Tools。窄屏交互已在手机尺寸的 Chrome 中验收。
 
 受测功能提交 `a42e95f`，分支 `codex/feature-note-assistant-20261127`。按方式 2 保留验收环境，等用户试用反馈。
+
+## 2026-11-27 网页模型连接反馈 · CHANGES_REQUESTED
+
+用户在验收网页连接自选模型端点时看到 `Connection error.: Failed to fetch`。沿用方式 2。在实际浏览器检查请求和响应，核对端点可用协议，在本机验证临时凭据可用的连接路径。验收要求为可访问的端点能进行工具测试，跨域或网络失败时指出当前站点、模型服务及可采取的操作，能够读取的 HTTP 错误保留上游诊断。通过真实跨域 HTTP 回归覆盖浏览器网络边界。
+
+红阶段：`WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 1，真实跨域预检被拒后页面只显示原始 `Failed to fetch`。
+
+### 反馈验证与交付 · DELIVERED
+
+Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路径时，两者的 OPTIONS 响应均缺少 `Access-Control-Allow-Origin`。使用用户提供的临时凭据在本机读取 `/v1/models` 成功。在一次独立测试进程中，连接 Pi 的 `testModel`、客户端 `modelFetch` 与桌面端实际的 Rust `forward`，使用 Responses 和 `gpt-6.2-sol` 成功完成 `check_connection`。这项实测仅发送工具测试消息。
+
+网页连接失败时显示模型服务、当前网页来源和桌面直连方式。自审发现 Pi 会显示最内层异常，已将可读诊断放在它能呈现的位置。Chrome 回归在启用请求模拟之前访问独立 HTTP 测试端点，覆盖预检拒绝（只收到 OPTIONS）及允许跨域的 401（网页保留网关错误）。
+
+- `WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 0，网页连接诊断和原有写入与历史流程通过。
+- `node --test apps/web/tests/mcp-tools.test.mjs apps/web/tests/assistant.test.mjs` 退出 0，7 项通过。`git diff --check` 退出 0。
+- `./scripts/local.py stop` 及 `./scripts/local.py start --port 19453` 退出 0，重建后验收地址仍为 `http://localhost:19453`，PID 更新为 22993。桌面 `tauri build --debug --bundles app`（启用 bundle）退出 0，试用产物为 `target/debug/bundle/macos/WeNote.app`。
+- 受测功能提交 `ce3b987`，按方式 2 在任务分支验收。打开桌面客户端，进入笔记库的「个人设置 → 笔记助手」，填写上述协议、模型及网关地址，输入本次会话的 Key 后点「测试连接」。网页使用该网关需要网关允许验收站点跨域访问。
