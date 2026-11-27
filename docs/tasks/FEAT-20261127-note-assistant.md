@@ -102,3 +102,11 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 红阶段运行 `WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs`，退出 1。收起状态的编辑区起点实测为 34 像素，预期为 0。
 
 自审在 1280 像素窗口发现展开四栏后普通短文件名也被截断。补充验收：该宽度完整显示「周报.md」，模式菜单仍可操作。
+
+### 标题行布局验收 · DELIVERED
+
+受测提交 `0d839d7`，沿用方式 2。Chrome 在 1280 像素桌面和 390 像素手机视口测量收起、展开两种布局。空编辑区、笔记和手机列表均贴顶，开关原位切换，历史、新建对话和已有标题操作可分别点击。自审时修正了手机背景列表的隐藏范围，并在四栏挤窄编辑区时将模式选择器折为图标，短文件名显示完整。
+
+- `WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 0，覆盖标题布局、模式菜单、对话历史、写入和草稿恢复。
+- `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 和 `git diff --check` 均退出 0。
+- Web 重新构建并运行在 `http://localhost:19453`，PID 35749，`/healthz` 返回 `ok`。刷新后打开笔记，点击「更多操作」右侧的分栏图标试用。macOS 调试包 `target/debug/bundle/macos/WeNote.app` 构建成功，本轮交互验证在 Chrome 完成。
