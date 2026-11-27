@@ -34,3 +34,5 @@
 - macOS 在任务 worktree 运行 `open target/debug/bundle/macos/WeNote.app`。服务地址填写同一地址并打开测试库。
 - 从「个人设置 → 笔记助手」填写模型地址和 ID，按端点要求填 Key，点「测试连接」。工作区右上角展开助手并为测试库授权编辑，输入「新建周报.md，写入联调定于周五」，查看预览、应用并打开结果。右栏顶端时钟可找回历史对话。
 - 本次模型验收使用受控响应。用户自选模型的实际生成质量待试用。未运行 Windows、Linux 和移动端原生设备验收，本机 Android SDK 目录为空，iOS 工具链仅有 Command Line Tools。窄屏交互已在手机尺寸的 Chrome 中验收。
+
+受测功能提交 `a42e95f`，分支 `codex/feature-note-assistant-20261127`。按方式 2 保留验收环境，等用户试用反馈。
