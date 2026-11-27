@@ -70,3 +70,15 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 - `node --test apps/web/tests/web-build-history.test.mjs apps/web/tests/assistant.test.mjs apps/web/tests/mcp-tools.test.mjs` 退出 0，共 8 项。`WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs` 退出 0，覆盖聊天模块 404、匿名模型、刷新后缺少 Key、旧配置 401 恢复草稿、重新填写后的认证头及正常写入流程。
 - `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 退出 0，桌面调试应用重新构建成功。验收网页已重建并运行在 `http://localhost:19453`，PID 24641。
 - 刷新网页，在「个人设置 → 笔记助手」重新填入 Key 并保存，可从右栏发送草稿。密钥仅存在页面内存，本机配置保存此前是否使用过 Key 的标记。
+
+## 2026-11-27 生成笔记时持续请求 · CHANGES_REQUESTED
+
+用户提供的 Responses 流正常完成，一次 create_note 包含 Markdown 正文和网关要求填写的 root_topic，整轮仅有工具事件。按方式 2 修复客户端对这类参数的适配，流式显示起草进度和正文，保留预览后确认写入；对确实无效且连续失败的工具调用给出可见错误并结束本轮。验收涵盖真实响应回放、无写入预览、单次确认保存和失败退出。
+
+### 工具调用回放验收 · DELIVERED
+
+受测功能提交 `36b3eac`，方式 2。附件显示网关为 create_note 的 text 和 root_topic 同时设置必填，两者均有值，模型以 167 个参数增量发送整篇 Markdown。客户端按笔记种类处理不适用的参数，再交给 MCP 原有校验。起草内容在助手栏中即时显示，完整调用经过校验后出现可应用的预览。工具连续两轮失败后结束本轮并显示原因。自审移除了诊断中回显原始工具参数的部分。
+
+- 红阶段以附件驱动 `apps/web/tests/assistant-browser.mjs`，退出 1，已收到全部正文的客户端仍仅显示「正在生成」。使用同一附件回放修复版本，退出 0。Chrome 验证结束事件到达前可见正文，正式预览的文字与模型输出相同，点击前测试库为空，确认后只生成目标笔记。连续无效的工具调用在两次请求后结束。
+- `node --test apps/web/tests/assistant.test.mjs apps/web/tests/mcp-tools.test.mjs apps/web/tests/web-build-history.test.mjs` 退出 0，9 项通过。`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 退出 0，独立环境上的助手和既有流程通过。正式回归使用合成数据，仓库中未保存用户附件。
+- 网页 `http://localhost:19453` 重新构建启动，PID 27943。原 worktree 下的 `target/debug/bundle/macos/WeNote.app` 重新打包成功。试用时刷新网页并补填当前页面的模型密钥，发送新建笔记的请求，确认预览后保存。
