@@ -86,6 +86,17 @@ async fn logout(origin: String, token: String) -> Result<(), String> {
 #[derive(serde::Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 enum LocalAction {
+    Conflicts,
+    ConflictPreview {
+        copy: String,
+    },
+    ResolveConflict {
+        copy: String,
+        choice: String,
+        remote_hash: String,
+        local_hash: String,
+        text: String,
+    },
     Profile {
         token: String,
         operation: String,
@@ -266,6 +277,17 @@ async fn notebook(
                     .and_then(|bytes| book.export_bytes(&dir, &name, &bytes))
                     .map(serde_json::Value::String)
             }
+            ConflictPreview { copy } => book.conflict_preview(&copy),
+            Conflicts => book.conflicts().map(|items| serde_json::json!(items)),
+            ResolveConflict {
+                copy,
+                choice,
+                remote_hash,
+                local_hash,
+                text,
+            } => book
+                .resolve_conflict(&copy, &remote_hash, &local_hash, &choice, &text)
+                .map(|_| serde_json::Value::Null),
             Trash => book.trash_files().map(|items| serde_json::json!(items)),
             ReadTrash { item } => book.read_trash(&item),
             PurgeTrash { item } => book.purge_trash(&item).map(|()| serde_json::Value::Null),

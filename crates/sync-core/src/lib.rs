@@ -3,7 +3,7 @@ mod disk;
 pub mod notebook;
 use anyhow::{bail, Context, Result};
 pub use api::{Api, AssetTransfer};
-use api::{Receipt, Remote};
+use api::{Manifest, Receipt, Remote};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use fs2::FileExt;
 use reqwest::Method;
@@ -52,7 +52,14 @@ struct State {
     revision: u64,
     files: BTreeMap<String, Entry>,
     #[serde(default)]
+    conflicts: BTreeMap<String, Conflict>,
+    #[serde(default)]
     pending: Option<Pending>,
+}
+#[derive(Serialize, Deserialize)]
+struct Conflict {
+    file_id: String,
+    path: String,
 }
 #[derive(Serialize, Default)]
 pub struct Report {
@@ -61,6 +68,7 @@ pub struct Report {
     pub downloaded: usize,
     pub conflicts: Vec<String>,
     pub revision: u64,
+    pub scan_bytes: u64,
 }
 struct Sync<'a> {
     api: &'a Api,
@@ -70,6 +78,76 @@ struct Sync<'a> {
     report: Report,
 }
 impl Sync<'_> {
+    fn remote_manifest(&self) -> Result<Manifest> {
+        let state = &self.state;
+        let full = || self.api.manifest(&state.vault, &state.device);
+        if state.revision == 0 {
+            return full();
+        }
+        let delta = match self.api.pull(&state.vault, &state.device, state.revision) {
+            Ok(delta) => delta,
+            Err(e)
+                if e.downcast_ref::<api::HttpError>()
+                    .is_some_and(|e| matches!(e.0, 404 | 405 | 409)) =>
+            {
+                return full()
+            }
+            Err(e) => return Err(e),
+        };
+        if delta.has_more
+            || delta.from_revision != state.revision
+            || delta.vault_id != state.vault
+            || delta.device_id != state.device
+            || delta.to_revision.checked_sub(state.revision) != Some(delta.changes.len() as u64)
+        {
+            return full();
+        }
+        let mut files: BTreeMap<String, Remote> = state
+            .files
+            .iter()
+            .map(|(id, e)| {
+                (
+                    id.clone(),
+                    Remote {
+                        file_id: id.clone(),
+                        path: e.path.clone(),
+                        current_version_id: Some(e.version.clone()),
+                        current_content_hash: e.hash.clone(),
+                        is_deleted: false,
+                    },
+                )
+            })
+            .collect();
+        for (index, change) in delta.changes.into_iter().enumerate() {
+            if change.vault_revision != state.revision + index as u64 + 1
+                || !matches!(
+                    change.operation.as_str(),
+                    "create_file"
+                        | "update_file_content"
+                        | "move_file"
+                        | "rename_file"
+                        | "delete_file"
+                        | "restore_file"
+                )
+            {
+                return full();
+            }
+            files.insert(
+                change.file_id.clone(),
+                Remote {
+                    file_id: change.file_id,
+                    path: change.path,
+                    current_version_id: Some(change.version_id),
+                    current_content_hash: change.content_hash,
+                    is_deleted: change.operation == "delete_file",
+                },
+            );
+        }
+        Ok(Manifest {
+            snapshot_revision: delta.to_revision,
+            files: files.into_values().collect(),
+        })
+    }
     fn save(&self) -> Result<()> {
         disk::atomic(
             &self.state_dir.join("state.json"),
@@ -235,8 +313,16 @@ impl Sync<'_> {
         self.api
             .version(&self.state.vault, id, &entry.version, &entry.hash)
     }
-    fn keep_conflict(&mut self, path: &str, bytes: &[u8]) -> Result<()> {
+    fn keep_conflict(&mut self, id: &str, path: &str, bytes: &[u8]) -> Result<()> {
         let copy = disk::conflict(self.root, path, bytes)?;
+        self.state.conflicts.insert(
+            copy.clone(),
+            Conflict {
+                file_id: id.to_owned(),
+                path: path.to_owned(),
+            },
+        );
+        self.save()?;
         self.report.conflicts.push(copy);
         Ok(())
     }
@@ -257,7 +343,7 @@ impl Sync<'_> {
                 if digest(&edited) != hash {
                     bail!("文件在扫描后已修改 {}", remote.path)
                 }
-                self.keep_conflict(&remote.path, &edited)?;
+                self.keep_conflict(id, &remote.path, &edited)?;
             }
         }
         disk::replace(self.root, &remote.path, local_hash, &bytes)?;
@@ -302,7 +388,7 @@ impl Sync<'_> {
                 {
                     if hash != &base.hash {
                         let data = fs::read(disk::local_path(self.root, &base.path)?)?;
-                        self.keep_conflict(&base.path, &data)?
+                        self.keep_conflict(&r.file_id, &base.path, &data)?
                     };
                     self.recycle(&base.path, hash)?;
                     local.remove(&base.path);
@@ -322,6 +408,12 @@ impl Sync<'_> {
         };
         let Some(mut base) = previous else {
             let present = local.remove(&r.path);
+            // Matching local bytes need no disk mutation. The final checkpoint records these
+            // adoptions together; interruption simply rediscovers the matching files.
+            if present.as_deref() == Some(&remote.hash) {
+                self.state.files.insert(r.file_id.clone(), remote);
+                return Ok(());
+            }
             self.receive_at_path(&r.file_id, &remote, present.as_deref(), prior_hashes)?;
             return self.remember(r.file_id.clone(), remote);
         };
@@ -347,6 +439,7 @@ impl Sync<'_> {
                 if let Some(hash) = local.remove(&base.path) {
                     if hash != base.hash {
                         self.keep_conflict(
+                            &r.file_id,
                             &base.path,
                             &fs::read(disk::local_path(self.root, &base.path)?)?,
                         )?;
@@ -434,7 +527,7 @@ impl Sync<'_> {
                 disk::replace(self.root, &r.path, Some(&hash), &merged)?;
                 data = merged;
             } else {
-                self.keep_conflict(&r.path, &data)?;
+                self.keep_conflict(&r.file_id, &r.path, &data)?;
                 disk::replace(self.root, &r.path, Some(&hash), &theirs)?;
                 return self.remember(r.file_id.clone(), remote);
             }
@@ -503,6 +596,7 @@ pub fn synchronize_while(
             device: api.device()?,
             revision: 0,
             files: BTreeMap::new(),
+            conflicts: BTreeMap::new(),
             pending: None,
         },
     };
@@ -519,8 +613,13 @@ pub fn synchronize_while(
     check()?;
     sync.flush()?;
     sync.save()?;
-    let mut local = disk::scan(&root)?;
-    let manifest = api.manifest(vault, &sync.state.device)?;
+    let cache_path = state_dir.join("scan-cache.json");
+    let old_cache = disk::current(&cache_path)?
+        .and_then(|data| serde_json::from_slice(&data).ok())
+        .unwrap_or_default();
+    let (mut local, cache, bytes_read) = disk::scan_cached(&root, &old_cache)?;
+    sync.report.scan_bytes = bytes_read;
+    let manifest = sync.remote_manifest()?;
     let paths: BTreeSet<_> = manifest
         .files
         .iter()
@@ -549,5 +648,8 @@ pub fn synchronize_while(
     sync.report.revision = manifest.snapshot_revision;
     sync.report.device_id = sync.state.device.clone();
     sync.save()?;
+    if cache != old_cache {
+        disk::atomic(&cache_path, &serde_json::to_vec(&cache)?)?;
+    }
     Ok(sync.report)
 }

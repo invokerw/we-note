@@ -262,3 +262,15 @@
 .import-preview-content dt { color: var(--muted); }
 .import-preview-content dd { margin: 0; }
 .import-preview footer { flex-shrink: 0; }
+
+.recovery-dialog { max-width: min(60rem, 94vw); max-height: 90dvh; overflow: auto; color: var(--ink, inherit); background: var(--surface, Canvas); }
+.recovery-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.recovery-columns pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 42vh; overflow: auto; }
+.recovery-dialog footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
+@media (max-width: 720px) { .recovery-columns { grid-template-columns: 1fr; } .recovery-columns pre { max-height: 22vh; } }
+.conflict-switch { display: none; }
+.recovery-dialog textarea { display: block; width: 100%; min-height: 7rem; }
+@media (max-width: 720px) {
+  .conflict-switch { display: flex; gap: .5rem; }
+  .recovery-columns[data-side=local] > [data-side=remote], .recovery-columns[data-side=remote] > [data-side=local] { display: none; }
+}

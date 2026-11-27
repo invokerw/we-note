@@ -25,6 +25,24 @@ pub struct Manifest {
     pub files: Vec<Remote>,
 }
 #[derive(Deserialize)]
+pub(crate) struct Delta {
+    pub vault_id: String,
+    pub device_id: String,
+    pub from_revision: u64,
+    pub to_revision: u64,
+    pub has_more: bool,
+    pub changes: Vec<Change>,
+}
+#[derive(Deserialize)]
+pub(crate) struct Change {
+    pub file_id: String,
+    pub version_id: String,
+    pub operation: String,
+    pub path: String,
+    pub content_hash: String,
+    pub vault_revision: u64,
+}
+#[derive(Deserialize)]
 pub struct Receipt {
     pub file_id: String,
     pub version_id: String,
@@ -173,6 +191,11 @@ impl Api {
             None,
         )?;
         Ok(v["id"].as_str().context("missing device")?.to_owned())
+    }
+    pub(crate) fn pull(&self, vault: &str, device: &str, revision: u64) -> Result<Delta> {
+        let response = self.client.post(format!("{}/api/v1/vaults/{vault}/sync/changes",self.origin))
+            .bearer_auth(&self.token).json(&json!({"mode":"pull","vault_id":vault,"device_id":device,"last_server_revision":revision})).send()?;
+        Ok(checked(response)?.json()?)
     }
     pub fn manifest(&self, vault: &str, device: &str) -> Result<Manifest> {
         let response = self

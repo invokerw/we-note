@@ -80,9 +80,45 @@ pub fn legacy_note(path: &Path) -> bool {
 pub fn text_bytes(bytes: &[u8]) -> bool {
     !bytes.contains(&0) && std::str::from_utf8(bytes).is_ok()
 }
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct CachedHash {
+    stamp: [i128; 7],
+    hash: String,
+}
+pub type ScanCache = BTreeMap<String, CachedHash>;
+#[cfg(unix)]
+fn file_stamp(m: &fs::Metadata) -> Option<[i128; 7]> {
+    use std::os::unix::fs::MetadataExt;
+    // Coarse timestamps cannot distinguish consecutive same-size edits. Rehash those files.
+    if m.ctime_nsec() == 0 || m.mtime_nsec() == 0 {
+        return None;
+    }
+    Some([
+        m.dev() as i128,
+        m.ino() as i128,
+        m.len() as i128,
+        m.ctime() as i128,
+        m.ctime_nsec() as i128,
+        m.mtime() as i128,
+        m.mtime_nsec() as i128,
+    ])
+}
+#[cfg(not(unix))]
+fn file_stamp(_: &fs::Metadata) -> Option<[i128; 7]> {
+    None
+}
+
 pub fn scan(root: &Path) -> Result<BTreeMap<String, String>> {
+    Ok(scan_cached(root, &ScanCache::new())?.0)
+}
+pub fn scan_cached(
+    root: &Path,
+    old: &ScanCache,
+) -> Result<(BTreeMap<String, String>, ScanCache, u64)> {
     let mut files = BTreeMap::new();
     let mut keys = BTreeMap::new();
+    let mut cache = ScanCache::new();
+    let mut bytes_read = 0;
     for entry in WalkDir::new(root)
         .follow_links(false)
         .into_iter()
@@ -94,11 +130,8 @@ pub fn scan(root: &Path) -> Result<BTreeMap<String, String>> {
         }
         let path = entry.path();
         let legacy = legacy_note(path);
-        if !legacy && entry.metadata()?.len() > 16 << 20 {
-            continue;
-        }
-        let bytes = fs::read(path)?;
-        if !legacy && !text_bytes(&bytes) {
+        let metadata = entry.metadata()?;
+        if !legacy && metadata.len() > 16 << 20 {
             continue;
         }
         let p = path
@@ -106,14 +139,36 @@ pub fn scan(root: &Path) -> Result<BTreeMap<String, String>> {
             .to_str()
             .context("non-unicode filename")?
             .replace(std::path::MAIN_SEPARATOR, "/");
+        let stamp = file_stamp(&metadata);
+        let cached = old.get(&p).filter(|item| Some(item.stamp) == stamp);
+        let hash = match cached {
+            Some(item) => item.hash.clone(),
+            None => {
+                let bytes = fs::read(path)?;
+                bytes_read += bytes.len() as u64;
+                if !legacy && !text_bytes(&bytes) {
+                    continue;
+                }
+                super::digest(&bytes)
+            }
+        };
+        if let Some(stamp) = stamp {
+            cache.insert(
+                p.clone(),
+                CachedHash {
+                    stamp,
+                    hash: hash.clone(),
+                },
+            );
+        }
         relative(&p)?;
         let key: String = p.nfc().collect::<String>().to_lowercase();
         if let Some(old) = keys.insert(key, p.clone()) {
             bail!("路径冲突 {old} / {p}")
-        };
-        files.insert(p.nfc().collect(), super::digest(&bytes));
+        }
+        files.insert(p.nfc().collect(), hash);
     }
-    Ok(files)
+    Ok((files, cache, bytes_read))
 }
 pub fn current(path: &Path) -> Result<Option<Vec<u8>>> {
     match fs::read(path) {

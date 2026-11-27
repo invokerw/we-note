@@ -1,3 +1,4 @@
+import { SyncConflicts } from "./SyncConflicts";
 import { CreateNoteWindow } from "./CreateNoteWindow";
 import { StarButton, useNoteStars } from "./StarredNotes";
 import { checkPicture, pictureTypes } from "./api";
@@ -279,6 +280,8 @@ function Workspace({
     }),
     [binding],
   );
+  const [conflictsOpen, setConflictsOpen] = useState(false);
+  const conflictAction = useCallback(<T,>(action:string, args?:Record<string, unknown>) => local<T>(vault, action, args),[vault]);
   const searchContent = useCallback((query: string) => local<string[]>(vault,"search_notes",{query,paths:files.filter(p=>!p.endsWith("/"))}),[vault,files]);
   const loadBacklinks = useCallback(async (): Promise<Hit[]> => {
     const id = await local<string | null>(vault, "file_id", { path });
@@ -702,12 +705,14 @@ function Workspace({
                 }}
               />
             </label>
+            <button disabled={busy} onClick={() => { if (!dirty) setConflictsOpen(true); else notify("请先保存当前修改。"); }}>同步冲突</button>
             <button disabled={busy} onClick={() => run(load)}>
               刷新列表
             </button>
           </>
         }
       />
+      {conflictsOpen && <SyncConflicts invoke={conflictAction} close={() => setConflictsOpen(false)} changed={async () => {await load(); if(path) await open(path,true);}} />}
       {createAnchor && <CreateNoteWindow anchor={createAnchor} phone={phone} folder={panes.folder || ""}
         paths={files} io={entries} close={() => setCreateAnchor(null)}
         create={format => { setNewPath((panes.folder || "") + formats[format]); panes.setPane("doc"); }}

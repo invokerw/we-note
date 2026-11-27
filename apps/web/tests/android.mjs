@@ -479,6 +479,16 @@ try {
   await button("打开笔记").click();
   await button(conflict.path).click();
   await page.locator(".reading").getByText("手机离线编辑").waitFor();
+  await tap(button("返回笔记列表"));
+  await tap(button("打开笔记库目录"));
+  await tap(button("同步冲突"));
+  const conflicts = page.getByRole("dialog", {name:"同步冲突"});
+  await conflicts.getByRole("button", {name:`原稿.md · ${conflict.path}`}).click();
+  await conflicts.getByRole("button", {name:"本地副本",exact:true}).click();
+  assert.match(await conflicts.locator("section[data-side=local]").innerText(), /手机离线编辑/);
+  await conflicts.getByRole("button", {name:"原笔记",exact:true}).click();
+  await conflicts.getByRole("button", {name:"保留原笔记"}).click();
+  await conflicts.getByText("没有待处理冲突。").waitFor();
   console.log(
     "Android emulator passed offline restart, system share, scheduled sync, conflict recovery, multipart image upload and portable ZIP download.",
   );

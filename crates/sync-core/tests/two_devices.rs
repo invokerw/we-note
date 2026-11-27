@@ -202,6 +202,13 @@ fn two_devices_and_web_converge() -> Result<()> {
     let before_edit = book.read(draft_path)?;
     let edited = format!("edited\n![offline]({temporary_url})");
     book.save(draft_path, before_edit["hash"].as_str(), &edited)?;
+    // Losing access to staged bytes must leave the note intact and retryable.
+    let cache_dir = state_root.join(vault).join("asset-cache");
+    let hidden = state_root.join(vault).join("cache-unavailable");
+    fs::rename(&cache_dir, &hidden)?;
+    assert!(sync_a().is_err());
+    assert_eq!(fs::read_to_string(a.join(draft_path))?, edited);
+    fs::rename(hidden, cache_dir)?;
     sync_a()?;
     sync_b()?;
     let received = fs::read_to_string(b.join(draft_path))?;
@@ -352,5 +359,27 @@ fn missing_merge_base_preserves_both_edits() -> Result<()> {
     sync_a()?;
     assert_eq!(fs::read(a.join("other.md"))?, b"unrelated");
     assert_eq!(fs::read(a.join(&conflicts[0]))?, b"local changes");
+    let book = Notebook::open(&state_b, vault)?;
+    let pending = book.conflicts()?;
+    assert_eq!(pending.get(&conflicts[0]).map(String::as_str), Some(path));
+    let local_hash = book.read(&conflicts[0])?["hash"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let remote_hash = book.read(path)?["hash"].as_str().unwrap().to_owned();
+    assert!(book
+        .resolve_conflict(&conflicts[0], "stale", &local_hash, "merged", "combined")
+        .is_err());
+    assert_eq!(book.conflicts()?, pending);
+    book.resolve_conflict(
+        &conflicts[0],
+        &remote_hash,
+        &local_hash,
+        "merged",
+        "combined",
+    )?;
+    assert!(book.conflicts()?.is_empty());
+    assert_eq!(fs::read(b.join(path))?, b"combined");
+    assert_eq!(fs::read(b.join(&conflicts[0]))?, b"local changes");
     Ok(())
 }

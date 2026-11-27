@@ -1,3 +1,4 @@
+import { DraftDialog, useNoteDraft } from "./NoteDraft";
 import { NoteHistory } from "./NoteHistory";
 import { StarButton, type NoteStars } from "./StarredNotes";
 import { markdownWritingMode } from "./markdown/modes";
@@ -26,6 +27,8 @@ import {
 import { prepareNoteLink } from "./Sharing";
 
 type Props = {
+  account: string;
+  discardOnLeave: {current:string|null};
   actions: ReactNode;
   stars: NoteStars;
   phoneBack?: () => void;
@@ -82,6 +85,8 @@ export function AssetImage({
   );
 }
 export default function Editor({
+  account,
+  discardOnLeave,
   actions,
   stars,
   phoneBack,
@@ -146,6 +151,19 @@ export default function Editor({
   const rich = useRef<RichWriting | null>(null);
   const source = useRef(new TextFile("")),
     saved = useRef("");
+  const draftScope = account && !special ? JSON.stringify([account, vault, note.file_id]) : "";
+  const draft = useNoteDraft(draftScope, base, notify);
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
+  useEffect(() => () => {
+    if (discardOnLeave.current === note.file_id) {
+      latestDraft.current.write(null);
+      discardOnLeave.current = null;
+    }
+  }, [note.file_id, discardOnLeave]);
+  useEffect(() => {
+    if (draftScope && source.current.text !== saved.current) draft.write(source.current.text);
+  }, [draftScope]);
   const assetPicker = useRef<HTMLInputElement>(null);
   const editor = useRef<EditorView | null>(null);
   useEffect(() => {
@@ -191,6 +209,7 @@ export default function Editor({
   function edit(value: string) {
     source.current.edit(value);
     setText(value);
+    draft.write(value === saved.current ? null : value);
     dirty(value !== saved.current);
   }
   function changeMode(next: Mode) {
@@ -244,6 +263,7 @@ export default function Editor({
       setText(text);
     }
     saved.current = rewrite(submitted);
+    draft.write(source.current.text === saved.current ? null : source.current.text);
     dirty(source.current.text !== saved.current);
   }
   async function saveBytes(data: Uint8Array) { await persistBytes(data); }
@@ -314,6 +334,8 @@ export default function Editor({
   const title = note.path.split("/").at(-1)!;
   return (
     <>
+    {draft.pending && <DraftDialog draft={draft.pending} current={saved.current} base={base}
+      discard={() => void draft.decide()} restore={() => void draft.decide(value => { edit(value); setMode(markdown ? "split" : "edit"); })} />}
     {historyOpen && <NoteHistory token={token} path={path} name={title} draft={draftShare}
       close={() => setHistoryOpen(false)} restore={restoreVersion} />}
     <article

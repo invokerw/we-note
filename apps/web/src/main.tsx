@@ -182,6 +182,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
     return response.status === 204 ? {} : response.json();
   }, [token]);
   const profile = useAccountProfile(profileRequest);
+  const discardOnLeave = useRef<string|null>(null);
   const dirty = useRef(false),
     picker = useRef<HTMLInputElement>(null);
   const base = `/api/v1/vaults/${vault}`;
@@ -194,7 +195,10 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
   }
   useEffect(() => { dirty.current = false; }, [vault, note?.file_id, note?.path, editorRevision]);
   function leave() {
-    return !dirty.current || confirm("放弃尚未保存的编辑？");
+    if (!dirty.current) return true;
+    if (!confirm("放弃尚未保存的编辑？")) return false;
+    discardOnLeave.current = note?.file_id ?? null;
+    return true;
   }
   async function listVaults() {
     const v = (await (await request(token, "/api/v1/vaults")).json())
@@ -503,7 +507,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         paths={paths} io={entries} close={() => setCreateAnchor(null)}
         createAtPath={async (path, bytes) => { if (leave()) await create(path, bytes); }}
         browse={folder => { setView("files"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={() => !dirty.current || confirm("放弃尚未保存的编辑？")} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
+      {settingsOpen && <PersonalSettings profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={leave} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
         exportPanel={vault ? <LibraryResources vaultName={vaults.find(v => v.id === vault)?.name || vault} base={base} token={token} onImported={list} viewFolder={folder => { if (!leave()) return; setNote(null); setView("files"); panes.browse(folder ? folder + "/" : null); closeSettings(); }}/> : <p>请先选择笔记库。</p>}
         audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
         shares={<Sharing token={token} vaults={vaults}/>}/>}
@@ -603,6 +607,8 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
                 origin,
                 preferences,
                 updatePluginSetting,
+                account: profile.email,
+                discardOnLeave,
                 changed: list,
                 dirty: (b) => {
                   dirty.current = b;

@@ -204,6 +204,83 @@ impl Notebook {
         lock.try_lock_exclusive().context("正在同步，请稍后重试")?;
         Ok(lock)
     }
+    fn sync_state(&self) -> Result<State> {
+        Ok(serde_json::from_slice(&fs::read(
+            self.state_dir.join("state.json"),
+        )?)?)
+    }
+    pub fn conflicts(&self) -> Result<BTreeMap<String, String>> {
+        let state = self.sync_state()?;
+        Ok(state
+            .conflicts
+            .into_iter()
+            .map(|(copy, conflict)| {
+                let target = state
+                    .files
+                    .get(&conflict.file_id)
+                    .map(|e| e.path.clone())
+                    .unwrap_or(conflict.path);
+                (copy, target)
+            })
+            .collect())
+    }
+    pub fn conflict_preview(&self, copy: &str) -> Result<Value> {
+        let target = self.conflicts()?.remove(copy).context("冲突已处理")?;
+        let remote = disk::current(&self.path(&target)?)?;
+        let local = fs::read(self.path(copy)?)?;
+        let text = |data: &[u8]| {
+            disk::text_bytes(data).then(|| String::from_utf8_lossy(data).into_owned())
+        };
+        Ok(
+            json!({"target":target,"local":text(&local),"local_hash": digest(&local),
+            "remote": remote.as_deref().and_then(text), "remote_hash":remote.as_deref().map(digest).unwrap_or_default()}),
+        )
+    }
+    pub fn resolve_conflict(
+        &self,
+        copy: &str,
+        remote_hash: &str,
+        local_hash: &str,
+        choice: &str,
+        text: &str,
+    ) -> Result<()> {
+        let _lock = self.trash_lock()?;
+        let mut state = self.sync_state()?;
+        let conflict = state.conflicts.get(copy).context("冲突已处理，请刷新")?;
+        let tracked = state.files.get(&conflict.file_id);
+        let path = tracked.map(|e| &e.path).unwrap_or(&conflict.path);
+        if tracked.is_none() && state.files.values().any(|e| &e.path == path) {
+            bail!("路径已被另一篇笔记使用")
+        }
+        let local = fs::read(self.path(copy)?)?;
+        if digest(&local) != local_hash {
+            bail!("冲突副本已变化，请重新打开")
+        }
+        let expected = (!remote_hash.is_empty()).then_some(remote_hash);
+        if text.len() > 16 << 20 {
+            bail!("笔记超过 16 MiB")
+        }
+        match choice {
+            "merged" => disk::replace(&self.root, path, expected, text.as_bytes())?,
+            "local" => disk::replace(&self.root, path, expected, &local)?,
+            "remote" => {
+                if disk::current(&self.path(path)?)?
+                    .as_deref()
+                    .map(digest)
+                    .as_deref()
+                    != expected
+                {
+                    bail!("原笔记已变化，请重新打开")
+                }
+            }
+            _ => bail!("未知的冲突处理方式"),
+        }
+        state.conflicts.remove(copy);
+        disk::atomic(
+            &self.state_dir.join("state.json"),
+            &serde_json::to_vec(&state)?,
+        )
+    }
     pub fn purge_trash(&self, item: &TrashedFile) -> Result<()> {
         let _lock = self.trash_lock()?;
         let source = self.trashed_path(item)?;
