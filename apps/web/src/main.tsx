@@ -192,10 +192,9 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
       msg(String(e));
     }
   }
+  useEffect(() => { dirty.current = false; }, [vault, note?.file_id, note?.path, editorRevision]);
   function leave() {
-    if (dirty.current && !confirm("放弃尚未保存的编辑？")) return false;
-    dirty.current = false;
-    return true;
+    return !dirty.current || confirm("放弃尚未保存的编辑？");
   }
   async function listVaults() {
     const v = (await (await request(token, "/api/v1/vaults")).json())

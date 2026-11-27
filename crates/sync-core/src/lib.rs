@@ -157,7 +157,7 @@ impl Sync<'_> {
             return self.send(method, suffix, path, base, Some(resolved.as_bytes()));
         }
         let mut body = json!({"device_id":self.state.device});
-        if !path.is_empty() {
+        if !path.is_empty() && method != Method::PUT {
             body["path"] = json!(path)
         }
         if let Some(base) = base {
@@ -415,28 +415,34 @@ impl Sync<'_> {
         };
         if remote.hash != base.hash {
             let theirs = self.content(&r.file_id, &remote)?;
-            if r.path.to_ascii_lowercase().ends_with(".xmind") {
+            let merged = if r.path.to_ascii_lowercase().ends_with(".xmind") {
+                None
+            } else {
+                match self.content(&r.file_id, &base) {
+                    Ok(ancestor) => diffy::merge_bytes(&ancestor, &data, &theirs).ok(),
+                    Err(err)
+                        if err
+                            .downcast_ref::<api::HttpError>()
+                            .is_some_and(|e| e.0 == 404) =>
+                    {
+                        None
+                    }
+                    Err(err) => return Err(err),
+                }
+            };
+            if let Some(merged) = merged {
+                disk::replace(self.root, &r.path, Some(&hash), &merged)?;
+                data = merged;
+            } else {
                 self.keep_conflict(&r.path, &data)?;
                 disk::replace(self.root, &r.path, Some(&hash), &theirs)?;
                 return self.remember(r.file_id.clone(), remote);
-            }
-            let ancestor = self.content(&r.file_id, &base)?;
-            match diffy::merge_bytes(&ancestor, &data, &theirs) {
-                Ok(merged) => {
-                    disk::replace(self.root, &r.path, Some(&hash), &merged)?;
-                    data = merged
-                }
-                Err(_) => {
-                    self.keep_conflict(&r.path, &data)?;
-                    disk::replace(self.root, &r.path, Some(&hash), &theirs)?;
-                    return self.remember(r.file_id.clone(), remote);
-                }
             }
         };
         self.send(
             Method::PUT,
             &format!("/{}/content", r.file_id),
-            "",
+            &remote.path,
             Some(&remote),
             Some(&data),
         )

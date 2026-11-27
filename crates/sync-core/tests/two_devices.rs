@@ -198,6 +198,26 @@ fn two_devices_and_web_converge() -> Result<()> {
     assert!(!final_note.contains("wenote-draft.invalid"));
     assert!(final_note.contains(&format!("/{vault}/")));
     assert_eq!(fs::read_to_string(a.join(draft_path))?, final_note);
+    // An existing note must also publish an image staged while offline.
+    let before_edit = book.read(draft_path)?;
+    let edited = format!("edited\n![offline]({temporary_url})");
+    book.save(draft_path, before_edit["hash"].as_str(), &edited)?;
+    sync_a()?;
+    sync_b()?;
+    let received = fs::read_to_string(b.join(draft_path))?;
+    let received_url = received
+        .trim_end_matches(')')
+        .split("![offline](")
+        .last()
+        .unwrap();
+    assert!(
+        !received_url.contains("wenote-draft.invalid"),
+        "existing note still uses a draft image"
+    );
+    assert_eq!(
+        Notebook::open(&state_b, vault)?.image(received_url, &token)?["data"],
+        png
+    );
     let url = book.upload(&token, note, "tiny.png", "image/png", png)?;
     assert_eq!(url.rsplit('/').next().unwrap().len(), 16);
     assert_eq!(
@@ -271,5 +291,66 @@ fn two_devices_and_web_converge() -> Result<()> {
     );
     sync_b()?;
     assert_eq!(fs::read(b.join(folder).join("README"))?, b"plain text");
+    Ok(())
+}
+
+#[test]
+#[ignore = "requires a running API; run tests/e2e/desktop.mjs"]
+fn missing_merge_base_preserves_both_edits() -> Result<()> {
+    let origin = std::env::var("WENOTE_TEST_ORIGIN")?;
+    let email = format!("{}@test.invalid", Uuid::new_v4());
+    let password = "sync test password";
+    let guest = Api::new(&origin, "")?;
+    guest.json(
+        Method::POST,
+        "/api/v1/auth/register",
+        Some(json!({"email":email,"password":password})),
+        None,
+    )?;
+    let token = Api::login(&origin, &email, password)?;
+    let api = Api::new(&origin, &token)?;
+    let v = api.json(
+        Method::POST,
+        "/api/v1/vaults",
+        Some(json!({"name":"Acceptance"})),
+        None,
+    )?;
+    let vault = v["id"].as_str().context("vault id")?;
+    let temp = tempfile::tempdir()?;
+    let a = temp.path().join("Mac");
+    let b = temp.path().join("Windows");
+    fs::create_dir_all(a.join("daily"))?;
+    fs::create_dir(&b)?;
+    let state_root = temp.path().join("state-a");
+    let sync_a = || synchronize(&origin, &token, vault, &a, &state_root.join(vault));
+    let state_b = temp.path().join("state-b");
+    let sync_b = || synchronize(&origin, &token, vault, &b, &state_b.join(vault));
+    let path = "edited.md";
+    fs::write(a.join(path), "common ancestor")?;
+    sync_a()?;
+    sync_b()?;
+    // Model an expired version receipt without waiting for the minute-based cleanup worker.
+    let state_path = state_b.join(vault).join("state.json");
+    let mut state: serde_json::Value = serde_json::from_slice(&fs::read(&state_path)?)?;
+    let entry = state["files"]
+        .as_object_mut()
+        .unwrap()
+        .values_mut()
+        .next()
+        .unwrap();
+    entry["version"] = json!("expired-version");
+    fs::write(state_path, serde_json::to_vec(&state)?)?;
+    fs::write(a.join(path), "remote changes")?;
+    fs::write(b.join(path), "local changes")?;
+    fs::write(b.join("other.md"), "unrelated")?;
+    sync_a()?;
+    let conflicts = sync_b()?.conflicts;
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(fs::read(b.join(&conflicts[0]))?, b"local changes");
+    assert_eq!(fs::read(b.join(path))?, b"remote changes");
+    assert!(sync_b()?.conflicts.is_empty());
+    sync_a()?;
+    assert_eq!(fs::read(a.join("other.md"))?, b"unrelated");
+    assert_eq!(fs::read(a.join(&conflicts[0]))?, b"local changes");
     Ok(())
 }
