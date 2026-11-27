@@ -129,11 +129,13 @@ try {
   await checkSidebarLayout(".workspace");
   await ui.settings();
   await checkBrowserTransport();
+  await page.waitForFunction(()=>localStorage.getItem("wenote-codex-catalog-version"));
   await page.route("https://registry.npmjs.org/**", r => r.fulfill({json:{version:"1.2.99"}}));
-  await page.evaluate(() => localStorage.removeItem('wenote-codex-catalog-version'));
+  await page.evaluate(()=>localStorage.removeItem("wenote-codex-catalog-version"));
   await page.reload();
   let requested = 0;
   let modelCalls = 0;
+  let summarize = false;
   const expectedKey = "test-chat-key";
   const model = "http://127.0.0.1:19456/v1";
   await page.route(model + "/**", async (route) => {
@@ -192,8 +194,10 @@ try {
       ? "check_connection"
       : body.messages.at(-1)?.role === "tool"
         ? ""
-        : "create_note";
-    const args = check
+        : summarize ? "read_note" : "create_note";
+    const ref = summarize && String(body.messages[0].content).match(/"file_id":"([^"]+)","path":"周报.md"/);
+    if (summarize) assert(ref, '模型应收到所引用笔记的工具 ID');
+    const args = summarize && !check ? {file_id:ref[1]} : check
       ? {}
       : {
           path: "周报.md",
@@ -213,7 +217,7 @@ try {
             },
           ],
         }
-      : { role: "assistant", content: "已完成周报。" };
+      : { role: "assistant", content: summarize ? "联调在周五。" : "已完成周报。" };
     const events = [
       { delta, finish_reason: null },
       { delta: {}, finish_reason: tool ? "tool_calls" : "stop" },
@@ -233,14 +237,27 @@ try {
   await ui.save(); await ui.manual('anonymous'); await ui.test();
   await page.getByText('可用于写笔记',{exact:true}).waitFor();
   await ui.settings(); await page.getByLabel('API Key').fill(expectedKey); await ui.protocol('OpenAI Responses'); await ui.save();
-  await btn('选择聊天模型').click(); await page.getByLabel('可用模型').click(); await page.locator('.ant-select-item-option').filter({hasText:'test'}).last().click();
   async function testEffort(){
-    await page.getByLabel('推理等级').click(); await page.locator('.ant-select-item-option').filter({hasText:'ultra'}).last().click(); await ui.test();
+    await btn('选择聊天模型').click(); await btn('test').click();
+    const slider=page.getByRole('slider',{name:'推理等级'});
+    await slider.press('End');
+    await btn('恢复默认推理等级').click();
+    assert.match(await btn('选择聊天模型').innerText(),/test · 默认/);
+    await btn('重新选择模型').click();
+    await btn('anonymous').click();
+    assert.equal(await page.getByRole('dialog',{name:'选择推理等级'}).count(),0);
+    await btn('选择聊天模型').click(); await btn('test').click();
+    await slider.press('End'); await slider.press('Escape');
+    assert.match(await btn('选择聊天模型').innerText(),/test · 超高/);
+    await ui.test();
     await page.getByText('可用于写笔记',{exact:true}).waitFor();
   }
   await testEffort(); await ui.settings(); await ui.protocol('OpenAI Chat Completions'); await ui.save(); await testEffort();
   await btn("授权编辑").click();
   const draft = page.getByRole("textbox", {name:"助手消息"});
+  await page.getByText('起草一篇笔记', {exact:true}).click();
+  assert.equal(await draft.inputValue(), '起草一篇笔记');
+  assert.equal(await draft.evaluate(el=>el===document.activeElement), true);
   const turnModule = /\/static\/turn-[^/]+\.js$/;
   await page.route(turnModule, (route) => route.fulfill({ status: 404, body: "missing" }));
   const prompt = "帮我写一篇周报";
@@ -288,6 +305,9 @@ try {
   await btn("应用修改").click();
   await page.getByText("已完成周报。", { exact: true }).waitFor();
   assert.equal((await api(`vaults/${vault}/files`)).files.length, 1);
+  const vote = page.locator('.ant-actions-feedback-item-like');
+  await vote.click();
+  await page.locator('.ant-actions-feedback-item-like-active').waitFor();
   await draft.fill("留给下一次");
   await btn("历史对话").click();
   await btn("新对话").click();
@@ -298,6 +318,8 @@ try {
   await btn("展开笔记助手").click();
   await page.getByText("已完成周报。", { exact: true }).waitFor();
   assert.equal(await draft.inputValue(), "留给下一次");
+  await page.locator('.ant-actions-feedback-item-like-active').click();
+  assert.equal(await page.locator('.ant-actions-feedback-item-like-active').count(),0);
   await btn("收起笔记助手").click();
   await page.locator(".entry").filter({ hasText: "周报.md" }).click();
   await checkSidebarLayout(".workspace", btn("更多操作"));
@@ -308,6 +330,33 @@ try {
   await checkSidebarLayout(".note-list-pane", btn("打开笔记库目录"));
   await btn("展开笔记助手").click();
   assert(await draft.isVisible());
+  await ui.settings(); await page.getByLabel('API Key').fill(expectedKey); await ui.save();
+  await draft.fill('手机草稿');
+  await btn('选择聊天模型').click(); await btn('test').click();
+  const slider = page.getByRole('slider', {name:'推理等级'});
+  const rail = await slider.boundingBox();
+  assert(rail.width > 120 && rail.x >= 0 && rail.x + rail.width <= 390);
+  for (const scheme of ['dark', 'light']) {
+    await page.evaluate(value=>document.documentElement.dataset.colorScheme=value,scheme);
+    assert.equal(await slider.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)', '滑杆输入层应露出下方的等级轨道');
+  }
+  await slider.press('End');
+  if (process.env.WENOTE_ASSISTANT_PREVIEW) await page.screenshot({path:process.env.WENOTE_ASSISTANT_PREVIEW,animations:'disabled'});
+  await slider.press('Escape');
+  assert.equal(await draft.inputValue(),'手机草稿');
+  await btn('新对话').click();
+  if (await page.getByTitle('移除引用 周报.md').count()) await page.getByTitle('移除引用 周报.md').click();
+  await draft.press('@');
+  await page.getByRole('menuitemcheckbox',{name:'周报.md'}).waitFor();
+  await draft.press('Enter');
+  await page.getByTitle('移除引用 周报.md').waitFor();
+  summarize=true;
+  await draft.fill('总结引用的笔记'); await btn('发送').click();
+  await page.getByText('联调在周五。',{exact:true}).waitFor();
+  await page.getByText('本轮读取 · 1 篇笔记',{exact:true}).click();
+  await page.locator('.ant-sources-list-item').getByText('周报.md').click();
+  if(await btn('收起笔记助手').isVisible()) await btn('收起笔记助手').click();
+  await page.locator('.phone-document-head').getByText('周报.md',{exact:true}).waitFor();
   const other = (await api("vaults", { name: "第二个库" })).id;
   await page.goto(`${origin}/?vault=${other}`);
   await btn("展开笔记助手").click();

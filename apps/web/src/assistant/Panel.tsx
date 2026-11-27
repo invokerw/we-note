@@ -9,7 +9,11 @@ import {
   type Proposal,
 } from "./history";
 import { checkedConfig } from "./policy";
-import { Bubble, Sender } from "@ant-design/x";
+import { Conversations, Prompts, Welcome, XProvider } from "@ant-design/x";
+import zhCN from "@ant-design/x/es/locale/zh_CN";
+import type { SenderRef } from "@ant-design/x/es/sender/interface";
+import { NoteSender } from "./NoteSender";
+import { ThreadMessages } from "./ThreadMessages";
 import { Button } from "antd";
 import { SettingOutlined, SendOutlined, StopOutlined } from "@ant-design/icons";
 import { ModelPicker } from "./ModelPicker";
@@ -61,6 +65,8 @@ export function AssistantPanel(props: Props) {
     [list, setList] = useState<Chat[] | null>(null),
     [error, showError] = useState(""),
     [status, setStatus] = useState(""),
+    [summary, setSummary] = useState(""),
+    [activeUser, setActiveUser] = useState<string>(),
     [stream, text] = useState(""),
     [draftPreview, setDraftPreview] = useState(""),
     [busy, setBusy] = useState(false),
@@ -100,10 +106,13 @@ export function AssistantPanel(props: Props) {
     pending = useRef<Pending | null>(null),
     applyingRef = useRef(false),
     mounted = useRef(true),
+    sender = useRef<SenderRef>(null),
+    follow = useRef(true),
     flow = useRef<HTMLDivElement>(null);
   const activeTurn = useRef<Promise<void> | null>(null);
   const selectedKey = "wenote-assistant-current:" + scope;
   function present(c: Chat) {
+    if (current.current?.id !== c.id) follow.current = true;
     current.current = c;
     setChat(c);
     localStorage.setItem(selectedKey, c.id);
@@ -122,7 +131,7 @@ export function AssistantPanel(props: Props) {
   function append(l: Line) {
     return update((c) => ({
       ...c,
-      lines: [...c.lines, l],
+      lines: [...c.lines, { id: crypto.randomUUID(), ...l }],
       updated: Date.now(),
     }));
   }
@@ -188,9 +197,18 @@ export function AssistantPanel(props: Props) {
   }, [props.credentialOwner]);
   useEffect(() => () => stop(), [connection.assistantGrant?.id]);
   useEffect(() => {
-    if (open && flow.current)
+    if (open && follow.current && flow.current)
       flow.current.scrollTop = flow.current.scrollHeight;
-  }, [chat?.lines.length, stream, draftPreview]);
+  }, [
+    open,
+    list,
+    chat?.id,
+    chat?.lines.length,
+    stream,
+    summary,
+    draftPreview,
+    status,
+  ]);
   useEffect(() => {
     const id = connection.assistantGrant?.id;
     if (
@@ -289,7 +307,9 @@ export function AssistantPanel(props: Props) {
     showError("");
     setStatus("正在生成…");
     text("");
-    let partial = "";
+    const userId = crypto.randomUUID();
+    let partial = "",
+      visibleSummary = "";
     let key = "";
     try {
       const config = checkedConfig({ ...model, effort: effectiveEffort });
@@ -326,9 +346,11 @@ export function AssistantPanel(props: Props) {
                 }
               : l,
           ),
-          { role: "user", text: prompt },
+          { id: userId, role: "user", text: prompt },
         ],
       }));
+      setActiveUser(userId);
+      follow.current = true;
       await runTurn({
         connection,
         chat: { ...before, contextStart },
@@ -339,6 +361,12 @@ export function AssistantPanel(props: Props) {
         signal: ctrl.signal,
         append: (l) => {
           if (!ctrl.signal.aborted) void append(l);
+        },
+        summary: (s) => {
+          if (!ctrl.signal.aborted) {
+            visibleSummary = s;
+            setSummary(s);
+          }
         },
         draft: (s) => {
           if (!ctrl.signal.aborted) setDraftPreview(s);
@@ -369,7 +397,18 @@ export function AssistantPanel(props: Props) {
       });
     } catch (e) {
       if (mounted.current) {
-        if (partial) void append({ role: "assistant", text: partial });
+        const started = current.current?.lines.some((l) => l.id === userId);
+        if (
+          partial ||
+          visibleSummary.trim() ||
+          (ctrl.signal.aborted && started)
+        )
+          void append({
+            role: "assistant",
+            text: partial,
+            summary: visibleSummary.trim() || undefined,
+            interrupted: ctrl.signal.aborted,
+          });
         if (!ctrl.signal.aborted) {
           const needsKey = gatewayNeedsKey(e, key);
           if (needsKey || effectiveEffort) {
@@ -395,6 +434,8 @@ export function AssistantPanel(props: Props) {
       if (controller.current === ctrl) controller.current = null;
       if (mounted.current) {
         text("");
+        setSummary("");
+        setActiveUser(undefined);
         setStatus("");
         setDraftPreview("");
         setBusy(false);
@@ -515,9 +556,22 @@ export function AssistantPanel(props: Props) {
     !applying &&
     !testing &&
     (!busy || !!pending.current);
+  const availableRefs = props.paths.filter(
+    (p) => !p.endsWith("/") && !chat?.refs.includes(p),
+  );
+  const prompts = chat?.refs.length
+    ? ["总结引用的笔记", "提炼笔记中的待办"]
+    : ["起草一篇笔记", "列一份待办清单"];
+  function fillDraft(value: string) {
+    void update((c) => ({
+      ...c,
+      draft: c.draft ? `${c.draft}\n${value}` : value,
+    }));
+    sender.current?.focus();
+  }
   if (!scope) return null;
   return (
-    <>
+    <XProvider locale={zhCN}>
       <button
         className="assistant-toggle"
         aria-label={open ? "收起笔记助手" : "展开笔记助手"}
@@ -583,18 +637,30 @@ export function AssistantPanel(props: Props) {
         {list ? (
           <div className="assistant-history">
             <h3>历史对话</h3>
-            {list.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => {
-                  present(c);
+            <Conversations
+              activeKey={chat?.id}
+              items={list.map((c) => ({
+                key: c.id,
+                label: (
+                  <button
+                    type="button"
+                    aria-current={c.id === chat?.id ? "true" : undefined}
+                  >
+                    {c.title}
+                    <small>{new Date(c.updated).toLocaleString()}</small>
+                  </button>
+                ),
+              }))}
+              onActiveChange={(id) => {
+                const next = list.find((c) => c.id === id);
+                if (next) {
+                  present(next);
                   setList(null);
-                }}
-              >
-                {c.title}
-                <small>{new Date(c.updated).toLocaleString()}</small>
-              </button>
-            ))}
+                  showError("");
+                  setStatus("");
+                }
+              }}
+            />
             <button
               onClick={() => {
                 if (confirm("清除本机当前库的全部助手对话？"))
@@ -611,6 +677,11 @@ export function AssistantPanel(props: Props) {
             <div
               className="assistant-flow"
               ref={flow}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                follow.current =
+                  el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+              }}
               role="log"
               aria-label="对话"
             >
@@ -654,131 +725,73 @@ export function AssistantPanel(props: Props) {
                   </button>
                 )
               )}
+              {chat && !chat.lines.length && grant && model.baseUrl && (
+                <>
+                  <Welcome
+                    variant="borderless"
+                    title="想从哪里开始？"
+                    description={
+                      chat.refs.length
+                        ? "围绕引用的笔记提问，或一起修改内容。"
+                        : "把想法写成笔记，或引用已有笔记继续整理。"
+                    }
+                  />
+                  <Prompts
+                    vertical
+                    items={prompts.map((label) => ({
+                      key: label,
+                      label,
+                      disabled: !!chat.draft.trim(),
+                    }))}
+                    onItemClick={({ data }) => fillDraft(data.key as string)}
+                  />
+                </>
+              )}
               {chat && (
-                <Bubble.List
-                  autoScroll={false}
-                  role={{
-                    user: { placement: "end" },
-                    assistant: { variant: "borderless" },
-                    tool: { variant: "outlined" },
-                  }}
-                  items={chat.lines.map((l, i) => {
-                    const p = l.proposal;
-                    return {
-                      key: i,
-                      role: l.role,
-                      content: (
-                        <div className={"assistant-line role-" + l.role}>
-                          <p>{l.text}</p>
-                          {l.path && (
-                            <button
-                              className="assistant-path"
-                              onClick={() => props.openFile(p?.path ?? l.path!)}
-                            >
-                              {p?.path ?? l.path}
-                            </button>
-                          )}
-                          {p && (
-                            <div className="assistant-preview">
-                              <pre>{p.summary}</pre>
-                              {p.status === "preview" ||
-                              p.status === "sending" ? (
-                                <>
-                                  <button
-                                    disabled={
-                                      !grant?.write ||
-                                      grant.id !== p.grant ||
-                                      applying
-                                    }
-                                    onClick={() => void apply(p)}
-                                  >
-                                    {p.status === "sending"
-                                      ? "核对保存结果"
-                                      : "应用修改"}
-                                  </button>
-                                  {p.status === "preview" && (
-                                    <button
-                                      disabled={applying}
-                                      onClick={() => discard(p)}
-                                    >
-                                      放弃
-                                    </button>
-                                  )}
-                                  {p.receipt && <p>{p.receipt}</p>}
-                                </>
-                              ) : (
-                                <small>{p.receipt ?? "已放弃"}</small>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                <ThreadMessages
+                  lines={chat.lines}
+                  activeUser={activeUser}
+                  stream={stream}
+                  summary={summary}
+                  draft={draftPreview}
+                  status={status}
+                  canApply={(p) =>
+                    !!grant?.write && grant.id === p.grant && !applying
+                  }
+                  applying={applying}
+                  apply={(p) => void apply(p)}
+                  discard={discard}
+                  openFile={props.openFile}
+                  reuse={fillDraft}
+                  locked={locked}
+                  feedback={(index, value) =>
+                    void update((c) => ({
+                      ...c,
+                      lines: c.lines.map((l, i) =>
+                        i === index ? { ...l, feedback: value } : l,
                       ),
-                    };
-                  })}
+                    }))
+                  }
                 />
               )}
-              {stream && <p>{stream}</p>}
-              {draftPreview && (
-                <div className="assistant-preview" aria-label="正在起草的笔记">
-                  <pre>{draftPreview}</pre>
-                </div>
-              )}
-              {status && <small role="status">{status}</small>}
+              {status && !activeUser && <small role="status">{status}</small>}
             </div>
             {chat && (
               <div className="assistant-compose">
-                <fieldset disabled={busy || applying}>
-                  <select
-                    aria-label="引用笔记"
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value)
-                        references([...chat.refs, e.target.value], chat.all);
-                    }}
-                  >
-                    <option value="">＋ 引用笔记</option>
-                    {props.paths
-                      .filter((p) => !chat.refs.includes(p) && !p.endsWith("/"))
-                      .map((p) => (
-                        <option key={p}>{p}</option>
-                      ))}
-                  </select>
-                  {chat.refs.map((ref) => (
-                    <button
-                      type="button"
-                      key={ref}
-                      title={"移除引用 " + ref}
-                      onClick={() =>
-                        references(
-                          chat.refs.filter((p) => p !== ref),
-                          chat.all,
-                        )
-                      }
-                    >
-                      {ref} ×
-                    </button>
-                  ))}
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={chat.all}
-                      onChange={(e) => references(chat.refs, e.target.checked)}
-                    />
-                    搜索本库
-                  </label>
-                </fieldset>
-                <Sender
-                  value={chat.draft}
-                  aria-label="助手消息"
-                  placeholder="给笔记助手发消息…"
-                  autoSize={{ minRows: 2, maxRows: 5 }}
-                  onChange={(value) =>
+                <NoteSender
+                  sender={sender}
+                  draft={chat.draft}
+                  refs={chat.refs}
+                  all={chat.all}
+                  availableRefs={availableRefs}
+                  locked={locked}
+                  references={references}
+                  changeDraft={(value) =>
                     void update((c) => ({ ...c, draft: value }))
                   }
-                  onSubmit={() => {
+                  submit={() => {
                     if (canSend) void submit();
                   }}
-                  suffix={false}
                   footer={
                     <div className="assistant-sender-footer">
                       {model.baseUrl && (
@@ -879,6 +892,6 @@ export function AssistantPanel(props: Props) {
           </p>
         )}
       </aside>
-    </>
+    </XProvider>
   );
 }

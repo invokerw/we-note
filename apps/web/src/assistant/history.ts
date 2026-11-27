@@ -8,6 +8,10 @@ export type Proposal = {
   receipt?: string;
 };
 export type Line = {
+  id?: string;
+  summary?: string;
+  feedback?: "like" | "dislike" | "default";
+  interrupted?: boolean;
   role: "user" | "assistant" | "tool";
   text: string;
   path?: string;

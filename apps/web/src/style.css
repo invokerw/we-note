@@ -72,7 +72,7 @@ button.primary {
 button.primary:hover:enabled {
   background: var(--navy);
 }
-input:where(:not(.ant-input, .ant-select input)):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+input:where(:not(.ant-input, .ant-select input, .assistant-level-rail input)):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 select,
 textarea {
   min-width: 0;
@@ -1968,7 +1968,7 @@ pre {
   background: var(--paper);
   color: var(--ink);
 }
-[data-color-scheme="dark"] :is(input:where(:not(.ant-input, .ant-select input)):not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+[data-color-scheme="dark"] :is(input:where(:not(.ant-input, .ant-select input, .assistant-level-rail input)):not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
   color: var(--ink);
   background: #18212d;
   border-color: #405065;

@@ -208,3 +208,167 @@
 .assistant-config .ant-form-item { margin: 0; }
 .assistant-config label { display: inline-flex; }
 .assistant-config summary { cursor: pointer; }
+.assistant-model-rows {
+  max-height: min(34vh, 260px);
+  overflow: auto;
+}
+.assistant-model-rows button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  text-align: start;
+  width: 100%;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.assistant-model-rows button:hover,
+.assistant-model-rows button[aria-pressed="true"] {
+  background: var(--ant-color-fill-tertiary, var(--tint));
+}
+.assistant-model-rows small {
+  display: block;
+  opacity: 0.65;
+}
+.assistant-model-rows span {
+  overflow-wrap: anywhere;
+}
+.assistant-model-menu:has(.assistant-level-sheet) {
+  width: min(230px, 74vw);
+}
+.assistant-level-sheet {
+  display: grid;
+  justify-items: center;
+  position: relative;
+  gap: 2px;
+}
+.assistant-level-sheet > strong {
+  color: var(--ant-color-primary, #2985e8);
+}
+.assistant-level-sheet > button:not(.assistant-level-reset) {
+  max-width: 85%;
+}
+.assistant-level-reset {
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+.assistant-level-rail {
+  margin-top: 5px;
+  width: 100%;
+  height: 36px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.assistant-level-track {
+  position: absolute;
+  inset: 6px 0;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--ant-color-fill-secondary, #dfdfdf);
+}
+.assistant-level-track > div {
+  height: 100%;
+  background: #369bff;
+}
+.assistant-level-track span {
+  position: absolute;
+  inset: 0 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.assistant-level-track i {
+  width: 4px;
+  height: 4px;
+  border-radius: 100%;
+  background: #71839877;
+}
+.assistant-level-rail input {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  position: relative;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 16px;
+}
+.assistant-level-rail input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #dadce0;
+  background: white;
+  box-shadow: 0 1px 3px #0002;
+}
+.assistant-level-rail input::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #dadce0;
+  background: white;
+}
+.assistant-history .ant-conversations {
+  padding: 0;
+}
+.assistant-history .ant-conversations-label {
+  width: 100%;
+}
+.assistant-history .ant-conversations-label button {
+  width: 100%;
+  align-items: start;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.assistant-flow .ant-welcome {
+  padding-inline: 0;
+}
+.assistant-reply {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.assistant-reply > div {
+  min-width: 0;
+}
+.assistant-reply details > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.assistant-answer > :first-child {
+  margin-block-start: 0;
+}
+.assistant-answer > :last-child {
+  margin-block-end: 0;
+}
+.assistant-answer :is(pre, table) {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.assistant-answer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.assistant-preview small {
+  display: block;
+}
+.assistant-compose .ant-sender-header {
+  padding: 8px 8px 0;
+}

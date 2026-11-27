@@ -38,6 +38,7 @@ export async function checkResponsesTurn(page, origin, files) {
     if (calls > 2) return res.writeHead(500).end();
     if (invalid) return res.end(createNoteStream({ ...args, kind: "invalid" }));
     if (calls === 2) return res.end(frame({ type: "response.completed", response: { status: "completed", output: [] } }));
+    if (!capture) res.write(frame({ type: 'response.reasoning_summary_text.delta', delta: '将可见摘要与本轮草稿关联。' }) + frame({ type: 'response.reasoning_text.delta', delta: 'PRIVATE_TRACE_FIXTURE' }));
     res.write(source.slice(0, split));
     await new Promise((resolve) => { finish = resolve; });
     res.end(source.slice(split));
@@ -52,6 +53,10 @@ export async function checkResponsesTurn(page, origin, files) {
     await page.getByRole("textbox", {name:"助手消息"}).fill("写一篇测试笔记");
     await button("发送").click();
     await page.getByLabel("正在起草的笔记").filter({ hasText: expected.text }).waitFor();
+    const reply=page.locator('.assistant-reply').last();
+    await reply.evaluate(el=>el.dataset.stable='stream');
+    if (!capture) await reply.getByText('思考摘要',{exact:true}).waitFor();
+    assert.equal(await page.getByText('PRIVATE_TRACE_FIXTURE',{exact:true}).count(),0);
     assert.equal(await button("应用修改").count(), 0);
     finish();
     await button("应用修改").waitFor();
@@ -61,7 +66,22 @@ export async function checkResponsesTurn(page, origin, files) {
     await button("应用修改").click();
     await button("发送").waitFor();
     assert.deepEqual((await files()).map((f) => f.path), [expected.path]);
+    assert.equal(await reply.getAttribute('data-stable'),'stream');
+    if (!capture) {
+      await reply.getByText('思考摘要', {exact:true}).click();
+      await reply.getByText('将可见摘要与本轮草稿关联。',{exact:true}).waitFor();
+    }
+    assert.equal(await reply.locator('.ant-sources').count(),0);
     assert.equal(calls, 2);
+    calls = 0;
+    await page.getByRole('textbox',{name:'助手消息'}).fill('停止这次起草');
+    await button('发送').click();
+    await page.getByLabel('正在起草的笔记').waitFor();
+    await button('停止').click();
+    await reply.getByText('本轮已停止',{exact:true}).waitFor();
+    assert.equal(await button('应用修改').count(),0);
+    assert.equal((await files()).length,1);
+    finish();
     invalid = true; calls = 0;
     await page.getByRole("textbox", {name:"助手消息"}).fill("测试无效调用");
     await button("发送").click();

@@ -2,6 +2,7 @@ import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import { streamSimple as completions } from "@earendil-works/pi-ai/api/openai-completions";
 import { streamSimple as responses } from "@earendil-works/pi-ai/api/openai-responses";
+import { publicSummary } from "./summary";
 import { reasoningPayload } from "./catalog";
 import { modelFetch } from "./modelFetch";
 import type { Config } from "./policy";
@@ -10,6 +11,7 @@ export function createAgent(
   key: string,
   systemPrompt: string,
   tools: AgentTool[],
+  onSummary?: (summary: string) => void,
 ) {
   const model: Model<Config["api"]> = {
     id: config.model,
@@ -28,12 +30,40 @@ export function createAgent(
     toolExecution: "sequential",
     identity: { attribution: null },
     streamFn: (_model, context, options) => {
+      const collect =
+        config.api === "openai-responses" && onSummary
+          ? publicSummary()
+          : undefined;
       const opts = {
         ...options,
         apiKey: key || "local",
         fetch: modelFetch(config.baseUrl, key),
         maxRetries: 0,
-        onPayload: (body: unknown) => reasoningPayload(body, config.api, config.effort),
+        onPayload: (body: unknown) => {
+          const payload = reasoningPayload(body, config.api, config.effort);
+          if (
+            onSummary &&
+            config.api === "openai-responses" &&
+            config.effort &&
+            config.effort !== "none" &&
+            typeof payload === "object" &&
+            payload &&
+            "reasoning" in payload
+          ) {
+            return {
+              ...payload,
+              reasoning: { ...(payload.reasoning as object), summary: "auto" },
+            };
+          }
+          return payload;
+        },
+        onProviderStreamEvent:
+          collect && onSummary
+            ? (event: unknown) => {
+                const summary = collect(event);
+                if (summary !== undefined) onSummary(summary);
+              }
+            : undefined,
       };
       return model.api === "openai-responses"
         ? responses({ ...model, api: "openai-responses" }, context, opts)
