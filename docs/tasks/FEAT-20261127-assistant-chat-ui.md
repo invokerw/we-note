@@ -2,9 +2,9 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 类型与状态 | `feature` · `IN_PROGRESS` · 2026-11-27 |
+| 类型与状态 | `feature` · `DELIVERED` · 2026-11-27 |
 | 影响端 | Web、桌面、Android、iOS 共用的客户端助手与原生模型传输 |
-| 本轮交付 | 已确认设计，正在实现 |
+| 本轮交付 | 任务分支版本待验收 |
 | 开发验收方式 | 用户已选 2，在任务分支验收，通过后合入本地 `main` |
 | 基线与分支 | `main@37449f3` → `codex/feature-assistant-chat-ui-20261127` |
 | worktree | `/Users/weifei/.codex/worktrees/assistant-chat-ui-20261127/we-note` |
@@ -31,3 +31,12 @@
 ## 模型目录客户端版本
 
 按设备本地日期，每天首次启动 Web 或本地笔记客户端时，从 npm 的 `@openai/codex` 稳定发布标签读取版本。当天重复启动复用缓存，获取失败时使用上次版本，首次离线使用已验证的内置版本。普通目录独立加载，扩展目录使用当次确认的版本。验收覆盖跨日、重复启动、超时及异常版本。
+
+## 首次交付 · 2026-11-27
+
+方式 2，受测提交 `569b41b`。网页 `http://localhost:19469`，PID 46537。日志 `dist/local/server.log`，数据 `services/api/data`。在本实例注册普通账号、创建库并展开笔记助手，设置服务地址后选模型和推理等级。验收期间保留工作区和服务，清理时运行 `./scripts/local.py stop`。
+
+- 红阶段新增目录合并、协议字段及每日版本单测，各自首次运行退出 1，缺少目标模块。实现后 `node --test apps/web/tests/assistant*.test.mjs apps/web/tests/{mcp-tools,web-build-history}.test.mjs` 退出 0，共 12 项。`cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib model::tests` 退出 0，共 2 项。
+- `npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 均退出 0。在独立验收页单独运行 `assistant-browser.mjs` 和 `assistant-credentials.mjs` 也通过。受控网关核对了目录使用的版本、两个协议的 ultra 字段和当前页面密钥。Chrome 在 1280px 浅色和 390px 深色验证弹窗、草稿和发送按钮位置，真实启动更新到 0.172.0。
+- 在 `apps/client` 执行 `./node_modules/.bin/tauri build --debug --bundles app --config '{"bundle":{"active":true}}'` 退出 0，产物 `target/debug/bundle/macos/WeNote.app`。手机交互通过浏览器窄屏验证，本轮未做 Android/iOS 真机测试。
+- 自审修正切换服务时旧目录短暂参与自动选择的问题，并核对多窗口同日更新、离线回退和失败后的草稿恢复。`git diff --cached --check` 退出 0。
