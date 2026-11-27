@@ -42,3 +42,9 @@
 - 安装包校验。`quick_validate.py skills/wenote-notes` 最初因缺少 `SKILL.md` 退出 1。实现后对源码和解压目录校验均退出 0。已核对归档清单和解压后文件与源码逐字节一致。
 - 客户端验收。在 `http://localhost:19439` 的独立测试库中，以 Chrome 执行从安装包正文提取的两个 `tools/call` 示例，退出 0。在两个目录新建同名周报，翻页定位 `产品/周报.md`，修改指定句子后核对正文和换行。在两个分支各建「调研」节点，只在「产品」下添加两级节点并读回父子 ID。重复请求各执行一次，旧版本写入返回 `FILE_VERSION_CONFLICT`。
 - 自审对照客户端的八个工具签名、插件类型、同步回执和错误处理，确认 Skill 使用当前连接提供的工具名。安装说明见项目 README 的「通过 MCP 编辑笔记」。本轮交付范围为 Skill 和说明，客户端产物及跨平台验证记录见上表。
+
+## 验收归档
+
+2026-11-27 · `ACCEPTED` → `MERGED`。用户确认验收完成。本地 `main` 从 `d23846e` 快进至验收提交 `3ca890c`。已核对两个 Git 树完全相同，重新运行 `node --test tests/mcp-tools.test.mjs` 的四项测试均通过。
+
+Skill 安装包、macOS 应用和 Android 调试 APK 已保存在主工作区 `dist/acceptance/FEAT-20261127-client-mcp-3ca890c/`。安装包内的文件与 `skills/wenote-notes/` 源码逐字节一致。已关闭 19439 端口的验收服务，备份本机验收数据并清理任务 worktree 和本地任务分支。公开任务分支仍提供已验收版本。
