@@ -316,6 +316,8 @@ try {
   await install(withCaps(["parse", "network"]));
   await page.getByRole("alert").filter({ hasText: "权限不受支持" }).waitFor();
   await install(withCaps(["parse"]));
+  await button("授权并安装").waitFor();
+  await page.getByLabel("安装本地插件包").setInputFiles([]);
   await click("授权并安装");
   const readOnlyAction = { id: "uppercase", label: "查看转换结果", kind: "message" };
   const readOnlyPackage = action => zipSync({ ...entries, "manifest.json": strToU8(JSON.stringify({

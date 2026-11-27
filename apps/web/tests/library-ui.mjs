@@ -97,6 +97,46 @@ test('新建库和上传路径使用库内表单', async t => {
   await button(upload, '上传').click();
   await page.getByRole('heading',{name:'上传.md'}).waitFor();
 });
+for (const [layout, width, dark] of [['宽屏浅色', 1280, false], ['手机深色', 390, true]]) {
+  test(`个人设置的文件选择按钮支持键盘操作和统一样式（${layout}）`, async t => {
+    const page = await open(t, dark, width);
+    await button(page, '打开个人设置').click();
+    const settings = page.getByRole('dialog', { name: '个人设置' });
+    let firstStyle;
+    for (const [section, label, accept] of [
+      ['账户与安全', '更换头像', 'image/png,image/jpeg,image/gif,image/webp'],
+      ['编辑与插件', '安装本地插件包', '.zip'],
+      ['导出/导入', '选择 ZIP', '.zip,application/zip'],
+    ]) {
+      await button(settings, section).click();
+      const input = settings.getByLabel(label, { exact: true });
+      await input.waitFor({ state: 'attached' });
+      assert.ok(await input.isHidden(), `${label} 应只显示主题按钮`);
+      const trigger = button(settings, label);
+      const style = await trigger.evaluate(el => {
+        const { backgroundColor, color, borderRadius, height } = getComputedStyle(el);
+        return { backgroundColor, color, borderRadius, height };
+      });
+      firstStyle ??= style;
+      assert.deepEqual(style, firstStyle);
+      assert.ok(contrast(style.color, style.backgroundColor) >= 4.5, label);
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), trigger.press('Enter')]);
+      assert.equal(await chooser.element().getAttribute('accept'), accept);
+      await chooser.setFiles([]);
+      assert.equal(await trigger.isEnabled(), true);
+      if (label === '选择 ZIP') {
+        await page.context().setOffline(true);
+        await settings.getByText('连接服务器并登录当前库后可导入。').waitFor();
+        assert.ok(await trigger.isDisabled());
+        assert.ok(await input.isDisabled());
+        await page.context().setOffline(false);
+        await settings.getByText('连接服务器并登录当前库后可导入。').waitFor({ state: 'hidden' });
+        assert.ok(await trigger.isEnabled());
+      }
+      if (width === 390) await button(settings, '返回设置分类').click();
+    }
+  });
+}
 test('从正文重命名使用同一个文件表单，取消与提交都可用', async t => {
   const page=await open(t);
   await button(page,'示例.md').click();

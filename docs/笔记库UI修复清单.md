@@ -29,9 +29,9 @@
 
 | 编号 | 界面与现状 | 修复及可观察的验收结果 | 状态 |
 | --- | --- | --- | --- |
-| 14 | [个人设置](../apps/web/src/PersonalSettings.tsx)头像、密码、账户活动和退出各自排版，头像确认与改密提示使用系统弹窗。 | 统一个人和外观设置的上传、字段、动作和结果。修改密码失败可就近纠正，成功能看到重新登录提示；定时设置错误与字段关联。 | 待修 |
-| 15 | [插件管理](../apps/web/src/plugins/Manager.tsx)、[Markdown 偏好](../apps/web/src/markdown/Settings.tsx)、[脑图](../apps/web/src/plugins/MindMenu.tsx)、[白板](../apps/web/src/markdown/Whiteboard.tsx)工具独立实现。 | 统一安装、启停、卸载、偏好控件和宿主工具栏。验证嵌套设置关闭、偏好保存、编辑焦点及文件保存。 | 待修 |
-| 16 | [导出](../apps/web/src/Resources.tsx)采用原生下拉和文本任务行；[导入预览](../apps/web/src/PortableImport.tsx)另有进度和冲突明细。 | 统一选择、上传、任务状态和确认区。可辨认待确认、执行中、离线、失败、完成，并能下载或打开导入目录。 | 待修 |
+| 14 | [个人设置](../apps/web/src/PersonalSettings.tsx)头像、密码、账户活动和退出各自排版，头像确认与改密提示使用系统弹窗。 | 统一个人和外观设置的上传、字段、动作和结果。修改密码失败可就近纠正，成功能看到重新登录提示；定时设置错误与字段关联。 | 头像文件选择已统一，账户、密码与外观其余控件待修 |
+| 15 | [插件管理](../apps/web/src/plugins/Manager.tsx)、[Markdown 偏好](../apps/web/src/markdown/Settings.tsx)、[脑图](../apps/web/src/plugins/MindMenu.tsx)、[白板](../apps/web/src/markdown/Whiteboard.tsx)工具独立实现。 | 统一安装、启停、卸载、偏好控件和宿主工具栏。验证嵌套设置关闭、偏好保存、编辑焦点及文件保存。 | 本地插件包选择已统一，启停、卸载及偏好控件待修 |
+| 16 | [导出](../apps/web/src/Resources.tsx)采用原生下拉和文本任务行；[导入预览](../apps/web/src/PortableImport.tsx)另有进度和冲突明细。 | 统一选择、上传、任务状态和确认区。可辨认待确认、执行中、离线、失败、完成，并能下载或打开导入目录。 | 便携 ZIP 选择已统一，导出选择和任务反馈待修 |
 | 17 | [生成分享](../apps/web/src/Editor.tsx)、[公开页与停止分享](../apps/web/src/Sharing.tsx)、[保存副本](../apps/web/src/ShareSaveDialog.tsx)有不同表单和确认方式。 | 统一有效期、只读链接、复制反馈和目录选择。验证生成、解锁、停止、取消和保存副本，确认文案明确作用对象。 | 待修 |
 | 18 | [MCP 连接](../apps/web/src/mcp/Connections.tsx)使用原生权限控件和浏览器确认。 | 统一连接列表、权限组、待同步明细及危险确认。撤销或放弃前显示目标，取消后授权和待同步修改保留。 | 待修 |
 | 19 | [登录与注册](../apps/web/src/main.tsx)、[邀请、找回和验证](../apps/web/src/AccountAction.tsx)使用手写表单；注册成功的邮件通知使用错误提示区域。 | 普通入口和分享内登录共用字段、提交和校验。测试无效输入、成功邮件、网络错误和返回原流程。 | 待修 |

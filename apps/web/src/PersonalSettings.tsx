@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { checkPicture, pictureTypes } from "./api";
+import FilePickerButton from "./FilePickerButton";
 import AppearanceSettings from "./AppearanceSettings";
 import Manager from "./plugins/Manager";
 import type { UserPreferences } from "./preferences";
@@ -230,21 +231,12 @@ export default function PersonalSettings(props: {
                 {profile.email && (
                   <>
                     <fieldset disabled={busy}>
-                      <label className="choose-avatar">
-                        更换头像
-                        <input
-                          type="file"
-                          accept={pictureTypes}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            e.target.value = "";
-                            if (file)
-                              void run(async () =>
-                                setPreview(await thumbnail(file)),
-                              );
-                          }}
-                        />
-                      </label>
+                      <FilePickerButton
+                        label="更换头像"
+                        accept={pictureTypes}
+                        disabled={busy}
+                        onSelect={file => run(async () => setPreview(await thumbnail(file)))}
+                      />
                       {preview && (
                         <>
                           <button

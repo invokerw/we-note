@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 任务 ID / 类型 | `REFACTOR-20261127-library-ui` / `refactor` |
-| 日期 / 状态 | 2026-11-27 / `DELIVERED`（首轮，任务整体进行中） |
+| 日期 / 状态 | 2026-11-27 / `DELIVERED`（第二轮，个人设置文件选择待验收） |
 | 验收方式 | 2（任务分支验收，通过后合入本地 main） |
 | 基线 | `main` · `c78ab416047f6011018261a15a789127c21961fd` |
 | 分支 | `codex/refactor-library-ui-20261127` |
@@ -60,3 +60,19 @@
 - 验收方式 2。任务 worktree、分支和实例保留，用户反馈沿用本任务记录。
 
 受测实现提交 `e131c4a`。提交前 `git diff --cached --check` 退出 0。实现已在 `codex/refactor-library-ui-20261127` 交付首轮验收。
+
+## 第二轮 · 个人设置文件选择
+
+用户补充“个人设置中的选择文件也需要更新”。沿用方式 2，在原 worktree 更新清单第 14–16 项。
+
+- [x] 账户与安全的「更换头像」、插件管理的「安装本地插件包」、导入的「选择 ZIP」共用带名称的 Ant Design 次按钮，可用鼠标和键盘打开系统文件选择器，适配浅色宽屏和深色手机布局。
+- [x] 保留各入口的类型限制、忙碌或离线禁用条件。选中文件后进入对应预览或校验流程，取消选择保留当前状态，再选同一文件可重新处理。
+
+| 验证 | 结果 |
+| --- | --- |
+| 红阶段 | 在 `apps/web` 执行 `WENOTE_TEST_ORIGIN=http://localhost:18327 node --test --test-name-pattern='个人设置的文件选择按钮' tests/library-ui.mjs`，退出 1。旧版宽屏和手机的头像入口均依赖覆盖在文字上的透明文件控件。 |
+| 绿阶段与自审 | 对照三处调用检查文件类型、禁用条件、取消、重复选择和插件包异步校验的顺序。移除头像专用 CSS，补测离线和重新联网时 ZIP 按钮的状态。重建并重启任务实例后 `node tests/library-ui.mjs` 8/8 通过，覆盖 1280px 浅色与 390px 深色按钮的高度、圆角、颜色、对比度和回车打开选择器。浏览器集成命令使用同一 `WENOTE_TEST_ORIGIN`。 |
+| 回归 | 在 `apps/web` 运行 `node --test tests/*.test.mjs`，16/16 通过。`node tests/personal-settings.mjs`、`node tests/phase4.mjs`、`node tests/client-mcp.mjs`、`node tests/sync-conflicts.mjs` 均退出 0。覆盖重复选择同一头像、便携包，以及取消选择后继续安装待确认插件。 |
+| 构建与设备 | `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo build --locked --offline -p wenote-desktop` 均退出 0。`npm run android --prefix apps/client -- --debug` 退出 1，本机 SDK 缺少命令行工具。手机浏览器布局已验证，Android 系统选择器真机待验。 |
+
+验收实例为 `http://localhost:18327`，本轮服务 PID 32826，账号、日志、数据目录、macOS 程序与停止命令见上方验收入口。在「个人设置」依次进入「账户与安全」「编辑与插件」「导出/导入」，核对三个文件按钮；可选择头像查看预览，取消后再选同一张图片。
