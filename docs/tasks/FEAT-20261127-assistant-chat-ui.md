@@ -2,9 +2,9 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 类型与状态 | `feature` · `IN_PROGRESS` · 2026-11-27 |
+| 类型与状态 | `feature` · `DELIVERED` · 2026-11-27 |
 | 影响端 | Web、桌面、Android、iOS 共用的客户端助手与原生模型传输 |
-| 本轮交付 | 任务分支版本待验收 |
+| 本轮交付 | 任务分支实现 `20530db`，等待用户验收 |
 | 开发验收方式 | 用户已选 2，在任务分支验收，通过后合入本地 `main` |
 | 基线与分支 | `main@37449f3` → `codex/feature-assistant-chat-ui-20261127` |
 | worktree | `/Users/weifei/.codex/worktrees/assistant-chat-ui-20261127/we-note` |
@@ -50,3 +50,17 @@
 按用户截图修订样稿：输入区合并为「模型 · 推理等级」单入口。打开先列模型，选定后在同一浮层显示该模型的分档滑杆。验收切换、返回模型列表、恢复默认、外部点击及窄屏布局。
 
 2026-11-27 用户确认按最终样稿实施。验收涵盖模型与等级的两步浮层、单气泡流式输出、服务公开摘要、实际工具步骤与已读来源、逐条反馈、空状态和历史导航。继续以方式 2 交付。
+
+## 对话与模型选择器交付 · 2026-11-27
+
+受测提交 `20530db`。本机验收页 `http://localhost:19469`，PID 62494，日志 `dist/local/server.log`，任务库数据 `services/api/data`。可用本实例账号登录，或注册普通账号并新建笔记库。桌面构建位于 `target/debug/bundle/macos/WeNote.app`。验收采用方式 2，确认通过后合入本地 `main` 并用 `./scripts/local.py stop` 清理本实例。
+
+1. 打开笔记助手，在右上角设置中保存 OpenAI 兼容服务地址和可选 Key。在输入框写草稿后打开底部按钮，依次选模型和滑杆档位。点击浮层模型名可返回，右上角可恢复默认。检查按钮回显与草稿。无档位的模型可直接发消息。
+2. 在新会话点一个建议，检查草稿与焦点。输入 `@` 引用一篇笔记，发送总结请求，从「本轮读取」打开文件。回复生成中可向上滚动或停止；公开摘要可展开。复制、评价或编辑原问题后可从历史切回对话。
+3. 请求创建或修改笔记，核对起草内容、目标路径和操作回执。点「放弃」应保留原文，点「应用修改」只保存一次。
+
+旧构建运行更新后的浏览器回归在模型列表选择处失败。补齐实现后，自审核对了逐轮气泡、公开摘要的增量和最终事件去重、反馈的本机作用域和工具回执。手机截图发现全局输入框背景遮住滑杆，新增明暗主题断言复现，修正后复测通过。
+
+- `node --test apps/web/tests/assistant*.test.mjs apps/web/tests/{mcp-tools,web-build-history}.test.mjs` 通过 14 项，`cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib model::tests` 通过 2 项。
+- `npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 和桌面 `tauri build --debug --bundles app` 均退出 0。浏览器使用受控网关核对两种协议的出站等级、流式摘要、停止起草、已读来源、反馈恢复、待确认修改、历史草稿以及 390px 宽的滑杆和发送按钮。`git diff --cached --check` 通过。
+- 手机在浏览器窄屏验证。Android SDK 目录为空，本轮未构建手机安装包或进行 Android、iOS 真机验证。
