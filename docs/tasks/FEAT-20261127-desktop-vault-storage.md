@@ -32,3 +32,5 @@ macOS 通过系统文件夹选择器保存账号位置。按服务 origin 和用
 - 使用 `notes@storage.test` 验收已有「工作」「生活」和各自示例笔记的账号。选择空文件夹，观察两个库自动同步，进入编辑器后切换库，重新登录和重启。
 - 使用 `new@storage.test` 验收首次创建笔记库、选用其他账号位置时的引导及独立存储。两个本机测试账号密码均为 `WeNote-Local-18473`。
 - 服务由 `./scripts/local.py start --port 18473` 创建，PID 43280，日志 `dist/local/server.log`，数据 `services/api/data`。`./scripts/local.py status` 和 `/healthz` 已确认运行，验收后使用 `./scripts/local.py stop` 停止。
+
+2026-11-27 `DELIVERED`。方式 2，受测提交 `b0a588e`。任务工作区、Apple Silicon 客户端和独立服务保留，等待用户验收。
