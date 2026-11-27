@@ -11,7 +11,7 @@
 
 ## 实现与验证
 
-用户已授权推送任务分支并运行现有 GitHub Actions。桌面 CI 包含 macOS、Windows，Android CI 在模拟器上安装 APK，运行原生导图离线读写。Linux 桌面和 iOS 不在这两个工作流中。
+用户已授权推送任务分支并运行现有 GitHub Actions。既有桌面 CI 扩充为 macOS、Windows、Linux，并在 macOS runner 上检查 iOS 模拟器目标的共享客户端库。Android CI 在模拟器上安装 APK，运行原生导图离线读写。iOS 完整安装包及真机操作仍依赖独立工程。
 
 先让 Node 工具测试因缺少模块失败，再实现原文替换、节点操作及字段保留。补充回归测试先复现摘要跨父节点和损坏标签识别问题，再修复。浏览器回归覆盖独立助手授权、版本竞争、断网重放、跨标签草稿及第三方 WASM 格式。用隔离的 macOS WKWebView 与真实笔记目录验证授权、外部 HTTP 握手及同一追加重试。
 

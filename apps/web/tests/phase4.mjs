@@ -308,7 +308,7 @@ try {
     zipSync({
       ...entries,
       "manifest.json": strToU8(
-        JSON.stringify({ ...manifest, capabilities: caps, actions: undefined }),
+        JSON.stringify({ ...manifest, capabilities: caps, actions: undefined, mcp_model: undefined }),
       ),
     });
   await install(withCaps(["parse", "network"]));
@@ -317,7 +317,7 @@ try {
   await click("授权并安装");
   const readOnlyAction = { id: "uppercase", label: "查看转换结果", kind: "message" };
   const readOnlyPackage = action => zipSync({ ...entries, "manifest.json": strToU8(JSON.stringify({
-    ...manifest, capabilities: ["parse"], actions: [action],
+    ...manifest, capabilities: ["parse"], actions: [action], mcp_model: undefined,
   })) });
   await install(readOnlyPackage({ ...readOnlyAction, id: "missing" }));
   await page.getByRole("alert").filter({ hasText: "缺少 action_missing" }).waitFor();

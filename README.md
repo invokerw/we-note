@@ -131,7 +131,7 @@ node --test tests/protocol/*.test.mjs
 node tests/protocol/mutation-check.mjs
 ```
 
-桌面用例在两个目录间验证新增、编辑、移动、恢复和冲突处理，并检查离线编辑、附件缓存和下载。浏览器用例使用两个独立账户验证图片预览、分享时刻的正文、接收方独立编辑及回收站恢复。指定 `WENOTE_TEST_BUCKET`、`WENOTE_TEST_S3` 与测试凭据可在专用 S3 测试桶上运行相同流程。仓库的原生验收工作流分别在 macOS 与 Windows 上构建并运行上述桌面和网页用例。
+桌面用例在两个目录间验证新增、编辑、移动、恢复和冲突处理，并检查离线编辑、附件缓存和下载。浏览器用例使用两个独立账户验证图片预览、分享时刻的正文、接收方独立编辑及回收站恢复。指定 `WENOTE_TEST_BUCKET`、`WENOTE_TEST_S3` 与测试凭据可在专用 S3 测试桶上运行相同流程。仓库的原生验收工作流分别在 macOS、Windows 与 Linux 上构建并运行上述桌面和网页用例。
 
 在专用 Android 模拟器上安装调试 APK，设置 `ANDROID_SERIAL` 为该模拟器的序列号，然后执行 `WENOTE_API=/tmp/wenote-api node tests/e2e/desktop.mjs --android`。该用例使用临时 API 验证断网重启、保存、后台同步和冲突恢复。
 

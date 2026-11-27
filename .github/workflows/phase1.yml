@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -18,10 +18,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Install Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
       - run: npm ci --prefix apps/web
       - run: npm run build --prefix apps/web
       - run: npm run build:desktop --prefix apps/web
+      - run: node --test apps/web/tests/mcp-tools.test.mjs
       - run: cargo build --locked --workspace
+      - run: cargo test --locked -p wenote-desktop --lib
+      - name: Check the shared client for the iOS simulator
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add aarch64-apple-ios-sim
+          cargo check --locked -p wenote-desktop --lib --target aarch64-apple-ios-sim
       - run: go test ./...
         working-directory: services/api
       - run: go build -o ../../wenote-api.exe ./cmd/wenote-api
