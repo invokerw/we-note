@@ -1,3 +1,4 @@
+import {assistantUI} from "./assistant-ui.mjs";
 import { checkResponsesTurn } from "./assistant-responses.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -32,6 +33,7 @@ const page = await browser.newPage();
 page.setDefaultTimeout(10000);
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
+const ui = assistantUI(page);
 const btn = (name) => page.getByRole("button", { name, exact: true });
 async function checkSidebarLayout(paneSelector, adjacentButton) {
   const toggle = btn("展开笔记助手");
@@ -95,19 +97,19 @@ async function checkBrowserTransport() {
     const service = `http://127.0.0.1:${gateway.address().port}`;
     const address = page.getByLabel("服务地址", { exact: true });
     await address.fill(`${service}/denied/v1`);
-    await page.getByLabel("模型 ID").fill("test");
     await page.getByLabel("API Key").fill("test-only");
-    await btn("测试连接").click();
-    const status = page.locator(".assistant-config [role=status]");
+    await ui.save(); await ui.manual("test"); await ui.test();
+    const status = page.locator(".assistant-error");
     await status.filter({ hasText: "桌面客户端" }).waitFor();
     const diagnostic = await status.innerText();
     assert(diagnostic.includes(origin) && diagnostic.includes(service));
     assert(diagnostic.includes("跨域"));
     assert(!diagnostic.includes("test-only"));
-    assert.deepEqual(received, ["OPTIONS /denied/v1/chat/completions"]);
+    assert(received.includes("OPTIONS /denied/v1/chat/completions"), JSON.stringify(received));
+    await ui.settings();
     await address.fill(`${service}/allowed/v1`);
     await page.getByLabel("API Key").fill("test-only");
-    await btn("测试连接").click();
+    await ui.save(); await ui.manual("test"); await ui.test();
     await status.filter({ hasText: "credential rejected" }).waitFor();
     assert(!(await status.innerText()).includes("跨域"));
     assert(received.includes("POST /allowed/v1/chat/completions"));
@@ -121,19 +123,29 @@ try {
     (t) => sessionStorage.setItem("wenote-session", t),
     token,
   );
+
   await page.goto(`${origin}/?vault=${vault}`);
   await btn("展开笔记助手").waitFor();
   await checkSidebarLayout(".workspace");
-  await btn("打开个人设置").click();
-  await btn("笔记助手").click();
+  await ui.settings();
   await checkBrowserTransport();
+  await page.route("https://registry.npmjs.org/**", r => r.fulfill({json:{version:"1.2.99"}}));
+  await page.evaluate(() => localStorage.removeItem('wenote-codex-catalog-version'));
+  await page.reload();
   let requested = 0;
   let modelCalls = 0;
   const expectedKey = "test-chat-key";
   const model = "http://127.0.0.1:19456/v1";
   await page.route(model + "/**", async (route) => {
-    const req = route.request(),
-      body = req.postDataJSON();
+    const req = route.request();
+    if (req.method() === 'GET') {
+      if (req.url().includes('?')) {
+        assert.equal(new URL(req.url()).searchParams.get('client_version'), '1.2.99');
+        await route.fulfill({json:{models:[{slug:'test',default_reasoning_level:'low',supported_reasoning_levels:[{effort:'low'},{effort:'ultra'}]}]}});
+      } else await route.fulfill({json:{data:[{id:'anonymous'},{id:'test'}]}});
+      return;
+    }
+    const body = req.postDataJSON();
     modelCalls++;
     const anonymous = body.model === "anonymous";
     if (!req.headers().authorization && !anonymous) {
@@ -142,6 +154,7 @@ try {
     }
     assert.equal(req.headers().authorization, anonymous ? undefined : `Bearer ${expectedKey}`);
     if (req.url().endsWith("/responses")) {
+      assert.equal(body.reasoning.effort, 'ultra');
       assert(body.tools.some((t) => t.name === "check_connection"));
       const item = {
         type: "function_call",
@@ -174,6 +187,7 @@ try {
     const check = body.tools?.some(
       (t) => t.function?.name === "check_connection",
     );
+    if(check) assert.equal(body.reasoning_effort, anonymous ? undefined : 'ultra');
     const tool = check
       ? "check_connection"
       : body.messages.at(-1)?.role === "tool"
@@ -214,22 +228,19 @@ try {
       body: events + "data: [DONE]\n\n",
     });
   });
-  await page.getByLabel("服务地址", { exact: true }).fill(model);
-  await page.getByLabel("模型 ID").fill("anonymous");
-  await btn("测试连接").click();
-  await page.getByText("可用于写笔记，模型设置已保存").waitFor();
-  await page.getByLabel("模型 ID").fill("test");
-  await page.getByLabel("API Key").fill(expectedKey);
-  await page.getByLabel("接口协议").selectOption("openai-responses");
-  await btn("测试连接").click();
-  await page.getByText("可用于写笔记，模型设置已保存").waitFor();
-  await page.getByLabel("接口协议").selectOption("openai-completions");
-  await btn("测试连接").click();
-  await page.getByText("可用于写笔记，模型设置已保存").waitFor();
-  await btn("关闭个人设置").click();
-  await btn("展开笔记助手").click();
+  await ui.settings();
+  await page.getByLabel('服务地址',{exact:true}).fill(model);
+  await ui.save(); await ui.manual('anonymous'); await ui.test();
+  await page.getByText('可用于写笔记',{exact:true}).waitFor();
+  await ui.settings(); await page.getByLabel('API Key').fill(expectedKey); await ui.protocol('OpenAI Responses'); await ui.save();
+  await btn('选择聊天模型').click(); await page.getByLabel('可用模型').click(); await page.locator('.ant-select-item-option').filter({hasText:'test'}).last().click();
+  async function testEffort(){
+    await page.getByLabel('推理等级').click(); await page.locator('.ant-select-item-option').filter({hasText:'ultra'}).last().click(); await ui.test();
+    await page.getByText('可用于写笔记',{exact:true}).waitFor();
+  }
+  await testEffort(); await ui.settings(); await ui.protocol('OpenAI Chat Completions'); await ui.save(); await testEffort();
   await btn("授权编辑").click();
-  const draft = page.getByLabel("助手消息");
+  const draft = page.getByRole("textbox", {name:"助手消息"});
   const turnModule = /\/static\/turn-[^/]+\.js$/;
   await page.route(turnModule, (route) => route.fulfill({ status: 404, body: "missing" }));
   const prompt = "帮我写一篇周报";
@@ -259,15 +270,13 @@ try {
   await page.reload();
   await btn("展开笔记助手").click();
   await btn("发送").click();
-  await page.getByRole("alert").filter({ hasText: "个人设置" }).waitFor();
+  await page.getByRole("alert").filter({ hasText: "模型设置" }).waitFor();
   assert.equal(await draft.inputValue(), prompt);
   assert.equal(await page.locator(".assistant-line.role-user").count(), 0);
   assert.equal(modelCalls, callsBeforeSend + 1);
-  await btn("打开个人设置").click();
-  await btn("笔记助手").click();
+  await ui.settings();
   await page.getByLabel("API Key").fill(expectedKey);
-  await btn("保存模型设置").click();
-  await btn("关闭个人设置").click();
+  await ui.save();
   await btn("发送").click();
   await btn("应用修改").waitFor();
   assert.equal((await api(`vaults/${vault}/files`)).files.length, 0);

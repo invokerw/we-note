@@ -15,6 +15,7 @@ import {
   readShareLocation,
 } from "./Sharing";
 import { useEffect, useRef, useState } from "react";
+import { catalogVersion } from "./assistant/clientVersion";
 import { createRoot } from "react-dom/client";
 import { handlerKey } from "./plugins/registry";
 import PersonalSettings, { SettingsButton, useAccountProfile, type ProfileRequest } from "./PersonalSettings";
@@ -530,7 +531,7 @@ function Library({ token, logout }: { token: string; logout: () => void }) {
         paths={paths} io={entries} close={() => setCreateAnchor(null)}
         createAtPath={async (path, bytes) => { if (leave()) await create(path, bytes); }}
         browse={folder => { setView("files"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings credentialOwner={credentialOwner} mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={leave} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
+      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={closeSettings} confirmLeave={leave} logout={logout} preferences={preferences} updatePluginSetting={updatePluginSetting}
         exportPanel={vault ? <LibraryResources vaultName={vaults.find(v => v.id === vault)?.name || vault} base={base} token={token} onImported={list} viewFolder={folder => { if (!leave()) return; setNote(null); setView("files"); panes.browse(folder ? folder + "/" : null); closeSettings(); }}/> : <p>请先选择笔记库。</p>}
         audit={<Audit token={token}/>} manage={profile.admin && <a href="/gm" onClick={e => {if(!leave()) e.preventDefault();}}>服务端管理</a>}
         shares={<Sharing token={token} vaults={vaults}/>}/>}
@@ -693,4 +694,5 @@ function App() {
     auth
   );
 }
+void catalogVersion();
 createRoot(document.getElementById("root")!).render(<App />);

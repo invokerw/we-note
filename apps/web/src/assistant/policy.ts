@@ -5,9 +5,11 @@ export type Config = {
   api: "openai-completions" | "openai-responses";
   baseUrl: string;
   model: string;
+  effort?: string;
   usesApiKey?: boolean;
 };
-export function checkedConfig(c: Config): Config {
+export function checkedConfig(c: Config, requireModel = true): Config {
+  if (!URL.canParse(c.baseUrl.trim())) throw Error("请输入完整的 HTTP 或 HTTPS 服务地址");
   const url = new URL(c.baseUrl.trim());
   if (
     !["http:", "https:"].includes(url.protocol) ||
@@ -19,13 +21,14 @@ export function checkedConfig(c: Config): Config {
     throw Error("请输入 HTTP 或 HTTPS 服务地址，不含密钥、查询参数或片段");
   if (
     !["openai-completions", "openai-responses"].includes(c.api) ||
-    !c.model.trim()
+    (requireModel && !c.model.trim())
   )
     throw Error("请选择模型协议并填写模型 ID");
   return {
     api: c.api,
     baseUrl: url.href.replace(/\/+$/, ""),
     model: c.model.trim(),
+    ...(c.effort ? {effort: c.effort} : {}),
     ...(c.usesApiKey === true ? { usesApiKey: true } : {}),
   };
 }

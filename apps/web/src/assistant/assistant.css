@@ -193,3 +193,18 @@
   > :is(.workspace, .entry-events) {
   visibility: hidden;
 }
+.assistant-compose { background: transparent; border: 0; padding: 0; min-width: 0; }
+.assistant-compose fieldset { padding: 0 4px; }
+.assistant-compose .ant-sender { background: var(--paper); }
+.assistant-sender-footer, .assistant-model-controls, .assistant-send-actions { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.assistant-model-controls { flex-wrap: wrap; flex: 1; }
+.assistant-model-trigger { max-width: 100%; }
+.assistant-model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.assistant-send-actions { margin-inline-start: auto; }
+.assistant-model-menu { display: grid; gap: 8px; width: min(280px, 80vw); }
+.assistant-flow .ant-bubble-list { overflow: visible; }
+.assistant-line.role-user { background: transparent; padding: 0; }
+.assistant-panel > header button .anticon svg { fill: currentColor; stroke: none; }
+.assistant-config .ant-form-item { margin: 0; }
+.assistant-config label { display: inline-flex; }
+.assistant-config summary { cursor: pointer; }

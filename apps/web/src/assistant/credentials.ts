@@ -93,7 +93,7 @@ export async function loadCredential(owner: string, url: string) {
       return { key: new TextDecoder().decode(bytes), remembered: true };
     } catch {
       throw Error(
-        "无法读取本机密钥，请在「个人设置 → 笔记助手」重新填写 API Key 并保存。",
+        "无法读取本机密钥，请在「笔记助手 → 模型设置」重新填写 API Key 并保存。",
       );
     }
   }
@@ -121,4 +121,16 @@ export async function saveModel(
   }
   localStorage.setItem(modelSettingsKey(owner), JSON.stringify(next));
   session = next.savedKey ? undefined : { owner, url: model.baseUrl, key };
+}
+
+export function saveSelection(owner: string, connection: Config, id: string) {
+  const saved = read(owner);
+  if (
+    saved.model.baseUrl !== connection.baseUrl ||
+    saved.model.api !== connection.api
+  )
+    return;
+  saved.model = { ...saved.model, model: id };
+  localStorage.setItem(modelSettingsKey(owner), JSON.stringify(saved));
+  return saved.model;
 }

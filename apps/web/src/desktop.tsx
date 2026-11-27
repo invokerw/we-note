@@ -14,6 +14,7 @@ import { handler, handlerKey, openTextDocument } from "./plugins/registry";
 import PersonalSettings, { SettingsButton, useAccountProfile, type ProfileRequest } from "./PersonalSettings";
 import { TextFile } from "./markdown/textFile";
 import { useEffect, useRef, useState, useMemo, useCallback, useId } from "react";
+import { catalogVersion } from "./assistant/clientVersion";
 import { createRoot } from "react-dom/client";
 import type { RichWriting } from "./markdown/crepeSource";
 import { applyDocumentText, captureInsertion, resumeWriting } from "./markdown/Source";
@@ -735,7 +736,7 @@ function Workspace({
           await load();
         }}
         browse={folder => { setView("笔记"); panes.browse(folder); }} />}
-      {settingsOpen && <PersonalSettings credentialOwner={credentialOwner} mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {clearCredential();close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
+      {settingsOpen && <PersonalSettings mcp={<McpPanel connection={connection}/>} profile={profile} request={profileRequest} phone={phone} close={() => {setSettingsOpen(false); if(path && !dirty && view === "笔记" && originalHandler.current !== handlerKey(path)) void run(() => open(path,true));}} confirmLeave={leave} logout={() => {clearCredential();close();document.getElementById("logout")?.click();}} sync={close} exportPanel={<Resources vaultName={binding.name || vault} client={client} unavailable={binding.account === "local"} viewFolder={async folder => {
         if (!leave()) return;
         if (!await binding.synchronize?.()) throw Error("请完成同步后查看导入的笔记");
         await load(); setSettingsOpen(false); setView("笔记"); choose(""); setSaved(text); setPluginDirty(false); setPluginBytes(null); panes.browse(folder ? folder + "/" : null);
@@ -860,6 +861,7 @@ function Workspace({
     </WorkspaceShell>
   );
 }
+void catalogVersion();
 const root = createRoot(document.getElementById("desktop-editor")!);
 window.addEventListener("open-notebook", (e) => {
   const binding = (e as CustomEvent<Binding>).detail,

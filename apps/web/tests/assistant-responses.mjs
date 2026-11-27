@@ -1,3 +1,4 @@
+import {assistantUI} from "./assistant-ui.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -30,6 +31,7 @@ export async function checkResponsesTurn(page, origin, files) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Headers", "content-type, authorization");
     if (req.method === "OPTIONS") return res.writeHead(204).end();
+    if (req.method === "GET") return res.end(JSON.stringify({data:[{id:"test"}]}));
     for await (const _chunk of req) { /* drain request */ }
     calls++;
     res.setHeader("Content-Type", "text/event-stream");
@@ -43,14 +45,11 @@ export async function checkResponsesTurn(page, origin, files) {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const button = (name) => page.getByRole("button", { name, exact: true });
   try {
-    await button("打开个人设置").click();
-    await button("笔记助手").click();
-    await page.getByLabel("接口协议").selectOption("openai-responses");
+    const ui=assistantUI(page); await ui.settings(); await ui.protocol('OpenAI Responses');
     await page.getByLabel("服务地址", { exact: true }).fill(`http://127.0.0.1:${server.address().port}/v1`);
-    await button("保存模型设置").click();
-    await button("关闭个人设置").click();
+    await ui.save();
     await button("授权编辑").click();
-    await page.getByLabel("助手消息").fill("写一篇测试笔记");
+    await page.getByRole("textbox", {name:"助手消息"}).fill("写一篇测试笔记");
     await button("发送").click();
     await page.getByLabel("正在起草的笔记").filter({ hasText: expected.text }).waitFor();
     assert.equal(await button("应用修改").count(), 0);
@@ -64,7 +63,7 @@ export async function checkResponsesTurn(page, origin, files) {
     assert.deepEqual((await files()).map((f) => f.path), [expected.path]);
     assert.equal(calls, 2);
     invalid = true; calls = 0;
-    await page.getByLabel("助手消息").fill("测试无效调用");
+    await page.getByRole("textbox", {name:"助手消息"}).fill("测试无效调用");
     await button("发送").click();
     await page.getByRole("alert").filter({ hasText: "已停止" }).waitFor();
     assert.equal(calls, 2);

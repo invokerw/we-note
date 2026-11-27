@@ -9,16 +9,26 @@ export function modelFetch(base: string, key: string): typeof fetch {
       url = new URL(req.url),
       root = new URL(base);
     const suffix = url.pathname.slice(root.pathname.replace(/\/$/, "").length);
+    const listing =
+      suffix === "/models" &&
+      req.method === "GET" &&
+      (!url.search || /^\?client_version=\d+\.\d+\.\d+$/.test(url.search));
+    const chat =
+      ["/chat/completions", "/responses"].includes(suffix) &&
+      req.method === "POST" &&
+      !url.search;
     if (
+      url.hash ||
+      url.username ||
+      url.password ||
       url.origin !== root.origin ||
       !url.pathname.startsWith(root.pathname.replace(/\/$/, "")) ||
-      !["/chat/completions", "/responses"].includes(suffix) ||
-      req.method !== "POST"
+      !(listing || chat)
     )
       throw Error("模型请求地址与配置不符");
     const headers = new Headers({
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
+      ...(listing ? {} : { "Content-Type": "application/json" }),
+      Accept: listing ? "application/json" : "text/event-stream",
     });
     if (key) headers.set("Authorization", `Bearer ${key}`);
     const core = window.__TAURI__?.core;

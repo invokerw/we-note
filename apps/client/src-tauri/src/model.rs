@@ -24,12 +24,24 @@ pub async fn model_stream(
     requests: State<'_, Requests>,
 ) -> Result<(), String> {
     let url = Url::parse(&url).map_err(|e| e.to_string())?;
+    let catalog = url.path().ends_with("/models")
+        && match url.query() {
+            None => true,
+            Some(q) => q.strip_prefix("client_version=").is_some_and(|v| {
+                let parts: Vec<_> = v.split('.').collect();
+                parts.len() == 3
+                    && parts
+                        .iter()
+                        .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+            }),
+        };
+    let chat = url.query().is_none()
+        && (url.path().ends_with("/chat/completions") || url.path().ends_with("/responses"));
     if !matches!(url.scheme(), "http" | "https")
         || !url.username().is_empty()
         || url.password().is_some()
-        || url.query().is_some()
         || url.fragment().is_some()
-        || !(url.path().ends_with("/chat/completions") || url.path().ends_with("/responses"))
+        || !(chat || catalog)
     {
         return Err("模型地址无效".into());
     }
@@ -67,11 +79,15 @@ async fn forward(
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(300))
         .build()?;
-    let mut request = client
-        .post(url)
-        .header("Content-Type", "application/json")
-        .header("Accept", "text/event-stream")
-        .body(body);
+    let mut request = if url.path().ends_with("/models") {
+        client.get(url).header("Accept", "application/json")
+    } else {
+        client
+            .post(url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")
+            .body(body)
+    };
     if !key.is_empty() {
         request = request.bearer_auth(key)
     }
@@ -101,6 +117,39 @@ mod tests {
     use serde_json::Value;
     use std::sync::Arc;
     use tauri::ipc::InvokeResponseBody;
+    #[tokio::test]
+    async fn native_catalog_get_preserves_version_and_authorization() {
+        use axum::{extract::RawQuery, routing::get};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::parse(&format!(
+            "http://{}/v1/models?client_version=1.2.3",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let app = Router::new().route(
+            "/v1/models",
+            get(|RawQuery(query): RawQuery, headers: HeaderMap| async move {
+                assert_eq!(query.as_deref(), Some("client_version=1.2.3"));
+                assert_eq!(headers["authorization"], "Bearer test");
+                assert_eq!(headers["accept"], "application/json");
+                "{}"
+            }),
+        );
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let channel = Channel::new(|packet| {
+            if let InvokeResponseBody::Json(json) = packet {
+                let event: Value = serde_json::from_str(&json).unwrap();
+                if event["type"] == "headers" {
+                    assert_eq!(event["status"], 200);
+                }
+            }
+            Ok(())
+        });
+        forward(url, "test".into(), String::new(), channel)
+            .await
+            .unwrap();
+        server.abort();
+    }
     #[tokio::test]
     async fn native_model_streams_headers_utf8_and_end_in_order() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

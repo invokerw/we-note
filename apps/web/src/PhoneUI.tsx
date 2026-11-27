@@ -32,6 +32,7 @@ export function useAndroidBack(enabled: boolean, back: () => void) {
     let active = true;
     const listener = window.__TAURI__.app.onBackButtonPress(() => {
       if (!active) return;
+      if (!window.dispatchEvent(new Event('wenote-assistant-back', {cancelable: true}))) return;
       const modal = Array.from(
         document.querySelectorAll<HTMLDialogElement>("dialog[open]"),
       ).at(-1);

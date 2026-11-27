@@ -2,6 +2,7 @@ import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import { streamSimple as completions } from "@earendil-works/pi-ai/api/openai-completions";
 import { streamSimple as responses } from "@earendil-works/pi-ai/api/openai-responses";
+import { reasoningPayload } from "./catalog";
 import { modelFetch } from "./modelFetch";
 import type { Config } from "./policy";
 export function createAgent(
@@ -32,6 +33,7 @@ export function createAgent(
         apiKey: key || "local",
         fetch: modelFetch(config.baseUrl, key),
         maxRetries: 0,
+        onPayload: (body: unknown) => reasoningPayload(body, config.api, config.effort),
       };
       return model.api === "openai-responses"
         ? responses({ ...model, api: "openai-responses" }, context, opts)

@@ -1,3 +1,4 @@
+import {assistantUI} from "./assistant-ui.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -50,6 +51,7 @@ async function restart(user) {
     (token) => sessionStorage.setItem("wenote-session", token),
     user.token,
   );
+  await page.route(endpoint + "/models**", r=>r.fulfill({json:{data:[{id:"test"}]}}));
   await page.route(endpoint + "/chat/completions", async (route) => {
     assert.equal(route.request().headers().authorization, `Bearer ${secret}`);
     modelCalls++;
@@ -73,27 +75,19 @@ async function restart(user) {
   await button("展开笔记助手").waitFor();
 }
 async function settings() {
-  await button("打开个人设置").click();
-  await button("笔记助手").click();
-  await page.waitForFunction(
-    () =>
-      !document.querySelector(".assistant-config")?.disabled &&
-      !!document.querySelector(".assistant-config"),
-  );
+  await assistantUI(page).settings();
 }
-async function save() {
-  await button("保存模型设置").click();
-  await page.getByRole("status").filter({ hasText: "已保存" }).waitFor();
-  await button("关闭个人设置").click();
-}
+async function save() {await assistantUI(page).save();}
+
 try {
   await restart(alice);
   await settings();
   await page.getByLabel("服务地址", { exact: true }).fill(endpoint);
-  await page.getByLabel("模型 ID").fill("test");
+
   await page.getByLabel("API Key").fill(secret);
   await remember().check();
   await save();
+  await page.getByRole("button",{name:"选择聊天模型"}).filter({hasText:"test"}).waitFor();
   const protectedLocally = await page.evaluate(async () => {
     const scoped = Object.keys(localStorage).find((k) =>
       k.startsWith("wenote-assistant-model:"),
@@ -127,7 +121,7 @@ try {
   await restart(alice);
   await button("展开笔记助手").click();
   await button("授权只读").click();
-  await page.getByLabel("助手消息").fill("验证本机密钥");
+  await page.getByRole("textbox", {name:"助手消息"}).fill("验证本机密钥");
   await button("发送").click();
   await page.getByText("凭据验证成功", { exact: true }).waitFor();
   assert.equal(modelCalls, 1);
@@ -136,7 +130,7 @@ try {
   assert.equal(await page.getByLabel("API Key").inputValue(), secret);
   await page.getByLabel("服务地址", { exact: true }).fill(endpoint + "/other");
   assert.equal(await page.getByLabel("API Key").inputValue(), "");
-  await button("关闭个人设置").click();
+  await button("取消").click();
   await settings();
   await remember().uncheck();
   await save();
