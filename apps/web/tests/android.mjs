@@ -26,6 +26,7 @@ const devices = await _android.devices({
 const device = devices.find((d) => d.serial() === serial);
 assert.ok(device);
 const port = "tcp:" + new URL(origin).port;
+let cdp;
 async function launch() {
   adb("shell", "am", "start", "-W", "-n", pkg + "/.MainActivity");
   const socketName =
@@ -54,6 +55,7 @@ async function launch() {
   const page = await (
     await device.webView({ socketName }, { timeout: 60000 })
   ).page();
+  cdp = await page.context().newCDPSession(page);
   page.setDefaultTimeout(20000);
   return page;
 }
@@ -128,7 +130,6 @@ try {
   adb("shell", "am", "force-stop", pkg);
   page = await launch();
   await button("打开笔记").click();
-  const cdp = await page.context().newCDPSession(page);
   async function tap(locator) {
     await locator.click({ trial: true });
     const rect = await locator.boundingBox();
@@ -295,7 +296,6 @@ try {
   if (await button('返回笔记列表').isVisible()) await tap(button('返回笔记列表'));
   await tap(button('打开个人设置'));
   await tap(button('MCP 连接'));
-  console.log('Android MCP settings', await page.getByRole('dialog').innerText());
   await page.getByLabel('允许新建、修改和移入回收站').check();
   await button('授权当前笔记库').click();
   const credential = await page.getByLabel('连接令牌（仅此次显示）').inputValue();
