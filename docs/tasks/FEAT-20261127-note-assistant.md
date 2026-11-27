@@ -82,3 +82,15 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 - 红阶段以附件驱动 `apps/web/tests/assistant-browser.mjs`，退出 1，已收到全部正文的客户端仍仅显示「正在生成」。使用同一附件回放修复版本，退出 0。Chrome 验证结束事件到达前可见正文，正式预览的文字与模型输出相同，点击前测试库为空，确认后只生成目标笔记。连续无效的工具调用在两次请求后结束。
 - `node --test apps/web/tests/assistant.test.mjs apps/web/tests/mcp-tools.test.mjs apps/web/tests/web-build-history.test.mjs` 退出 0，9 项通过。`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 退出 0，独立环境上的助手和既有流程通过。正式回归使用合成数据，仓库中未保存用户附件。
 - 网页 `http://localhost:19453` 重新构建启动，PID 27943。原 worktree 下的 `target/debug/bundle/macos/WeNote.app` 重新打包成功。试用时刷新网页并补填当前页面的模型密钥，发送新建笔记的请求，确认预览后保存。
+
+## 2026-11-27 记住本机模型密钥 · CHANGES_REQUESTED
+
+用户希望填写一次 API Key，刷新或下次打开客户端时直接读取。沿用方式 2。在模型设置加入可选的「在本机记住密钥」，按 WeNote 服务、账号和模型端点绑定，使用客户端本地加密存储。在本机取消记住后保存可删除持久凭据。原有仅本页使用的设置继续可用。验收覆盖全新页面直接聊天、浏览器重启、地址及账号隔离、取消记住以及原有临时 Key 流程。
+
+### 本机密钥记忆验收 · DELIVERED
+
+受测功能提交 `a5fd225`，沿用方式 2。首次默认仅当前页面使用。勾选「在本机记住密钥」保存后，Web 和原生前端使用 Web Crypto 加密并按账号保存到当前客户端；端点和账号参与认证加密。不可导出的加密密钥保存在 IndexedDB，配置与密文一次写入，本次自审核对了首次并发保存、取消记忆和旧版配置的读取。取消勾选并保存即可清除持久密文。
+
+- 红阶段 `WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-credentials.mjs` 退出 1，缺少记住密钥选项。修复后同一 Chrome 用户目录关闭进程并重启，直接聊天通过，账号及端点隔离、加密存储和取消记忆通过。
+- `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 退出 0，包含上述持久化回归及原有助手、笔记与同步流程。助手、MCP 和构建历史的 9 项聚焦测试通过。`git diff --check` 通过。
+- 验收网页按原地址 `http://localhost:19453` 重建并启动，PID 32681。macOS 调试包已重新构建至 `target/debug/bundle/macos/WeNote.app`。重启自动读取已在 Chrome 实测，原生端本轮验证到构建。
