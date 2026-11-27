@@ -6,7 +6,7 @@ const mobile = (action, payload = {}) =>
   invoke("mobile_control", { action, payload });
 let refreshToken = "",
   expires = 0;
-let accountEmail = "";
+let accountEmail = "", restoredBinding = "";
 let token = "",
   busy = false;
 const status = (s) => {
@@ -61,7 +61,9 @@ async function initialize() {
     localStorage.setItem("last-notebook", session.vault);
     byId("open-editor").hidden = false;
     token = session.token;
-    accountEmail = localStorage.getItem("account:" + session.origin) || "";
+    accountEmail = session.account || localStorage.getItem("account:" + session.origin) || "";
+    // Old native bindings may survive clearing the WebView account cache.
+    restoredBinding = session.generation || "";
     refreshToken = session.refresh;
     expires = session.expires;
     backgroundMode(true);
@@ -220,7 +222,8 @@ async function access() {
   }
   return renewal;
 }
-byId("open-editor").onclick = () => {
+byId("open-editor").onclick = async () => {
+  await initialized;
   const vault = token
     ? byId("vault").value
     : localStorage.getItem("last-notebook");
@@ -231,6 +234,7 @@ byId("open-editor").onclick = () => {
         name: byId("vault").selectedOptions[0]?.text || localStorage.getItem("vault-name:" + vault) || vault,
         synchronize: sync,
         account: token ? accountEmail : "local",
+        restoredBinding: token && !accountEmail ? restoredBinding : "",
         android,
         access: async () => {
           if (vault !== byId("vault").value)
@@ -262,6 +266,7 @@ byId("background").onchange = async () => {
         vault: byId("vault").value,
         name: byId("vault").selectedOptions[0].text,
         origin: byId("origin").value.trim(),
+        account: accountEmail,
         token,
         refresh: refreshToken,
         expires,

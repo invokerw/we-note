@@ -54,6 +54,7 @@ type Binding = {
   android?: boolean;
   vault: string;
   account?: string;
+  restoredBinding?: string;
   name?: string;
   synchronize?: () => Promise<boolean | undefined>;
   access: () => Promise<string>;
@@ -199,8 +200,9 @@ function Workspace({
     editing = mode === "crepe" || mode === "edit" || mode === "split";
   const [desktopTransport, setDesktopTransport] = useState(false);
   useEffect(() => { void window.__TAURI__.core.invoke<boolean>('mcp_desktop_available', {}).then(value => setDesktopTransport(value === true)).catch(() => {}); }, []);
+  const principal = account || (binding.restoredBinding && `binding:${binding.restoredBinding}`);
   const connection = useMcp({
-    scope: account && vault ? JSON.stringify([localStorage.getItem('origin'), account, vault]) : '',
+    scope: principal && vault ? JSON.stringify([localStorage.getItem('origin'), principal, vault]) : '',
     vault, desktop: desktopTransport, backend: nativeBackend((action, args) => local(vault, action, args)),
     dirty: p => dirty && p === path, dirtyPath: dirty ? path : '',
     changed: (target, previous, deleted) => { void run(async () => {

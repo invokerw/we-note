@@ -30,6 +30,9 @@ try {
             if (command === "is_android") return phone;
             if (command === "recent_notebook")
               return { vault: "vault", origin: "http://native.test" };
+            // A restored native session can outlive the WebView account cache.
+            if (phone && command === "mobile_control" && args.action === "restore")
+              return { vault: "vault", name: "离线库", origin: "http://native.test", token: "test", generation: "previous-binding" };
             if (command !== "notebook") return null;
             switch (args.operation.action) {
               case "library":
@@ -57,6 +60,12 @@ try {
     }, phone);
     await page.goto("http://native.test");
     await page.locator("#open-editor").click();
+    if (phone) {
+      await page.getByRole("button", {name:"打开个人设置", exact:true}).click();
+      await page.getByRole("button", {name:"MCP 连接", exact:true}).click();
+      await page.getByLabel("允许新建、修改和移入回收站").waitFor();
+      await page.getByRole("button", {name:"关闭个人设置", exact:true}).click();
+    }
     if (phone)
       await page
         .getByRole("button", { name: "打开笔记库目录", exact: true })
