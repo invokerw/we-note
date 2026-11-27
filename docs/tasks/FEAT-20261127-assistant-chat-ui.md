@@ -2,9 +2,9 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 类型与状态 | `feature` · `CHANGES_REQUESTED` · 2026-11-27 |
+| 类型与状态 | `feature` · `DELIVERED` · 2026-11-27 |
 | 影响端 | Web、桌面、Android、iOS 共用的客户端助手与原生模型传输 |
-| 本轮交付 | 任务分支实现 `20530db`，等待用户验收 |
+| 本轮交付 | 样稿对齐修复 `5c46124`，等待任务分支验收 |
 | 开发验收方式 | 用户已选 2，在任务分支验收，通过后合入本地 `main` |
 | 基线与分支 | `main@37449f3` → `codex/feature-assistant-chat-ui-20261127` |
 | worktree | `/Users/weifei/.codex/worktrees/assistant-chat-ui-20261127/we-note` |
@@ -68,3 +68,9 @@
 ## 2026-11-27 · 对照交互样稿返工
 
 用户在验收中指出真实聊天未按 `/static/assistant-design/` 样稿更新。沿用方式 2，在真实笔记库对照修改笔记、只读总结和新对话。验收核对右栏宽度、工具链与状态、原文和改为的分行展示、完成后的来源与反馈、输入框外引用标签、圆形发送和合并模型入口，并确认首次配置与授权、窄屏及旧会话可操作。
+
+方式 2 交付修复 `5c46124`。在 1280px 视口拍摄同一条「把发布清单里的验收日期改到周五」请求，原构建的真实侧栏为 320px，原文和改文挤在同一个文本块里，引用控件占据输入区。加入浏览器回归后，旧构建在侧栏宽度断言退出 1。调整任务分支后，右栏 410px，变更内容分行，来源位于反馈前。自审补测了相邻笔记短标题、每条正文的反馈位置、搜索范围切换和手机宽度。
+
+`npm --prefix apps/web run build`、`WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser`、14 项助手和相关单测、macOS `tauri build --debug --bundles app` 均退出 0。新回归使用受控模型响应并实际调用本库的读取、修改和保存接口。桌面与 390px 手机宽度的浏览器截图在本 worktree 的 `dist/assistant-design/after/`，对照样稿为 `reference-edit.png`，实装为 `live-edit.png`、`live-edit-mobile.png`、`live-empty.png`、`live-read.png`。手机按浏览器窄屏验收。
+
+实际入口 `http://localhost:19469/`，重新加载后在笔记库展开「笔记助手」；原样稿对照入口 `http://localhost:19469/static/assistant-design/`。实例 PID 62494、日志和数据目录沿用上轮。
