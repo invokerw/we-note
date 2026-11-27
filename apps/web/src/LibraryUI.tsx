@@ -239,7 +239,7 @@ export function NoteHeading({
             icon={
               <span className="mode-label">
                 <i className="mode-icon" aria-hidden="true" />
-                {modes.find(([id]) => id === mode)?.[1] ?? "编辑模式"}
+                <span className="mode-name">{modes.find(([id]) => id === mode)?.[1] ?? "编辑模式"}</span>
                 <span aria-hidden="true">⌄</span>
               </span>
             }

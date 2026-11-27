@@ -33,6 +33,47 @@ page.setDefaultTimeout(10000);
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 const btn = (name) => page.getByRole("button", { name, exact: true });
+async function checkSidebarLayout(paneSelector, adjacentButton) {
+  const toggle = btn("展开笔记助手");
+  const pane = page.locator(paneSelector);
+  const layout = await page.locator(".layout").boundingBox();
+  const closedPane = await pane.boundingBox();
+  assert.equal(closedPane.y, layout.y, "关闭助手时当前栏应从工作区顶边开始");
+  const closedToggle = await toggle.boundingBox();
+  if (adjacentButton) {
+    const adjacent = await adjacentButton.boundingBox();
+    assert(adjacent.x + adjacent.width <= closedToggle.x, "开关应给已有操作留出空间");
+    assert(Math.abs(adjacent.y + adjacent.height / 2 - closedToggle.y - closedToggle.height / 2) < 2,
+      "开关应与现有标题操作垂直居中");
+  }
+  await toggle.click();
+  const opened = await page.locator(".assistant-panel").boundingBox();
+  assert.equal(opened.y, layout.y, "助手栏应从工作区顶边开始");
+  assert.equal(opened.y + opened.height, layout.y + layout.height);
+  const close = btn("收起笔记助手");
+  assert.deepEqual(await close.boundingBox(), closedToggle, "开合应在原位置使用同一按钮");
+  const fresh = await btn("新对话").boundingBox();
+  assert(fresh.x + fresh.width <= closedToggle.x);
+  assert(Math.abs(fresh.y + fresh.height / 2 - closedToggle.y - closedToggle.height / 2) < 2);
+  if (opened.width < layout.width) {
+    const narrowed = await pane.boundingBox();
+    assert.equal(narrowed.y, closedPane.y);
+    assert.equal(narrowed.height, closedPane.height);
+    assert.equal(narrowed.x + narrowed.width, opened.x);
+    if (adjacentButton) {
+      const heading = page.locator(".document-head h1");
+      assert(await heading.evaluate(el => el.scrollWidth <= el.clientWidth), "四栏并排时应完整显示短文件名");
+      await btn("编辑模式").click();
+      await btn("预览").waitFor();
+      await page.keyboard.press("Escape");
+    }
+  } else {
+    assert(closedToggle.width >= 44 && closedToggle.height >= 44);
+    assert.equal(await pane.isVisible(), false);
+  }
+  await close.click();
+  assert.deepEqual(await pane.boundingBox(), closedPane);
+}
 async function checkBrowserTransport() {
   const received = [];
   const gateway = createServer((req, res) => {
@@ -82,6 +123,7 @@ try {
   );
   await page.goto(`${origin}/?vault=${vault}`);
   await btn("展开笔记助手").waitFor();
+  await checkSidebarLayout(".workspace");
   await btn("打开个人设置").click();
   await btn("笔记助手").click();
   await checkBrowserTransport();
@@ -247,8 +289,14 @@ try {
   await btn("展开笔记助手").click();
   await page.getByText("已完成周报。", { exact: true }).waitFor();
   assert.equal(await draft.inputValue(), "留给下一次");
-  await page.setViewportSize({ width: 390, height: 780 });
   await btn("收起笔记助手").click();
+  await page.locator(".entry").filter({ hasText: "周报.md" }).click();
+  await checkSidebarLayout(".workspace", btn("更多操作"));
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.locator(".phone-document-head").waitFor();
+  await checkSidebarLayout(".workspace", btn("更多操作"));
+  await btn("返回笔记列表").click();
+  await checkSidebarLayout(".note-list-pane", btn("打开笔记库目录"));
   await btn("展开笔记助手").click();
   assert(await draft.isVisible());
   const other = (await api("vaults", { name: "第二个库" })).id;

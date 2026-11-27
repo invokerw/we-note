@@ -1,39 +1,49 @@
 .layout:has(> .assistant-toggle) {
   --assistant-width: clamp(280px, 25vw, 420px);
-  --assistant-top: 34px;
-  padding-top: var(--assistant-top);
+  --assistant-head-height: var(--document-head-height);
+  --assistant-button-size: 32px;
+  --assistant-inset: 12px;
+  --assistant-actions-end: calc(var(--assistant-inset) + var(--assistant-button-size) + 4px);
   box-sizing: border-box;
   position: relative;
 }
-.layout:has(> .assistant-toggle)::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: var(--assistant-top);
-  background: var(--rail);
-  border-bottom: 1px solid var(--line);
+.layout:has(> .assistant-toggle[aria-expanded="false"]) :is(.document-head, .phone-head, .new-path) {
+  padding-inline-end: var(--assistant-actions-end);
 }
 .layout:has(> .assistant-panel:not([hidden])) {
   padding-right: var(--assistant-width);
 }
+.layout:has(> .assistant-panel:not([hidden])) .document-head {
+  container: assistant-note-heading / inline-size;
+}
+@container assistant-note-heading (max-width: 460px) {
+  .mode-label .mode-name { display: none; }
+}
 .layout .assistant-toggle {
   position: absolute;
-  top: 0;
-  right: 6px;
-  height: var(--assistant-top);
-  width: 38px;
+  inset-block-start: calc((var(--assistant-head-height) - var(--assistant-button-size)) / 2);
+  inset-inline-end: var(--assistant-inset);
+  z-index: 4;
+}
+.layout .assistant-toggle,
+.assistant-panel > header button {
+  height: var(--assistant-button-size);
+  width: var(--assistant-button-size);
   min-height: 0;
+  padding: 0;
   display: grid;
   place-items: center;
-  z-index: 2;
   color: var(--muted);
 }
-.assistant-toggle svg {
+.assistant-toggle svg,
+.assistant-panel > header svg {
   width: 18px;
   height: 18px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .layout .assistant-toggle[aria-expanded="true"] {
   color: var(--accent);
@@ -41,7 +51,7 @@
 }
 .assistant-panel {
   position: absolute;
-  inset: var(--assistant-top) 0 0 auto;
+  inset: 0 0 0 auto;
   width: var(--assistant-width);
   background: var(--rail);
   border-left: 1px solid var(--line);
@@ -53,18 +63,17 @@
 .assistant-panel[hidden] {
   display: none;
 }
-.assistant-panel header {
+.assistant-panel > header {
+  flex: none;
+  min-height: var(--assistant-head-height);
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 12px;
+  padding-inline: 16px var(--assistant-actions-end);
   border-bottom: 1px solid var(--line);
 }
-.assistant-panel header span {
-  flex: 1;
-}
-.assistant-panel header button {
-  font-size: 20px;
+.assistant-panel > header strong {
+  margin-inline-end: auto;
 }
 .assistant-flow,
 .assistant-history {
@@ -168,7 +177,9 @@
   gap: 6px;
 }
 .layout.android-phone:has(> .assistant-toggle) {
-  --assistant-top: 44px;
+  --assistant-head-height: var(--phone-head-height);
+  --assistant-button-size: 48px;
+  --assistant-inset: 6px;
   --assistant-width: 100%;
 }
 .layout.android-phone:has(> .assistant-panel:not([hidden])) {
@@ -177,11 +188,8 @@
 .android-phone .assistant-panel {
   z-index: 1;
 }
-.android-phone .assistant-toggle {
-  width: 44px;
-}
 
 .layout.android-phone:has(> .assistant-panel:not([hidden]))
-  > :is(.workspace, .sidebar, .note-list-pane) {
+  > :is(.workspace, .entry-events) {
   visibility: hidden;
 }

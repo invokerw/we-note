@@ -10,6 +10,7 @@
   --line: #f0f3f5;
   --tint: #f4f6f7;
   --reading-inset: 44px;
+  --document-head-height: 75px;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 .layout .sidebar { position: static; width: auto; height: auto; z-index: auto; }
@@ -36,7 +37,7 @@
 .layout .entry.current { color: var(--ink); background: var(--tint); }
 .layout .entry small { font-size: 12px; }
 .layout .file-icon { background: var(--accent); }
-.layout .document-head { min-height: 75px; padding-inline: 24px 16px; }
+.layout .document-head { min-height: var(--document-head-height); padding-inline: 24px 16px; }
 .layout .document-head h1 { color: var(--ink); font-family: inherit; font-size: 20px; line-height: 1.5; font-weight: 600; }
 .layout .format-bar { min-height: 47px; padding-inline: 12px; }
 .layout .document-mode { --body-size: 14px; --md-ink: #494e58; --md-heading: #494e58; }
@@ -67,8 +68,8 @@
   .layout .directory-drawer .layout-options { display: none; }
 }
 @media (max-width: 720px) {
-  .layout { --reading-inset: 16px; }
-  .layout .document-head { min-height: 52px; padding-inline: 10px; }
+  .layout { --reading-inset: 16px; --document-head-height: 52px; }
+  .layout .document-head { padding-inline: 10px; }
   .layout .document-head h1 { font-size: 14px; }
   .layout .document-mode .reading h1, .layout .mode-live .cm-line.live-h1 { font-size: calc(var(--body-size) * 19 / 14); }
 }

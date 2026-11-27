@@ -94,3 +94,11 @@ Chrome 从验收地址访问用户网关的 Chat Completions 与 Responses 路�
 - 红阶段 `WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-credentials.mjs` 退出 1，缺少记住密钥选项。修复后同一 Chrome 用户目录关闭进程并重启，直接聊天通过，账号及端点隔离、加密存储和取消记忆通过。
 - `WENOTE_API=dist/local/wenote-api node tests/e2e/desktop.mjs --browser` 退出 0，包含上述持久化回归及原有助手、笔记与同步流程。助手、MCP 和构建历史的 9 项聚焦测试通过。`git diff --check` 通过。
 - 验收网页按原地址 `http://localhost:19453` 重建并启动，PID 32681。macOS 调试包已重新构建至 `target/debug/bundle/macos/WeNote.app`。重启自动读取已在 Chrome 实测，原生端本轮验证到构建。
+
+## 2026-11-27 助手开关并入标题行 · CHANGES_REQUESTED
+
+用户反馈助手开关独占顶部一行，挤压笔记空间。沿用方式 2。收起时开关和笔记标题操作共用一行，空库仍可打开。展开后右栏从工作区顶边延伸到底边，历史、新建对话和收起开关共用栏标题行。手机在当前页面标题行提供同一个开关。验收测量开合前后各栏的顶边、按钮位置与可点击区域，并检查返回笔记和草稿恢复。
+
+红阶段运行 `WENOTE_TEST_ORIGIN=http://localhost:19453 node apps/web/tests/assistant-browser.mjs`，退出 1。收起状态的编辑区起点实测为 34 像素，预期为 0。
+
+自审在 1280 像素窗口发现展开四栏后普通短文件名也被截断。补充验收：该宽度完整显示「周报.md」，模式菜单仍可操作。

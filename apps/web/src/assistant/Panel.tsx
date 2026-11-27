@@ -435,7 +435,6 @@ export function AssistantPanel(props: Props) {
       >
         <header>
           <strong>笔记助手</strong>
-          <span />
           <button
             title="历史对话"
             aria-label="历史对话"
@@ -446,7 +445,10 @@ export function AssistantPanel(props: Props) {
                 : void browse().catch((e) => showError(String(e)))
             }
           >
-            ◷
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="10" cy="10" r="7" />
+              <path d="M10 6v4l3 2" />
+            </svg>
           </button>
           <button
             title="新对话"
@@ -454,7 +456,9 @@ export function AssistantPanel(props: Props) {
             disabled={busy || applying || !chat}
             onClick={fresh}
           >
-            ＋
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 4v12M4 10h12" />
+            </svg>
           </button>
         </header>
         {list ? (
