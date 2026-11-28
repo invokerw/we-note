@@ -19,6 +19,7 @@ class ReleaseWebTest(unittest.TestCase):
     def test_browser_acceptance_configures_chrome_path(self):
         workflow = Path(__file__).resolve().parents[2] / '.github/workflows/phase1.yml'
         text = workflow.read_text()
+        self.assertIn("if: runner.os != 'Windows'", text)
         self.assertIn('uses: browser-actions/setup-chrome@v2', text)
         self.assertIn("install-dependencies: ${{ runner.os == 'Linux' }}", text)
         self.assertIn("CHROME_PATH: ${{ runner.os != 'Windows' && steps.setup-chrome.outputs.chrome-path || '' }}", text)

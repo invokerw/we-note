@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: 24
       - id: setup-chrome
+        if: runner.os != 'Windows'
         uses: browser-actions/setup-chrome@v2
         with:
           install-dependencies: ${{ runner.os == 'Linux' }}
