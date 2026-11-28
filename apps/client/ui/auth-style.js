@@ -1,7 +1,7 @@
 const root = document.querySelector(".sync-entry");
 const cover = root?.querySelector(".cover-panel");
 const buttons = [...document.querySelectorAll("[data-auth-style]")];
-const styles = ["paper", "night", "garden"];
+const styles = ["paper", "night"];
 const stored = localStorage.getItem("wenote-auth-style");
 
 function choose(style) {
@@ -11,9 +11,8 @@ function choose(style) {
     cover.classList.toggle(`auth-style-${name}`, name === style);
   }
   const copy = {
-    paper: ["把想法留在身边", "从一页笔记开始", "记录、整理、回看，让每个想法都有位置。"],
-    night: ["CALM · FOCUS", "把复杂的事，写清楚", "在安静的空间里，专注于正在发生的思考。"],
-    garden: ["YOUR QUIET SPACE", "给灵感一个安静的房间", "收集灵感，慢慢长成属于你的知识库。"],
+    paper: ["CLEAR · KEEP", "从一页笔记\n开始", "记录、整理、回看，让每个想法都有位置。"],
+    night: ["CALM · FOCUS", "把复杂的事，\n写清楚", "在安静的空间里，专注于正在发生的思考。"],
   }[style];
   const kicker = cover.querySelector(".cover-kicker");
   const title = cover.querySelector(".cover-copy h2");

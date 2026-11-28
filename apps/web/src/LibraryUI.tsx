@@ -23,7 +23,7 @@ import {
   type ReactNode,
 } from "react";
 
-export type AuthStyle = "paper" | "night" | "garden";
+export type AuthStyle = "paper" | "night";
 
 export const authStyleOptions: ReadonlyArray<{
   id: AuthStyle;
@@ -34,24 +34,17 @@ export const authStyleOptions: ReadonlyArray<{
 }> = [
   {
     id: "paper",
-    label: "纸页",
-    kicker: "把想法留在身边",
-    title: "从一页笔记开始",
+    label: "白昼",
+    kicker: "CLEAR · KEEP",
+    title: "从一页笔记\n开始",
     description: "记录、整理、回看，让每个想法都有位置。",
   },
   {
     id: "night",
-    label: "夜航",
+    label: "黑夜",
     kicker: "CALM · FOCUS",
-    title: "把复杂的事，写清楚",
+    title: "把复杂的事，\n写清楚",
     description: "在安静的空间里，专注于正在发生的思考。",
-  },
-  {
-    id: "garden",
-    label: "花园",
-    kicker: "YOUR QUIET SPACE",
-    title: "给灵感一个安静的房间",
-    description: "收集灵感，慢慢长成属于你的知识库。",
   },
 ];
 
