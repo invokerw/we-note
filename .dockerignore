@@ -1,4 +1,7 @@
 **
+!skills/
+!skills/wenote-notes/
+!skills/wenote-notes/SKILL.md
 !apps/web/package*.json
 !apps/web/index.html
 !apps/web/tsconfig.json

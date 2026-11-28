@@ -3,6 +3,7 @@ WORKDIR /src
 COPY apps/web/package*.json ./
 RUN npm ci
 COPY apps/web/ ./
+COPY skills/ /skills/
 RUN npm run build
 
 FROM golang:1.27-bookworm AS api

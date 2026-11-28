@@ -7,6 +7,21 @@ from pathlib import Path
 
 
 class ReleaseWebTest(unittest.TestCase):
+    def test_web_skill_is_available_to_docker_build(self):
+        root = Path(__file__).resolve().parents[2]
+        dockerignore = root / '.dockerignore'
+        patterns = dockerignore.read_text().splitlines()
+        self.assertIn('!skills/', patterns)
+        self.assertIn('!skills/wenote-notes/', patterns)
+        self.assertIn('!skills/wenote-notes/SKILL.md', patterns)
+        self.assertIn('COPY skills/ /skills/', (root / 'Dockerfile').read_text())
+
+    def test_browser_acceptance_configures_chrome_path(self):
+        workflow = Path(__file__).resolve().parents[2] / '.github/workflows/phase1.yml'
+        text = workflow.read_text()
+        self.assertIn('uses: browser-actions/setup-chrome@v2', text)
+        self.assertIn('CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}', text)
+
     def probe(self, health, page):
         attempts = []
 
