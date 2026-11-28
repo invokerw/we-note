@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [main, library, webStyle, clientHtml, clientStyle, desktopScript, appIcon] = await Promise.all([
+const [main, library, webStyle, clientHtml, clientStyle, desktopScript, appIcon, mobileBackground, mobileForeground] = await Promise.all([
   readFile(new URL('../src/main.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/LibraryUI.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/style.css', import.meta.url), 'utf8'),
@@ -10,6 +10,8 @@ const [main, library, webStyle, clientHtml, clientStyle, desktopScript, appIcon]
   readFile(new URL('../../client/ui/style.css', import.meta.url), 'utf8'),
   readFile(new URL('../../client/ui/auth-style.js', import.meta.url), 'utf8'),
   readFile(new URL('../../client/src-tauri/icons/icon.svg', import.meta.url), 'utf8'),
+  readFile(new URL('../../client/src-tauri/gen/android/app/src/main/res/drawable/ic_launcher_background.xml', import.meta.url), 'utf8'),
+  readFile(new URL('../../client/src-tauri/gen/android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml', import.meta.url), 'utf8'),
 ]);
 
 test('auth entry exposes day and night visual directions and the new brand mark', () => {
@@ -35,4 +37,6 @@ test('auth entry exposes day and night visual directions and the new brand mark'
   assert.match(appIcon, /linearGradient id="background"/);
   assert.match(appIcon, /linearGradient id="page"/);
   assert.match(appIcon, /#F5A16D/);
+  assert.match(mobileBackground, /#FF4E82BC/);
+  assert.match(mobileForeground, /#FFF5A16D/);
 });

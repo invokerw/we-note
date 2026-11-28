@@ -56,6 +56,7 @@
 - `2026-11-28` 用户反馈保留黑夜和白天两种模式，删除花园方案，并统一两套方案的结构和视觉语言。同步优化日间标题换行、表单层次、主题切换入口和移动端布局。
 - `2026-11-28` 用户补充白天主题使用蓝白色调，保留橙色作为少量强调色，使日间和夜间主题保持同一套品牌语言。
 - `2026-11-28` 用户确认登录页方案后，继续请求重新设计 App 图标。本轮将图标收敛为适合小尺寸识别的蓝色圆角底、白色折页和橙色闪光组合。
+- `2026-11-28` 用户补充同步修改移动端图标，Android 各密度启动图标将复用同一套蓝白折页和橙色闪光视觉。
 
 ## 实现计划
 
@@ -88,6 +89,7 @@
 | `2026-11-28` | `curl -fsS http://127.0.0.1:4175/` | `0` | 返工后的任务 worktree 预览入口可访问 |
 | `2026-11-28` | `node --test apps/web/tests/auth-design.test.mjs && node --check apps/client/ui/auth-style.js && git diff --check` | `0` | 新 App 图标 SVG 契约、桌面脚本语法和差异格式检查通过 |
 | `2026-11-28` | `file apps/client/src-tauri/icons/icon.png apps/client/src-tauri/icons/icon.ico` | `0` | PNG 为 1024×1024 RGBA，ICO 包含 6 个 PNG 尺寸 |
+| `2026-11-28` | `python3` XML 解析 Android 图标资源 | `0` | Android 启动图标背景和前景资源格式通过 |
 
 ### 变更检查
 
@@ -102,6 +104,7 @@
 | 首次交付 | 自审覆盖 Web Auth、共享 Cover、桌面静态入口、三种主题变量和移动端媒体查询。发现浏览器自动化宿主当前不可用，使用构建、入口响应和代码契约完成可执行验证 | `node --test apps/web/tests/auth-design.test.mjs`、`node --check apps/client/ui/auth-style.js`、双模式构建、`curl -fsS http://127.0.0.1:4175/` 均通过 | `codex/feature-auth-landing-20261127`，提交 `666b115edfe2b41481fc043fef935e7d8ae05547` | `http://127.0.0.1:4175/` |
 | 用户反馈返工 | 删除花园方案，保留并优化蓝白日间与深色夜间主题，统一 Web 和桌面端入口，补充焦点态、移动端布局和主题背景 | `node --test apps/web/tests/auth-design.test.mjs`、`node --check apps/client/ui/auth-style.js`、双模式构建、`curl -fsS http://127.0.0.1:4175/` 均通过，`git diff --check` 通过 | `codex/feature-auth-landing-20261127`，提交 `d5e6fe5` | `http://127.0.0.1:4175/` |
 | App 图标迭代 | 重新设计桌面 App 图标，使用蓝色圆角底、白色折页和橙色闪光，提高 64×64 小尺寸下的识别度，并保留 SVG 源文件 | 图标契约测试、桌面端脚本检查、双模式构建、格式检查均通过 | `codex/feature-auth-landing-20261127`，提交 `b44e612` | `dist/auth-previews/wenote-app-icon-v2.png` |
+| 移动端图标同步 | Android 各密度 `ic_launcher`、`ic_launcher_round` 和 `ic_launcher_foreground` 资源同步新图标，保持启动器显示一致 | 图标契约测试、Android XML 解析和资源格式检查通过 | 待提交 | `dist/auth-previews/wenote-app-icon-mobile-v2.png` |
 
 ## 独立服务端
 
