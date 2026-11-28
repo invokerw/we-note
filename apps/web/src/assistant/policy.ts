@@ -8,7 +8,6 @@ export type Config = {
   effort?: string;
   usesApiKey?: boolean;
   webSearch?: boolean;
-  webAccessUrl?: string;
   webSearchModel?: string;
 };
 export function checkedConfig(c: Config, requireModel = true): Config {
@@ -27,21 +26,8 @@ export function checkedConfig(c: Config, requireModel = true): Config {
     (requireModel && !c.model.trim())
   )
     throw Error("请选择模型协议并填写模型 ID");
-  let webAccessUrl: string | undefined;
-  if (c.webAccessUrl?.trim()) {
-    if (!URL.canParse(c.webAccessUrl.trim()))
-      throw Error("请输入完整的 Web Access MCP 网关地址");
-    const gateway = new URL(c.webAccessUrl.trim());
-    if (
-      !["http:", "https:"].includes(gateway.protocol) ||
-      gateway.username ||
-      gateway.password ||
-      gateway.search ||
-      gateway.hash
-    )
-      throw Error("请输入 HTTP 或 HTTPS 网关地址，不含密钥、查询参数或片段");
-    webAccessUrl = gateway.href.replace(/\/+$/, "");
-  }
+  if (c.webSearch === true && c.api !== "openai-responses")
+    throw Error("网络搜索需要使用 OpenAI Responses 协议");
   return {
     api: c.api,
     baseUrl: url.href.replace(/\/+$/, ""),
@@ -49,14 +35,13 @@ export function checkedConfig(c: Config, requireModel = true): Config {
     ...(c.effort ? {effort: c.effort} : {}),
     ...(c.usesApiKey === true ? { usesApiKey: true } : {}),
     ...(typeof c.webSearch === "boolean" ? { webSearch: c.webSearch } : {}),
-    ...(webAccessUrl ? { webAccessUrl } : {}),
     ...(c.webSearchModel?.trim()
       ? { webSearchModel: c.webSearchModel.trim() }
       : {}),
   };
 }
 // Some model gateways require every property of a strict tool, including the
-// property reserved for the other note kind. Keep the MCP contract canonical.
+// property reserved for the other note kind. Keep the note tool contract canonical.
 export function prepareCreateArguments(args: unknown) {
   if (!args || typeof args !== "object" || Array.isArray(args)) return args;
   const fields = args as Record<string, unknown>;

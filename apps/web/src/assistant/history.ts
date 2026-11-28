@@ -1,5 +1,5 @@
 import type { Call } from "../mcp/tools";
-import type { WebSource } from "./webAccess";
+import type { WebSource } from "./webSearch";
 export type Proposal = {
   call: Call;
   path: string;

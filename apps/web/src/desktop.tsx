@@ -887,7 +887,7 @@ function Workspace({
           </article>
         )}
       </AppShell.Main>
-      <AssistantPanel credentialOwner={credentialOwner} key={"assistant:"+connection.scope} connection={connection} desktop={desktopTransport} folder={panes.folder??""} path={view==='笔记'?path:''} paths={files} openFile={p=>void run(()=>open(p))}/>
+      <AssistantPanel credentialOwner={credentialOwner} key={"assistant:"+connection.scope} connection={connection} folder={panes.folder??""} path={view==='笔记'?path:''} paths={files} openFile={p=>void run(()=>open(p))}/>
     </WorkspaceShell>
   );
 }

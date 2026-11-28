@@ -8,156 +8,242 @@
 | 类型 | `feature` |
 | 登记日期 | `2026-11-28` |
 | 影响端 | `web / desktop / android / iOS` |
-| 状态 | `DELIVERED` |
+| 状态 | `IN_PROGRESS` |
 | 开工前确认的验收方式 | 2（任务分支验收，通过后再合入 main） |
 | 基线分支 | `main` |
 | 基线提交 | `15fb4bf` |
 | 任务分支 | `codex/feature-pi-web-access-20261128` |
 | worktree | `/Users/weifei/code/we-note/.worktrees/pi-web-access-20261128` |
-| 需要独立服务端 | 否。首轮接入桌面本地 MCP 和外部 MCP Streamable HTTP Gateway。 |
+| 需要独立服务端 | 否。各客户端直接调用 OpenAI Responses API，复用现有 WeNote API 的登录和笔记能力。 |
 
 ## 用户原始需求
 
-> 可以，写个开发文档，开始做吧
+> 使用内部工具实现 web 相关工具，使用 OpenAI 的搜索功能。
 
-此前已确认采用 `pi-web-access`，在其中配置 OpenAI Search。已验证用户提供的临时网关 Key 可访问 `https://api.ergou.vip/v1/models`，并使用 `gpt-6.2-sol` 在 `/v1/responses` 中完成 `web_search`。临时 Key 不写入仓库和任务记录。
+此前已验证 OpenAI-compatible Responses endpoint 可以使用 `web_search`。此前任务曾按 `pi-web-access + MCP` 实现，用户在验收讨论中将方案调整为 WeNote 内部 AgentTool 方案。
 
-## 目标与范围
+临时 API Key 不写入仓库、任务记录、日志和测试夹具。
 
-### 已交付目标
-
-在 WeNote 个人笔记助手中接入 `pi-web-access@0.48.0` MCP，将 OpenAI Responses 的 `web_search` 能力作为网络工具提供给 Pi Agent Core，并展示搜索状态和来源。
-
-### 已实现范围
-
-- 固定并验证 `pi-web-access@0.48.0` 的 MCP 初始化和工具发现
-- 实现 MCP stdio 和 Streamable HTTP 客户端适配
-- 接入 `web_search`、`fetch_content`、`get_search_content`、`source_check`
-- 使用 OpenAI provider、Responses endpoint 和用户配置的搜索模型
-- 桌面端通过 Tauri 启动本地 MCP 子进程
-- Web、Android 和 iOS 通过配置的 MCP Gateway 地址连接
-- 增加联网搜索开关、状态提示、来源保存和来源展示
-- 增加 Bearer 请求头、60 秒 HTTP 超时、AbortSignal 取消和工具缺失过滤
-- 复用现有笔记 MCP、写入预览和授权边界
-
-### 明确排除
-
-- 不在仓库保存任何 API Key
-- 不自动将未引用笔记正文发送到网络搜索服务
-- 不把搜索结果直接写入笔记
-- 不在本任务中实现多提供商自动回退
-- 不接入图片、视频和其他非文本搜索
-- 不依赖 ChatGPT 网页登录态
-- 不在本任务中新增可公开部署的 Gateway 服务
-
-## 验收条件
-
-- [x] `pi-web-access` 可以完成 MCP 初始化和工具发现。
-- [x] Agent 适配层可以通过 MCP 调用网络工具，并把结果转换为 Pi Agent 工具结果。
-- [x] OpenAI Responses provider 使用配置的 endpoint 和模型执行搜索。
-- [x] 使用 `https://api.ergou.vip/v1` 与 `gpt-6.2-sol` 的受控请求已成功。
-- [x] 关闭联网搜索时，Agent 不注册网络工具，也不发起网络搜索请求。
-- [x] 搜索状态、停止传播、HTTP 超时和 Tauri 取消链路已接入。
-- [x] 最终回答可以展示可点击的来源标题和 URL。
-- [x] 来源随本机会话保存，刷新或重新打开历史对话后仍可见。
-- [x] API Key 不出现在代码、日志、Agent prompt、工具结果和会话正文中。
-- [x] 现有笔记读取、写入预览和用户确认流程通过回归测试。
-- [x] Web 构建、桌面前端构建和 Tauri 编译通过。
-- [ ] 外部 Gateway 的实际部署、浏览器真实搜索和 Android、iOS 真机搜索待用户验收。
-
-## 需求变更记录
+## 方案变更
 
 | 日期 | 变更 |
 | --- | --- |
-| 2026-11-28 | 确定使用 `pi-web-access` 作为统一搜索工具层，OpenAI Responses Search 作为提供商。 |
-| 2026-11-28 | 增加桌面 Tauri MCP 传输和 Web、移动端 Streamable HTTP Gateway 传输。Gateway 服务本身不在本任务实现。 |
+| 2026-11-28 | 初始方案使用 `pi-web-access@0.48.0`，通过桌面 MCP 和外部 Streamable HTTP Gateway 提供网络工具。 |
+| 2026-11-28 | 根据用户反馈改为 WeNote 内部 AgentTool，直接调用 OpenAI Responses API 的 `web_search`，取消客户端对 MCP Gateway 的依赖。 |
 
-## 实现计划
+## 新目标
 
-1. 固定 `pi-web-access` 版本并完成本地 MCP 的 `initialize`、`tools/list` 和 `web_search` 冒烟测试。
-2. 实现 Web Access MCP 连接、会话生命周期、工具发现、调用转发、取消和超时。
-3. 将 Web Access 工具与 WeNote MCP 工具合并到 Pi Agent Core。
-4. 增加搜索状态、来源归一化、历史保存和消息展示。
-5. 增加配置项、权限开关和错误提示。
-6. 完成 Web、桌面和移动端入口验证。
-7. 运行聚焦测试、回归测试、构建和端到端验收。
-8. 自审差异并按验收方式交付。
+在 WeNote 个人笔记助手中提供客户端内部网络工具。Agent 使用固定的 `AgentTool` schema，工具直接调用 OpenAI Responses API 的原生 `web_search` 能力，并将搜索结果与来源返回给 Pi Agent Core。
 
-以上第 1 至第 5 项已完成，第 6 项完成客户端入口和构建验证，外部 Gateway 与移动真机部分保留给验收环境。
+### 目标调用链
 
-## TDD 证据
+```text
+Pi Agent Core
+    ↓
+WeNote 内部 AgentTool
+    ↓
+WebSearchService
+    ├─ Web / Android / iOS → OpenAI Responses API
+    └─ Desktop → OpenAI Responses API，必要时经 Tauri HTTP command
+    ↓
+OpenAI Responses API
+    ↓
+web_search
+```
 
-### 失败测试
+## 目标范围
 
-| 日期 | 命令 | 退出状态 | 失败原因 |
+### 内部网络工具
+
+- `web_search`
+- `get_search_content`
+- `fetch_content`
+- `source_check`
+
+### 平台支持
+
+- Web、Android、iOS 和桌面端都在客户端注册内部网络工具。
+- 所有平台共享工具 schema、OpenAI Responses 请求格式、结果结构、来源提取和历史展示。
+- 客户端复用当前模型配置中的 endpoint、模型和 API Key。
+
+### OpenAI 配置
+
+各客户端复用当前助手模型配置中的：
+
+```text
+Base URL: https://api.ergou.vip/v1
+Responses endpoint: https://api.ergou.vip/v1/responses
+Search model: gpt-6.2-sol
+API Key: 当前模型配置中的密钥
+```
+
+Web、Android、iOS 和桌面端都使用当前客户端配置发起搜索请求。
+
+## 实现要求
+
+### AgentTool 层
+
+- 新增或改造 `apps/web/src/assistant/webSearch.ts`。
+- 由 `createWebSearchTools()` 返回固定的 `AgentTool[]`。
+- 关闭网络搜索时不注册工具。
+- `execute` 负责状态、取消、服务调用和结果转换。
+- 工具 schema 不从外部服务动态发现。
+
+### OpenAI Responses 层
+
+- 使用 Responses endpoint。
+- 请求体包含配置的搜索模型、用户查询和 `tools: [{ "type": "web_search" }]`。
+- 解析文本输出、来源 URL 和来源标题。
+- 适配 OpenAI-compatible endpoint 的 `/responses` 路径。
+- 将 Provider 错误转换为 WeNote 稳定错误码。
+
+### 客户端请求层
+
+实现客户端 OpenAI Responses API 适配。
+
+```text
+POST <baseUrl>/responses
+Authorization: Bearer <model API key>
+```
+
+客户端复用当前模型配置中的 Base URL、API Key 和搜索模型。Web、Android、iOS 的 endpoint 需要允许客户端跨域请求。桌面端可以直接使用相同请求，也可以通过 Tauri 转发。
+
+网页读取需要限制：
+
+- URL scheme
+- 私有地址和回环地址
+- 响应大小
+- 响应时间
+- 内容类型
+
+### Tauri 层
+
+- 允许客户端前端直接发起 HTTPS 搜索请求。
+- 如目标 endpoint 的跨域策略不适合桌面 WebView，可增加直接 HTTP 搜索命令。
+- 移除或停用本地 `pi-web-access-mcp` 进程启动逻辑。
+- 支持 AbortSignal 对应的请求取消。
+- API Key 不写入配置文件和临时文件。
+
+### UI 和历史
+
+- 保留联网搜索开关。
+- 移除 MCP Gateway URL 设置项。
+- 增加搜索服务状态。
+- 保留搜索状态提示。
+- 保留来源链接展示和历史持久化。
+- 搜索结果不绕过笔记写入预览和用户确认。
+
+## 验收条件
+
+### Agent 和客户端
+
+- [ ] 内部 `web_search` 工具可以被 Pi Agent Core 调用。
+- [ ] `get_search_content` 可以读取当前轮次缓存结果。
+- [ ] `fetch_content` 可以读取符合安全限制的网页正文。
+- [ ] `source_check` 可以返回来源核验结果。
+- [ ] 关闭网络搜索时，Agent 不注册网络工具。
+- [ ] 搜索状态、停止传播、超时和错误提示正常。
+- [ ] 来源标题和 URL 可以点击。
+- [ ] 来源刷新或重新打开历史对话后仍可见。
+
+### 客户端请求
+
+- [ ] Web、Android、iOS 和桌面端可以发起 OpenAI Responses `web_search` 请求。
+- [ ] 请求使用当前模型配置中的 Base URL、API Key 和搜索模型。
+- [ ] API Key 只出现在 Authorization 请求头。
+- [ ] OpenAI Responses `web_search` 请求成功。
+- [ ] `api.ergou.vip/v1` 与 `gpt-6.2-sol` 的受控搜索请求成功。
+- [ ] 客户端 Provider 错误返回稳定错误码。
+- [ ] 超时和取消正常。
+- [ ] 回环地址、私有地址、过大网页响应和不支持的内容类型被拒绝。
+- [ ] API Key 不出现在日志、Agent prompt、工具结果和会话正文中。
+- [ ] 不新增 MCP Gateway 或服务器端搜索密钥配置。
+
+### 现有功能回归
+
+- [ ] 笔记搜索、读取和导图读取仍然正常。
+- [ ] 笔记创建、编辑、移动和删除继续经过预览与确认。
+- [ ] 搜索结果不会直接写入笔记。
+- [ ] Web 构建通过。
+- [ ] Tauri 编译通过。
+- [ ] Android 和 iOS 构建或入口验证通过。
+
+## 历史实现记录
+
+此前提交 `9407247` 实现了 `pi-web-access@0.48.0` 的 MCP stdio 和 Streamable HTTP 客户端，提交 `28dda81` 记录了该实现的交付状态。该实现保留为方案变更前的验证依据，后续改造会移除其网络搜索运行时依赖。
+
+此前已经验证：
+
+- `initialize` 和 `tools/list` 可以正常完成。
+- `web_search`、`fetch_content`、`get_search_content`、`source_check` 可以被发现。
+- OpenAI-compatible Responses endpoint 可以完成受控 `web_search` 请求。
+
+新方案需要重新实现内部工具、客户端 Responses 适配和对应测试。历史 MCP 测试不能替代新方案的验收。
+
+## 实施顺序
+
+1. 更新 TypeScript 工具层，移除运行时 MCP 工具发现和调用依赖。
+2. 实现客户端 Responses API 请求、文本解析和来源归一化。
+3. 实现网页读取安全策略和来源核验。
+4. 在 Web、桌面和移动端入口复用前端 HTTPS 请求适配。
+5. 更新 `runTurn`、设置页、上下文缓存键和历史来源处理。
+6. 先补充失败测试，再按最小改动实现内部工具。
+7. 运行 TypeScript、Web、桌面和 Tauri 测试。
+8. 自审完整差异，修复问题并重新测试。
+9. 在任务分支提供 Web、桌面和移动端验收入口。
+
+## TDD 记录
+
+### 既有历史测试
+
+此前 MCP 方案的测试已通过，记录在历史交付版本中。新方案需要新增失败测试覆盖内部 `AgentTool` 和客户端 Responses 请求。
+
+### 新方案测试记录
+
+| 日期 | 命令 | 结果 | 关键结果 |
 | --- | --- | --- | --- |
-| 2026-11-28 | `node --test apps/web/tests/assistant-web-access.test.mjs` | 1 | 首轮缺少 `apps/web/src/assistant/webAccess.ts`，按 TDD 先固定失败基线。 |
+| 2026-11-28 | `node --test apps/web/tests/assistant-web-search.test.mjs` | 通过 | 内部 AgentTool、Responses 请求、来源解析、缓存、网页读取和错误码 |
+| 2026-11-28 | `node --test --test-concurrency=1 tests/*.test.mjs` | 通过 | Web 测试 36 项通过 |
+| 2026-11-28 | `npm run build --prefix apps/web` | 通过 | Web TypeScript 和 Vite 构建通过 |
+| 2026-11-28 | `npm run build:desktop --prefix apps/web` | 通过 | 桌面前端 TypeScript 和 Vite 构建通过 |
+| 2026-11-28 | `cargo fmt --check --manifest-path apps/client/src-tauri/Cargo.toml` | 通过 | Tauri 格式检查通过 |
+| 2026-11-28 | `cargo check --locked --manifest-path apps/client/src-tauri/Cargo.toml` | 通过 | Tauri 编译检查通过 |
+| 2026-11-28 | `cargo test --locked -p wenote-desktop --lib` | 通过 | Tauri 单元测试 3 项通过，授权环境重跑确认本地 socket 测试正常 |
+|  |  | 待执行 | 真实 Responses Provider 请求和 Web、桌面、移动端人工入口验收 |
 
-### 通过测试
-
-| 日期 | 命令 | 退出状态 | 关键结果 |
-| --- | --- | --- | --- |
-| 2026-11-28 | `node --test apps/web/tests/assistant-web-access.test.mjs` | 0 | 7 项通过，覆盖来源提取、结果转换、开关、缺少网关、通知格式、HTTP 会话和 Bearer 请求头。 |
-| 2026-11-28 | `node --test apps/web/tests/assistant.test.mjs apps/web/tests/assistant-web-access.test.mjs` | 0 | 11 项通过，覆盖配置归一化、Gateway URL 校验、笔记写入策略和 Web Access 适配。 |
-| 2026-11-28 | `node --test --test-concurrency=1 tests/*.test.mjs` | 0 | Web 前端测试 31 项通过。测试输出包含既有 Vite WebSocket 监听权限提示，不影响测试结果。 |
-| 2026-11-28 | `npm run build --prefix apps/web` | 0 | TypeScript 检查和 Web Vite 构建通过。 |
-| 2026-11-28 | `npm run build:desktop --prefix apps/web` | 0 | 桌面前端 TypeScript 检查和构建通过，产物位于 `apps/client/dist/`。 |
-| 2026-11-28 | `cargo check --manifest-path apps/client/src-tauri/Cargo.toml` | 0 | Tauri Rust 代码编译通过。 |
-| 2026-11-28 | `cargo test --locked -p wenote-desktop --lib` | 0 | 3 项 Tauri 原生单元测试通过。 |
-| 2026-11-28 | `cargo build --locked -p wenote-desktop` | 0 | 桌面端 debug 构建通过。 |
-| 2026-11-28 | `cargo build --locked -p wenote-desktop --release` | 0 | macOS ARM64 release 编译通过。 |
-| 2026-11-28 | `pi-web-access@0.48.0` MCP stdio 冒烟 | 0 | `initialize` 和 `tools/list` 成功，发现 4 个网络工具。 |
-
-## 变更检查
-
-- [x] `git diff --check`
-- [x] 影响模块回归测试
-- [x] 完成 MCP 协议冒烟验收
-- [x] 完成 Web 构建
-- [x] 完成桌面前端和 Tauri 编译验证
-- [ ] 完成外部 Gateway 和移动真机验收
-
-## 每轮自审与交付
-
-| 轮次 / 对应反馈 | 自审发现及优化处理 | 复测命令和结果 | 验收分支及受测提交号 | 验收入口 |
-| --- | --- | --- | --- | --- |
-| 首次交付 | 修复搜索配置归一化丢失 `webSearch: true`、MCP 初始化通知错误带 ID、HTTP 空通知响应、Gateway URL 校验、上下文缓存隔离和 Tauri 取消链路。未把 API Key 写入代码、配置文件、日志或会话历史。 | Web 31 项、聚焦 11 项、Tauri 3 项通过，Web 和桌面前端构建通过。 | `codex/feature-pi-web-access-20261128`，提交 `9407247` | 使用本 worktree 的 Web 构建或 `target/release/wenote-desktop`，在模型设置中开启「网络搜索」。桌面端网关地址留空，Web 或移动端填写外部 MCP Gateway。 |
-
-## 独立服务端
+## 服务端边界
 
 | 项目 | 内容 |
 | --- | --- |
-| 启动命令 | 未新增。桌面端由 Tauri 启动 `pi-web-access-mcp`，缺少本机命令时回退 `npx -y pi-web-access@0.48.0`。Web、Android、iOS 需要外部 MCP Streamable HTTP Gateway。 |
-| 地址和端口 | 外部 Gateway 地址由用户在模型设置中填写。 |
-| PID | 桌面 MCP 进程由 Tauri 管理。 |
-| 日志 | 不写入仓库日志。子进程标准错误被丢弃，协议标准输出只作为 MCP 通道。 |
-| 数据目录 | 桌面临时配置位于 Tauri `app_cache_dir/pi-web-access/web-search.json`，不包含 API Key。 |
-| 测试账户或初始化步骤 | 填写 Responses Base URL、模型 ID、API Key，打开联网搜索。Gateway 模式需要符合 MCP Streamable HTTP 的外部服务。 |
-| 停止命令 | Tauri 取消调用会终止当前子进程，应用退出时由进程生命周期回收。 |
+| 搜索服务 | 不新增 WeNote 搜索 API，不新增 MCP Gateway。 |
+| OpenAI 搜索密钥 | 由各客户端当前模型配置提供。 |
+| 现有 API | 继续负责登录、笔记和同步，不参与搜索请求。 |
+| 服务端改动 | 本方案不要求 Go API 改动。 |
 
 ## 客户端交付
 
 | 项目 | 内容 |
 | --- | --- |
-| 构建命令 | `npm run build --prefix apps/web`、`npm run build:desktop --prefix apps/web`、`cargo build --locked -p wenote-desktop --release` |
-| 启动或安装命令 | `target/release/wenote-desktop`，服务地址按现有桌面流程配置。 |
-| 产物路径 | `/Users/weifei/code/we-note/.worktrees/pi-web-access-20261128/apps/client/dist/`，`target/release/wenote-desktop` |
-| 使用的服务端地址 | `https://api.ergou.vip/v1`，仅用于此前受控测试。 |
-| 已验证功能 | MCP 初始化、工具发现、工具适配、搜索开关、来源保存、Web 和桌面构建、Tauri 原生编译及既有单元测试。 |
+| Web 构建 | `npm run build --prefix apps/web` |
+| 桌面构建 | `npm run build:desktop --prefix apps/web`、`cargo build --locked -p wenote-desktop --release` |
+| Web 入口 | 在模型设置中开启网络搜索，复用当前模型 Responses 配置。 |
+| 桌面入口 | 在模型设置中开启网络搜索，复用当前模型 Responses 配置。 |
+| 移动入口 | 在移动端助手中开启网络搜索，复用当前模型 Responses 配置。 |
 
 ## 状态变更记录
 
 | 日期 | 状态 | 依据 | 下一步 |
 | --- | --- | --- | --- |
-| 2026-11-28 | `PLANNED` | 已从 `main` 创建任务 worktree，完成设计文档和任务记录 | 等待用户确认验收方式 |
-| 2026-11-28 | `IN_PROGRESS` | 用户选择方式 2，开始在任务分支实现 | 完成 MCP 适配和聚焦测试 |
-| 2026-11-28 | `DELIVERED` | 实现、测试、自审和构建已完成，任务分支保留待用户验收 | 用户验收外部 Gateway 和移动端场景 |
+| 2026-11-28 | `PLANNED` | 已从 `main` 创建任务 worktree，完成初版 MCP 设计 | 等待用户确认验收方式 |
+| 2026-11-28 | `IN_PROGRESS` | 用户选择方式 2，完成初版 MCP 客户端实现 | 等待用户确认新的内部工具方案 |
+| 2026-11-28 | `IN_PROGRESS` | 用户要求改为客户端内部 AgentTool 和 OpenAI Search | 更新设计，重写客户端实现和补充集成测试 |
+| 2026-11-28 | `IN_PROGRESS` | 已完成客户端内部网络工具、设置项和 Tauri 清理，Web 与桌面构建通过 | 在任务分支运行授权环境 Tauri 测试，等待用户验收 |
 
 ## 用户验收
 
 | 日期 | 结果 | 反馈 | 处理 |
 | --- | --- | --- | --- |
-|  | 待验收 |  |  |
+| 2026-11-28 | 待验收 | 已完成第一轮客户端内部工具实现和自动化测试 | 请在任务分支验收搜索开关、真实 Provider 请求、来源展示和笔记写入确认流程 |
 
 ## 验收通过后的清理
 

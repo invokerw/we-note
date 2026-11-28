@@ -22,7 +22,6 @@ export function ModelSettings({
   const [url, setUrl] = useState(initial.baseUrl),
     [api, setApi] = useState(initial.api),
     [webSearch, setWebSearch] = useState(initial.webSearch === true),
-    [webAccessUrl, setWebAccessUrl] = useState(initial.webAccessUrl ?? ""),
     [webSearchModel, setWebSearchModel] = useState(initial.webSearchModel ?? "");
   const [key, setKey] = useState(""),
     [remember, setRemember] = useState(false);
@@ -58,7 +57,6 @@ export function ModelSettings({
           model: "",
           usesApiKey: !!key.trim(),
           webSearch,
-          webAccessUrl,
           webSearchModel,
         },
         false,
@@ -130,21 +128,10 @@ export function ModelSettings({
           checked={webSearch}
           onChange={(e) => setWebSearch(e.target.checked)}
         >
-          启用网络搜索（pi-web-access）
+          启用网络搜索（OpenAI Search）
         </Checkbox>
         {webSearch && (
           <>
-            <Form.Item
-              label="Web Access MCP 网关地址（可选）"
-              htmlFor="assistant-web-access-url"
-            >
-              <Input
-                id="assistant-web-access-url"
-                placeholder="桌面端留空，浏览器或移动端填写 HTTPS MCP 网关"
-                value={webAccessUrl}
-                onChange={(e) => setWebAccessUrl(e.target.value)}
-              />
-            </Form.Item>
             <Form.Item
               label="搜索模型（可选）"
               htmlFor="assistant-web-search-model"
@@ -157,7 +144,7 @@ export function ModelSettings({
               />
             </Form.Item>
             <small>
-              桌面端会启动本机 pi-web-access MCP。浏览器和移动端需要配置可访问的 MCP 网关。
+              网络搜索使用当前模型服务地址和 API Key，通过 OpenAI Responses API 的 web_search 工具完成。
             </small>
           </>
         )}
