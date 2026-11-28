@@ -44,6 +44,6 @@ jobs:
         working-directory: services/api
       - run: node tests/e2e/desktop.mjs --browser
         env:
-          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_PATH: ${{ runner.os != 'Windows' && steps.setup-chrome.outputs.chrome-path || '' }}
           RUST_BACKTRACE: "1"
           WENOTE_API: ./wenote-api.exe

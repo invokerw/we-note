@@ -21,7 +21,7 @@ class ReleaseWebTest(unittest.TestCase):
         text = workflow.read_text()
         self.assertIn('uses: browser-actions/setup-chrome@v2', text)
         self.assertIn("install-dependencies: ${{ runner.os == 'Linux' }}", text)
-        self.assertIn('CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}', text)
+        self.assertIn("CHROME_PATH: ${{ runner.os != 'Windows' && steps.setup-chrome.outputs.chrome-path || '' }}", text)
 
     def probe(self, health, page):
         attempts = []

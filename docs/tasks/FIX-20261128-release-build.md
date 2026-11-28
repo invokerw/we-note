@@ -113,7 +113,8 @@
 | 轮次 / 对应反馈 | 自审发现及优化处理 | 复测命令和结果 | 验收分支及受测提交号 | 验收入口 |
 | --- | --- | --- | --- | --- |
 | 首轮修复 | 修复 Docker 构建上下文和跨平台 Chrome 配置，补充发布回归检查。采用新建 `v0.1.3`，保留远端已有的旧 `v0.1.2` tag。 | Web、桌面前端、Rust、Go、浏览器验收和 macOS `.app` 已通过，DMG 受本机 Finder 超时影响。旧运行中 Ubuntu 和 Windows 已通过，macOS 浏览器验收超时。 | `codex/bugfix-release-build-20261128`，`26846f8` | [Desktop and web acceptance](https://github.com/invokerw/we-note/actions/runs/46133621551) |
-| 第二轮修复 | 为 Linux runner 的 Chrome for Testing 安装系统依赖，并补充回归检查。 | `python3 tests/release/check-web.py` 通过，等待新的三平台 GitHub Actions 验证。 | `codex/bugfix-release-build-20261128`，待提交 | 分支 push 后检查 GitHub Actions |
+| 第二轮修复 | 为 Linux runner 的 Chrome for Testing 安装系统依赖，并补充回归检查。 | Ubuntu 通过，Windows 浏览器验收失败，macOS 仍在运行。`python3 tests/release/check-web.py` 通过。 | `codex/bugfix-release-build-20261128`，`febfdcf` | [Desktop and web acceptance](https://github.com/invokerw/we-note/actions/runs/46137882558) |
+| 第三轮修复 | 保留 Linux 和 macOS 的显式 Chrome 路径，让 Windows 使用 runner 自带的 Chrome 通道，避免 Windows 浏览器验收回归。 | `python3 tests/release/check-web.py` 通过，等待新的三平台 GitHub Actions 验证。 | `codex/bugfix-release-build-20261128`，待提交 | 分支 push 后检查 GitHub Actions |
 
 ## 独立服务端
 
@@ -141,7 +142,7 @@
 
 | 时间 | 状态 | 依据 | 下一步 |
 | --- | --- | --- | --- |
-| 2026-11-28 | `IN_PROGRESS` | 用户选择方式 2，已完成修复并提交 `26846f8`，用户选择发布 tag 为 `v0.1.3`。旧分支验收的 macOS 浏览器步骤超时，新分支验收的 Ubuntu 浏览器步骤快速失败。 | 修复 Linux Chrome 依赖配置并重新等待三平台验收 |
+| 2026-11-28 | `IN_PROGRESS` | 用户选择方式 2，已完成 `26846f8` 和 `febfdcf`，用户选择发布 tag 为 `v0.1.3`。Ubuntu 已通过，Windows 浏览器验收失败，macOS 仍在运行。 | 保留 Windows runner 自带 Chrome 通道并重新等待三平台验收 |
 
 ## 用户验收
 
