@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="background" x1="126" y1="72" x2="902" y2="958" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#79B3E8" />
+      <stop offset="0.52" stop-color="#4E82BC" />
+      <stop offset="1" stop-color="#294E80" />
+    </linearGradient>
+    <linearGradient id="page" x1="292" y1="197" x2="759" y2="816" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#EAF3FC" />
+    </linearGradient>
+    <filter id="shadow" x="188" y="145" width="650" height="755" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="30" stdDeviation="26" flood-color="#183B67" flood-opacity="0.28" />
+    </filter>
+    <filter id="glow" x="674" y="126" width="231" height="231" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18" />
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="220" fill="url(#background)" />
+  <circle cx="792" cy="190" r="90" fill="#BDE0FF" fill-opacity="0.22" filter="url(#glow)" />
+  <path d="M0 778C181 690 302 729 442 824C570 911 755 938 1024 792V1024H0V778Z" fill="#173962" fill-opacity="0.18" />
+
+  <g filter="url(#shadow)">
+    <path d="M292 211C292 182.833 314.833 160 343 160H624L758 294V783C758 811.167 735.167 834 707 834H343C314.833 834 292 811.167 292 783V211Z" fill="url(#page)" />
+    <path d="M624 160V262C624 279.673 638.327 294 656 294H758L624 160Z" fill="#C8DFF3" />
+  </g>
+
+  <path d="M396 433H644" stroke="#6E99C3" stroke-width="30" stroke-linecap="round" />
+  <path d="M396 515H584" stroke="#A5C0DA" stroke-width="30" stroke-linecap="round" />
+  <path d="M396 597H624" stroke="#A5C0DA" stroke-width="30" stroke-linecap="round" />
+
+  <circle cx="794" cy="236" r="62" fill="#F4A36D" fill-opacity="0.24" />
+  <path d="M794 170V302M728 236H860M747 189L841 283M841 189L747 283" stroke="#F5A16D" stroke-width="24" stroke-linecap="round" />
+  <circle cx="794" cy="236" r="14" fill="#FFF4EA" />
+</svg>
