@@ -20,7 +20,10 @@ export function ModelSettings({
 }) {
   const [initial] = useState(() => readConfig(owner));
   const [url, setUrl] = useState(initial.baseUrl),
-    [api, setApi] = useState(initial.api);
+    [api, setApi] = useState(initial.api),
+    [webSearch, setWebSearch] = useState(initial.webSearch === true),
+    [webAccessUrl, setWebAccessUrl] = useState(initial.webAccessUrl ?? ""),
+    [webSearchModel, setWebSearchModel] = useState(initial.webSearchModel ?? "");
   const [key, setKey] = useState(""),
     [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(true),
@@ -49,7 +52,15 @@ export function ModelSettings({
     setBusy(true);
     try {
       const connection = checkedConfig(
-        { api, baseUrl: url, model: "", usesApiKey: !!key.trim() },
+        {
+          api,
+          baseUrl: url,
+          model: "",
+          usesApiKey: !!key.trim(),
+          webSearch,
+          webAccessUrl,
+          webSearchModel,
+        },
         false,
       );
       if (connection.baseUrl === initial.baseUrl)
@@ -115,6 +126,41 @@ export function ModelSettings({
         >
           在本机记住密钥
         </Checkbox>
+        <Checkbox
+          checked={webSearch}
+          onChange={(e) => setWebSearch(e.target.checked)}
+        >
+          启用网络搜索（pi-web-access）
+        </Checkbox>
+        {webSearch && (
+          <>
+            <Form.Item
+              label="Web Access MCP 网关地址（可选）"
+              htmlFor="assistant-web-access-url"
+            >
+              <Input
+                id="assistant-web-access-url"
+                placeholder="桌面端留空，浏览器或移动端填写 HTTPS MCP 网关"
+                value={webAccessUrl}
+                onChange={(e) => setWebAccessUrl(e.target.value)}
+              />
+            </Form.Item>
+            <Form.Item
+              label="搜索模型（可选）"
+              htmlFor="assistant-web-search-model"
+            >
+              <Input
+                id="assistant-web-search-model"
+                placeholder="默认使用当前模型，例如 gpt-6.2-sol"
+                value={webSearchModel}
+                onChange={(e) => setWebSearchModel(e.target.value)}
+              />
+            </Form.Item>
+            <small>
+              桌面端会启动本机 pi-web-access MCP。浏览器和移动端需要配置可访问的 MCP 网关。
+            </small>
+          </>
+        )}
         <details>
           <summary>高级设置</summary>
           <Form.Item label="接口协议" htmlFor="assistant-api">

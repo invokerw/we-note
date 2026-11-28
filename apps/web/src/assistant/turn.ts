@@ -10,6 +10,7 @@ import {
   type Config,
 } from "./policy";
 import type { Chat, Line, Proposal } from "./history";
+import { createWebAccessClient, webAccessTools } from "./webAccess";
 export type Connection = ReturnType<typeof useMcp>;
 type Turn = {
   connection: Connection;
@@ -18,6 +19,7 @@ type Turn = {
   folder: string;
   config: Config;
   key: string;
+  desktop?: boolean;
   signal: AbortSignal;
   append: (line: Line) => void;
   text: (s: string) => void;
@@ -125,6 +127,19 @@ export async function runTurn(t: Turn) {
         return toolResult(result);
       },
     }));
+  const webAccess = createWebAccessClient(t.config, t.key, t.desktop === true);
+  if (webAccess) {
+    const webTools = await webAccess.listTools(t.signal);
+    tools.push(
+      ...webAccessTools(
+        webTools,
+        webAccess,
+        t.signal,
+        t.status,
+        (line) => t.append(line),
+      ),
+    );
+  }
   let summary = "";
   const agent = createAgent(
     t.config,
@@ -214,6 +229,7 @@ export async function runTurn(t: Turn) {
         status: l.proposal.status,
         receipt: l.proposal.receipt,
       },
+      sources: l.sources,
     }));
     await agent.prompt(
       past.length

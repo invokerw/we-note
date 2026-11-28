@@ -1,6 +1,7 @@
 mod mcp;
 mod model;
 mod storage;
+mod web_access;
 use sha2::{Digest, Sha256};
 #[cfg(target_os = "android")]
 mod mobile;
@@ -404,9 +405,13 @@ pub fn run() {
     builder
         .manage(mcp::Transport::default())
         .manage(model::Requests::default())
+        .manage(web_access::ManagerState::default())
         .invoke_handler(tauri::generate_handler![
             model::model_stream,
             model::model_cancel,
+            web_access::web_access_request,
+            web_access::web_access_cancel,
+            web_access::web_access_close,
             storage::account_storage_available,
             storage::choose_storage,
             storage::account_location,

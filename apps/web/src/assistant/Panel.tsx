@@ -38,6 +38,7 @@ type Props = {
   paths: string[];
   folder: string;
   openFile: (p: string) => void;
+  desktop?: boolean;
 };
 const actionNames: Record<string, string> = {
   create_note: "创建笔记",
@@ -337,6 +338,9 @@ export function AssistantPanel(props: Props) {
         config.baseUrl,
         config.api,
         config.model,
+        config.webSearch,
+        config.webAccessUrl,
+        config.webSearchModel,
       ]);
       const contextStart =
         before.contextKey === contextKey
@@ -370,6 +374,7 @@ export function AssistantPanel(props: Props) {
         folder: props.folder,
         config,
         key,
+        desktop: props.desktop,
         signal: ctrl.signal,
         append: (l) => {
           if (!ctrl.signal.aborted) void append(l);

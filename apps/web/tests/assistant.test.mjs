@@ -34,6 +34,25 @@ test("custom model address is bound to its protocol and excludes credentials in 
     checkedConfig({ ...config, baseUrl: "https://u:p@example.test/v1" }),
   );
   assert.throws(() => checkedConfig({ ...config, api: "unknown" }));
+  assert.deepEqual(
+    checkedConfig({
+      ...config,
+      webSearch: true,
+      webAccessUrl: "https://gateway.test/mcp/",
+      webSearchModel: " search-model ",
+    }),
+    {
+      ...config,
+      baseUrl: "https://example.test/v1",
+      model: "local",
+      webSearch: true,
+      webAccessUrl: "https://gateway.test/mcp",
+      webSearchModel: "search-model",
+    },
+  );
+  assert.throws(() =>
+    checkedConfig({ ...config, webAccessUrl: "https://gateway.test/mcp?token=secret" }),
+  );
 });
 test("a write preview freezes host-generated operation and read version", () => {
   const call = {

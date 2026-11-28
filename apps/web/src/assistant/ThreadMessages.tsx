@@ -258,6 +258,7 @@ function Reply({
   actions: Props;
 }) {
   const paths = new Set<string>(),
+    sources = new Map<string, { title: string; url: string }>(),
     content: ReactNode[] = [];
   let steps: Entry[] = [];
   function flushSteps() {
@@ -279,6 +280,7 @@ function Reply({
       steps.push(entry);
       if (line.text === "已读取" && line.path && !line.proposal)
         paths.add(line.path);
+      for (const source of line.sources ?? []) sources.set(source.url, source);
       if (line.proposal) flushSteps();
       continue;
     }
@@ -340,6 +342,21 @@ function Reply({
           onClick={(item) => {
             if (typeof item.key === "string" && paths.has(item.key))
               p.openFile(item.key);
+          }}
+        />
+      )}
+      {!!sources.size && (
+        <Sources
+          title={`网络来源 · ${sources.size}`}
+          defaultExpanded={false}
+          items={Array.from(sources.values(), (source) => ({
+            key: source.url,
+            title: source.title,
+            url: source.url,
+          }))}
+          onClick={(item) => {
+            if (typeof item.url === "string")
+              window.open(item.url, "_blank", "noopener,noreferrer");
           }}
         />
       )}

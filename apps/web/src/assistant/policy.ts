@@ -7,6 +7,9 @@ export type Config = {
   model: string;
   effort?: string;
   usesApiKey?: boolean;
+  webSearch?: boolean;
+  webAccessUrl?: string;
+  webSearchModel?: string;
 };
 export function checkedConfig(c: Config, requireModel = true): Config {
   if (!URL.canParse(c.baseUrl.trim())) throw Error("请输入完整的 HTTP 或 HTTPS 服务地址");
@@ -24,12 +27,32 @@ export function checkedConfig(c: Config, requireModel = true): Config {
     (requireModel && !c.model.trim())
   )
     throw Error("请选择模型协议并填写模型 ID");
+  let webAccessUrl: string | undefined;
+  if (c.webAccessUrl?.trim()) {
+    if (!URL.canParse(c.webAccessUrl.trim()))
+      throw Error("请输入完整的 Web Access MCP 网关地址");
+    const gateway = new URL(c.webAccessUrl.trim());
+    if (
+      !["http:", "https:"].includes(gateway.protocol) ||
+      gateway.username ||
+      gateway.password ||
+      gateway.search ||
+      gateway.hash
+    )
+      throw Error("请输入 HTTP 或 HTTPS 网关地址，不含密钥、查询参数或片段");
+    webAccessUrl = gateway.href.replace(/\/+$/, "");
+  }
   return {
     api: c.api,
     baseUrl: url.href.replace(/\/+$/, ""),
     model: c.model.trim(),
     ...(c.effort ? {effort: c.effort} : {}),
     ...(c.usesApiKey === true ? { usesApiKey: true } : {}),
+    ...(typeof c.webSearch === "boolean" ? { webSearch: c.webSearch } : {}),
+    ...(webAccessUrl ? { webAccessUrl } : {}),
+    ...(c.webSearchModel?.trim()
+      ? { webSearchModel: c.webSearchModel.trim() }
+      : {}),
   };
 }
 // Some model gateways require every property of a strict tool, including the
