@@ -20,6 +20,7 @@ class ReleaseWebTest(unittest.TestCase):
         workflow = Path(__file__).resolve().parents[2] / '.github/workflows/phase1.yml'
         text = workflow.read_text()
         self.assertIn('uses: browser-actions/setup-chrome@v2', text)
+        self.assertIn("install-dependencies: ${{ runner.os == 'Linux' }}", text)
         self.assertIn('CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}', text)
 
     def probe(self, health, page):

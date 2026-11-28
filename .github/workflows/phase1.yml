@@ -20,6 +20,8 @@ jobs:
           node-version: 24
       - id: setup-chrome
         uses: browser-actions/setup-chrome@v2
+        with:
+          install-dependencies: ${{ runner.os == 'Linux' }}
       - name: Install Linux desktop build dependencies
         if: runner.os == 'Linux'
         run: |

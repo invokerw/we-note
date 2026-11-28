@@ -83,6 +83,7 @@
 | 2026-11-28 | GitHub Actions `Release` run `46115108001` | failure | Docker `RUN npm run build` 失败，导致服务端镜像和 Release job 失败。 |
 | 2026-11-28 | GitHub Actions `Desktop and web acceptance` run `46115107958` | failure | Ubuntu 和 macOS 的 `node tests/e2e/desktop.mjs --browser` 失败，Windows 通过。 |
 | 2026-11-28 | `python3 tests/release/check-web.py` | 1 | 新增回归检查先于修复失败，确认 Docker 上下文和 Chrome 配置均缺失。 |
+| 2026-11-28 | `python3 tests/release/check-web.py` | 1 | 第二轮回归检查先于修复失败，确认 Linux Chrome for Testing 还缺少 runner 依赖配置。 |
 | 2026-11-28 | 模拟 Docker Web 上下文的 `npm run build` | 1 | 无法解析 `../../../../skills/wenote-notes/SKILL.md?raw`。 |
 
 ### 通过测试
@@ -92,7 +93,7 @@
 | 2026-11-28 | `npm ci --prefix apps/web` | 0 | 干净安装完成。 |
 | 2026-11-28 | `npm run build --prefix apps/web` | 0 | Web 生产构建通过。 |
 | 2026-11-28 | `npm run build:desktop --prefix apps/web` | 0 | 桌面前端构建通过。 |
-| 2026-11-28 | `python3 tests/release/check-web.py` | 0 | 发布启动探针测试通过。 |
+| 2026-11-28 | `python3 tests/release/check-web.py` | 0 | 发布启动探针测试通过，包含 Linux Chrome 依赖配置检查。 |
 | 2026-11-28 | `go test ./...` in `services/api` | 0 | 服务端测试通过。 |
 | 2026-11-28 | `node --test apps/web/tests/mcp-tools.test.mjs apps/web/tests/assistant.test.mjs apps/web/tests/assistant-web-search.test.mjs apps/web/tests/web-build-history.test.mjs` | 0 | Web 相关测试通过。 |
 | 2026-11-28 | `CHROME_PATH=... WENOTE_API=./wenote-api node tests/e2e/desktop.mjs --browser` | 0 | Rust 同步、账户存储和完整浏览器验收通过。 |
@@ -111,7 +112,8 @@
 
 | 轮次 / 对应反馈 | 自审发现及优化处理 | 复测命令和结果 | 验收分支及受测提交号 | 验收入口 |
 | --- | --- | --- | --- | --- |
-| 首轮修复 | 修复 Docker 构建上下文和跨平台 Chrome 配置，补充发布回归检查。采用新建 `v0.1.3`，保留远端已有的旧 `v0.1.2` tag。 | Web、桌面前端、Rust、Go、浏览器验收和 macOS `.app` 已通过，DMG 受本机 Finder 超时影响。Ubuntu 和 Windows 的分支 CI 已通过，macOS 浏览器验收仍在运行。 | `codex/bugfix-release-build-20261128`，`26846f8` | [Desktop and web acceptance](https://github.com/invokerw/we-note/actions/runs/46133621551) |
+| 首轮修复 | 修复 Docker 构建上下文和跨平台 Chrome 配置，补充发布回归检查。采用新建 `v0.1.3`，保留远端已有的旧 `v0.1.2` tag。 | Web、桌面前端、Rust、Go、浏览器验收和 macOS `.app` 已通过，DMG 受本机 Finder 超时影响。旧运行中 Ubuntu 和 Windows 已通过，macOS 浏览器验收超时。 | `codex/bugfix-release-build-20261128`，`26846f8` | [Desktop and web acceptance](https://github.com/invokerw/we-note/actions/runs/46133621551) |
+| 第二轮修复 | 为 Linux runner 的 Chrome for Testing 安装系统依赖，并补充回归检查。 | `python3 tests/release/check-web.py` 通过，等待新的三平台 GitHub Actions 验证。 | `codex/bugfix-release-build-20261128`，待提交 | 分支 push 后检查 GitHub Actions |
 
 ## 独立服务端
 
@@ -139,7 +141,7 @@
 
 | 时间 | 状态 | 依据 | 下一步 |
 | --- | --- | --- | --- |
-| 2026-11-28 | `IN_PROGRESS` | 用户选择方式 2，已完成修复并提交 `26846f8`，用户选择发布 tag 为 `v0.1.3`。Ubuntu 和 Windows 分支 CI 已通过，macOS 浏览器验收仍在运行。 | 等待三平台验收完成，再执行 `v0.1.3` 发布流程 |
+| 2026-11-28 | `IN_PROGRESS` | 用户选择方式 2，已完成修复并提交 `26846f8`，用户选择发布 tag 为 `v0.1.3`。旧分支验收的 macOS 浏览器步骤超时，新分支验收的 Ubuntu 浏览器步骤快速失败。 | 修复 Linux Chrome 依赖配置并重新等待三平台验收 |
 
 ## 用户验收
 
