@@ -104,7 +104,7 @@
 | 首次交付 | 自审覆盖 Web Auth、共享 Cover、桌面静态入口、三种主题变量和移动端媒体查询。发现浏览器自动化宿主当前不可用，使用构建、入口响应和代码契约完成可执行验证 | `node --test apps/web/tests/auth-design.test.mjs`、`node --check apps/client/ui/auth-style.js`、双模式构建、`curl -fsS http://127.0.0.1:4175/` 均通过 | `codex/feature-auth-landing-20261127`，提交 `666b115edfe2b41481fc043fef935e7d8ae05547` | `http://127.0.0.1:4175/` |
 | 用户反馈返工 | 删除花园方案，保留并优化蓝白日间与深色夜间主题，统一 Web 和桌面端入口，补充焦点态、移动端布局和主题背景 | `node --test apps/web/tests/auth-design.test.mjs`、`node --check apps/client/ui/auth-style.js`、双模式构建、`curl -fsS http://127.0.0.1:4175/` 均通过，`git diff --check` 通过 | `codex/feature-auth-landing-20261127`，提交 `d5e6fe5` | `http://127.0.0.1:4175/` |
 | App 图标迭代 | 重新设计桌面 App 图标，使用蓝色圆角底、白色折页和橙色闪光，提高 64×64 小尺寸下的识别度，并保留 SVG 源文件 | 图标契约测试、桌面端脚本检查、双模式构建、格式检查均通过 | `codex/feature-auth-landing-20261127`，提交 `b44e612` | `dist/auth-previews/wenote-app-icon-v2.png` |
-| 移动端图标同步 | Android 各密度 `ic_launcher`、`ic_launcher_round` 和 `ic_launcher_foreground` 资源同步新图标，保持启动器显示一致 | 图标契约测试、Android XML 解析和资源格式检查通过 | 待提交 | `dist/auth-previews/wenote-app-icon-mobile-v2.png` |
+| 移动端图标同步 | Android 各密度 `ic_launcher`、`ic_launcher_round` 和 `ic_launcher_foreground` 资源同步新图标，保持启动器显示一致 | 图标契约测试、Android XML 解析和资源格式检查通过 | `codex/feature-auth-landing-20261127`，提交 `7c6cb81`、`4342b47` | `dist/auth-previews/wenote-app-icon-mobile-v2.png` |
 
 ## 独立服务端
 
