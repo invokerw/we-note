@@ -337,6 +337,8 @@ export function AssistantPanel(props: Props) {
         config.baseUrl,
         config.api,
         config.model,
+        config.webSearch,
+        config.webSearchModel,
       ]);
       const contextStart =
         before.contextKey === contextKey

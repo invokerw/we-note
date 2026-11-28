@@ -7,6 +7,8 @@ export type Config = {
   model: string;
   effort?: string;
   usesApiKey?: boolean;
+  webSearch?: boolean;
+  webSearchModel?: string;
 };
 export function checkedConfig(c: Config, requireModel = true): Config {
   if (!URL.canParse(c.baseUrl.trim())) throw Error("请输入完整的 HTTP 或 HTTPS 服务地址");
@@ -24,16 +26,22 @@ export function checkedConfig(c: Config, requireModel = true): Config {
     (requireModel && !c.model.trim())
   )
     throw Error("请选择模型协议并填写模型 ID");
+  if (c.webSearch === true && c.api !== "openai-responses")
+    throw Error("网络搜索需要使用 OpenAI Responses 协议");
   return {
     api: c.api,
     baseUrl: url.href.replace(/\/+$/, ""),
     model: c.model.trim(),
     ...(c.effort ? {effort: c.effort} : {}),
     ...(c.usesApiKey === true ? { usesApiKey: true } : {}),
+    ...(typeof c.webSearch === "boolean" ? { webSearch: c.webSearch } : {}),
+    ...(c.webSearchModel?.trim()
+      ? { webSearchModel: c.webSearchModel.trim() }
+      : {}),
   };
 }
 // Some model gateways require every property of a strict tool, including the
-// property reserved for the other note kind. Keep the MCP contract canonical.
+// property reserved for the other note kind. Keep the note tool contract canonical.
 export function prepareCreateArguments(args: unknown) {
   if (!args || typeof args !== "object" || Array.isArray(args)) return args;
   const fields = args as Record<string, unknown>;

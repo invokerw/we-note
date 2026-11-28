@@ -10,6 +10,7 @@ import {
   type Config,
 } from "./policy";
 import type { Chat, Line, Proposal } from "./history";
+import { createWebSearchService, createWebSearchTools } from "./webSearch";
 export type Connection = ReturnType<typeof useMcp>;
 type Turn = {
   connection: Connection;
@@ -125,6 +126,16 @@ export async function runTurn(t: Turn) {
         return toolResult(result);
       },
     }));
+  const webSearch = createWebSearchService(t.config, t.key);
+  if (webSearch)
+    tools.push(
+      ...createWebSearchTools(
+        webSearch,
+        t.signal,
+        t.status,
+        (line) => t.append(line),
+      ),
+    );
   let summary = "";
   const agent = createAgent(
     t.config,
@@ -214,6 +225,7 @@ export async function runTurn(t: Turn) {
         status: l.proposal.status,
         receipt: l.proposal.receipt,
       },
+      sources: l.sources,
     }));
     await agent.prompt(
       past.length

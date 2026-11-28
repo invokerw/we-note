@@ -1,4 +1,5 @@
 import type { Call } from "../mcp/tools";
+import type { WebSource } from "./webSearch";
 export type Proposal = {
   call: Call;
   path: string;
@@ -16,6 +17,7 @@ export type Line = {
   text: string;
   path?: string;
   proposal?: Proposal;
+  sources?: WebSource[];
 };
 export type Chat = {
   id: string;

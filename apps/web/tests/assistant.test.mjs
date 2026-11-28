@@ -9,7 +9,7 @@ import {
 
 import { parseCall } from "../src/mcp/tools.ts";
 
-test("gateway create arguments keep the selected note kind and validate the resulting MCP call", () => {
+test("note create arguments keep the selected note kind and validate the resulting tool call", () => {
   const base = { operation_id: "test", path: "note.md", kind: "markdown", text: "", root_topic: "extra" };
   const parse = (args) => parseCall("create_note", prepareCreateArguments(args)).args;
   assert.throws(() => parseCall("create_note", base));
@@ -34,6 +34,33 @@ test("custom model address is bound to its protocol and excludes credentials in 
     checkedConfig({ ...config, baseUrl: "https://u:p@example.test/v1" }),
   );
   assert.throws(() => checkedConfig({ ...config, api: "unknown" }));
+  assert.throws(
+    () => checkedConfig({ ...config, api: "openai-completions", webSearch: true }),
+    /网络搜索需要使用 OpenAI Responses 协议/,
+  );
+  assert.deepEqual(
+    checkedConfig({
+      ...config,
+      webSearch: true,
+      webSearchModel: " search-model ",
+    }),
+    {
+      ...config,
+      baseUrl: "https://example.test/v1",
+      model: "local",
+      webSearch: true,
+      webSearchModel: "search-model",
+    },
+  );
+  assert.deepEqual(
+    checkedConfig({ ...config, webSearch: false }),
+    {
+      ...config,
+      baseUrl: "https://example.test/v1",
+      model: "local",
+      webSearch: false,
+    },
+  );
 });
 test("a write preview freezes host-generated operation and read version", () => {
   const call = {

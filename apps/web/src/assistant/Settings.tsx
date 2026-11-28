@@ -20,7 +20,9 @@ export function ModelSettings({
 }) {
   const [initial] = useState(() => readConfig(owner));
   const [url, setUrl] = useState(initial.baseUrl),
-    [api, setApi] = useState(initial.api);
+    [api, setApi] = useState(initial.api),
+    [webSearch, setWebSearch] = useState(initial.webSearch === true),
+    [webSearchModel, setWebSearchModel] = useState(initial.webSearchModel ?? "");
   const [key, setKey] = useState(""),
     [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(true),
@@ -49,7 +51,14 @@ export function ModelSettings({
     setBusy(true);
     try {
       const connection = checkedConfig(
-        { api, baseUrl: url, model: "", usesApiKey: !!key.trim() },
+        {
+          api,
+          baseUrl: url,
+          model: "",
+          usesApiKey: !!key.trim(),
+          webSearch,
+          webSearchModel,
+        },
         false,
       );
       if (connection.baseUrl === initial.baseUrl)
@@ -115,6 +124,30 @@ export function ModelSettings({
         >
           在本机记住密钥
         </Checkbox>
+        <Checkbox
+          checked={webSearch}
+          onChange={(e) => setWebSearch(e.target.checked)}
+        >
+          启用网络搜索（OpenAI Search）
+        </Checkbox>
+        {webSearch && (
+          <>
+            <Form.Item
+              label="搜索模型（可选）"
+              htmlFor="assistant-web-search-model"
+            >
+              <Input
+                id="assistant-web-search-model"
+                placeholder="默认使用当前模型，例如 gpt-6.2-sol"
+                value={webSearchModel}
+                onChange={(e) => setWebSearchModel(e.target.value)}
+              />
+            </Form.Item>
+            <small>
+              网络搜索使用当前模型服务地址和 API Key，通过 OpenAI Responses API 的 web_search 工具完成。
+            </small>
+          </>
+        )}
         <details>
           <summary>高级设置</summary>
           <Form.Item label="接口协议" htmlFor="assistant-api">
