@@ -121,7 +121,7 @@
 
 | 轮次 / 对应反馈 | 自审发现及优化处理 | 复测命令和结果 | 验收分支及受测提交号 | 验收入口 |
 | --- | --- | --- | --- | --- |
-| 首次交付 | 修复搜索配置归一化丢失 `webSearch: true`、MCP 初始化通知错误带 ID、HTTP 空通知响应、Gateway URL 校验、上下文缓存隔离和 Tauri 取消链路。未把 API Key 写入代码、配置文件、日志或会话历史。 | Web 31 项、聚焦 11 项、Tauri 3 项通过，Web 和桌面前端构建通过。 | `codex/feature-pi-web-access-20261128`，提交号待提交后补记 | 使用本 worktree 的 Web 构建或 `target/release/wenote-desktop`，在模型设置中开启「网络搜索」。桌面端网关地址留空，Web 或移动端填写外部 MCP Gateway。 |
+| 首次交付 | 修复搜索配置归一化丢失 `webSearch: true`、MCP 初始化通知错误带 ID、HTTP 空通知响应、Gateway URL 校验、上下文缓存隔离和 Tauri 取消链路。未把 API Key 写入代码、配置文件、日志或会话历史。 | Web 31 项、聚焦 11 项、Tauri 3 项通过，Web 和桌面前端构建通过。 | `codex/feature-pi-web-access-20261128`，提交 `9407247` | 使用本 worktree 的 Web 构建或 `target/release/wenote-desktop`，在模型设置中开启「网络搜索」。桌面端网关地址留空，Web 或移动端填写外部 MCP Gateway。 |
 
 ## 独立服务端
 
